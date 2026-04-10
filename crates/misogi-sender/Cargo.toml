@@ -1,0 +1,29 @@
+[package]
+name = "misogi-sender"
+version = "0.1.0"
+edition = "2024"
+description = "Misogi sender node - handles file upload and transfer initiation"
+
+[[bin]]
+name = "misogi-sender"
+path = "src/main.rs"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+axum = { version = "0.7", features = ["multipart"] }
+tonic = "0.12"
+tower = "0.4"
+tower-http = { version = "0.6", features = ["cors"] }
+tokio-util = "0.7"
+tokio-stream = "0.1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
+serde_json = "1"
+serde = { version = "1", features = ["derive"] }
+clap = { version = "4", features = ["derive"] }
+toml = "0.8"
+notify = "7"
+prost = "0.13"
+misogi-core = { path = "../misogi-core" }
+uuid = { version = "1", features = ["v4"] }
+chrono = "0.4"
