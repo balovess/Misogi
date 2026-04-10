@@ -1,0 +1,25 @@
+# Build outputs
+target/
+*.o
+*.so
+*.exe
+*.dll
+*.pdb
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Environment files
+.env
+.env.local
