@@ -3,6 +3,7 @@ use misogi_core::proto::receiver_service_server::{
     ReceiverService,
     ReceiverServiceServer,
 };
+#[allow(dead_code)]
 use misogi_core::proto::*;
 use crate::state::SharedState;
 use std::pin::Pin;

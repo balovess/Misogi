@@ -3,6 +3,7 @@ mod config;
 mod state;
 mod upload_engine;
 mod http_routes;
+mod approval_routes;
 mod grpc_service;
 mod router;
 mod tunnel_task;
@@ -43,18 +44,22 @@ async fn run_server(config: SenderConfig) {
         addr = %config.server_addr,
         storage_dir = %config.storage_dir,
         chunk_size = config.chunk_size,
-        "Misogi Sender starting in server mode"
+        driver_type = %config.transfer_driver_type,
+        "Misogi Sender starting in server mode (Task 5.14: Pluggable Trait Layer)"
     );
 
-    if let Some(ref receiver) = config.receiver_addr {
-        tracing::info!(receiver_addr = %receiver, "Receiver configured");
+    if let Some(ref receiver) = config.tunnel_remote_addr {
+        tracing::info!(receiver_addr = %receiver, "Receiver configured (direct_tcp mode)");
     }
 
     tokio::fs::create_dir_all(&config.storage_dir)
         .await
         .expect("Failed to create storage directory");
 
-    let state = Arc::new(AppState::new(config));
+    // Use AppState::from_config() for full pluggable trait layer initialization (Task 5.14)
+    // This constructs all trait objects: TransferDriver, CDRStrategy chain, FileTypeDetector,
+    // PIIDetector, LogFormatter, etc. based on configuration settings.
+    let state = AppState::from_config(&config);
 
     let app = router::build_router(state.clone());
 
@@ -76,14 +81,16 @@ async fn run_daemon_mode(config: SenderConfig) {
         storage_dir = %config.storage_dir,
         chunk_size = config.chunk_size,
         watch_dir = ?config.watch_dir.as_deref(),
-        "Misogi Sender starting in daemon mode"
+        driver_type = %config.transfer_driver_type,
+        "Misogi Sender starting in daemon mode (Task 5.14: Pluggable Trait Layer)"
     );
 
     tokio::fs::create_dir_all(&config.storage_dir)
         .await
         .expect("Failed to create storage directory");
 
-    let state = Arc::new(AppState::new(config));
+    // Use AppState::from_config() for full pluggable trait layer initialization (Task 5.14)
+    let state = AppState::from_config(&config);
 
     daemon::run_daemon(state.config.clone(), state).await;
 }

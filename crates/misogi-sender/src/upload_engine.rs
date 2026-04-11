@@ -1,7 +1,9 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use tokio::io::AsyncWriteExt;
 use crate::state::SharedState;
 use misogi_core::{ChunkMeta, FileManifest, FileInfo, FileStatus, MisogiError, Result};
+use misogi_cdr::{pdf_sanitizer::PdfSanitizer, office_sanitizer::OfficeSanitizer, zip_scanner::ZipScanner, SanitizationPolicy, SanitizationReport, FileSanitizer};
 
 pub struct FileUploader {
     storage_dir: PathBuf,
@@ -266,5 +268,128 @@ impl FileUploader {
             )));
         }
         Ok(file_dir)
+    }
+
+    pub fn get_reassembled_path(&self, file_id: &str) -> Result<PathBuf> {
+        let file_dir = self.get_file_path(file_id)?;
+        Ok(file_dir.join("_reassembled.bin"))
+    }
+
+    pub fn get_sanitized_output_path(&self, file_id: &str) -> Result<PathBuf> {
+        let file_dir = self.get_file_path(file_id)?;
+        Ok(file_dir.join("_sanitized.bin"))
+    }
+
+    /// Sanitize an uploaded file using the appropriate CDR engine.
+    /// Called automatically after complete_upload() when auto_sanitize is enabled.
+    ///
+    /// **Task 5.14 Note**: This method currently uses legacy direct sanitizer calls.
+    /// The pluggable CDR strategy chain (`state.cdr_strategies`) is available in
+    /// AppState but not yet wired into this method due to API alignment work needed
+    /// between CDRStrategy trait signatures and existing sanitizer interfaces.
+    ///
+    /// **Future Enhancement**: Replace legacy match block with iteration over
+    /// `state.cdr_strategies`, calling `strategy.evaluate()` then `strategy.apply()`.
+    /// See [`sanitize_file_with_state()`](Self::sanitize_file_with_state) for the
+    /// intended integration pattern (currently returns NotImplemented).
+    pub async fn sanitize_file(
+        &self,
+        file_id: &str,
+        policy: &SanitizationPolicy,
+        pdf_sanitizer: &PdfSanitizer,
+        office_sanitizer: &OfficeSanitizer,
+        zip_scanner: &ZipScanner,
+    ) -> Result<SanitizationReport> {
+        let manifest = self.load_manifest(file_id).await?;
+
+        let ext = Path::new(&manifest.filename)
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_lowercase();
+
+        let input_path = self.get_reassembled_path(file_id)?;
+
+        if !input_path.exists() {
+            let file_dir = self.storage_dir.join(file_id);
+            let temp_file_path = file_dir.join("_complete_temp.bin");
+            let mut output = tokio::fs::File::create(&input_path).await?;
+
+            for i in 0..manifest.chunk_count {
+                let chunk_path = file_dir.join(format!("chunk_{}.bin", i));
+                if chunk_path.exists() {
+                    let chunk_data = tokio::fs::read(&chunk_path).await?;
+                    output.write_all(&chunk_data).await?;
+                }
+            }
+            output.flush().await?;
+            drop(output);
+        }
+
+        let output_path = self.get_sanitized_output_path(file_id)?;
+
+        // Legacy sanitization logic (backward compatible, unchanged)
+        let report = match ext.as_str() {
+            ".pdf" => pdf_sanitizer.sanitize(&input_path, &output_path, policy).await?,
+            ".docx" | ".xlsx" | ".pptx" | ".docm" | ".xlsm" | ".pptm" => {
+                office_sanitizer.sanitize(&input_path, &output_path, policy).await?
+            }
+            ".zip" | ".jar" => zip_scanner.sanitize(&input_path, &output_path, policy).await?,
+            _ => {
+                SanitizationReport::new(file_id.to_string(), manifest.filename.clone())
+            },
+        };
+
+        Ok(report)
+    }
+
+    /// Sanitize a file using the pluggable CDR strategy chain from AppState (Task 5.14).
+    ///
+    /// **Status**: Placeholder for future integration.
+    ///
+    /// This method is intended to replace [`sanitize_file()`](Self::sanitize_file) by
+    /// iterating through `state.cdr_strategies` and delegating to matching strategies.
+    /// However, integration is pending alignment of CDRStrategy trait signatures with
+    /// existing sanitizer interfaces.
+    ///
+    /// # Arguments
+    /// * `file_id` — Unique file identifier
+    /// * `policy` — Global sanitization policy controlling strictness
+    /// * `state` — Shared application state containing `cdr_strategies`
+    ///
+    /// # Returns
+    /// Currently delegates to legacy [`sanitize_file()`](Self::sanitize_file).
+    /// Will return strategy-chain results once CDRStrategy integration is complete.
+    pub async fn sanitize_file_with_state(
+        &self,
+        file_id: &str,
+        policy: &SanitizationPolicy,
+        state: &SharedState,
+    ) -> Result<SanitizationReport> {
+        // TODO (Task 5.14 future): Implement CDR strategy chain iteration here.
+        // Intended pattern:
+        //   for strategy in &state.cdr_strategies {
+        //       if strategy.supports(&ext) {
+        //           let decision = strategy.evaluate(&context).await?;
+        //           if matches!(decision, StrategyDecision::Sanitize) {
+        //               return strategy.apply(&context, &decision).await;
+        //           }
+        //       }
+        //   }
+        //
+        // Blocking issues to resolve:
+        // - CDRStrategy::apply() signature uses (context, decision) not (input, output, context)
+        // - SanitizeContext fields differ from assumed (filename/mime_type vs file_id/extension/policy)
+        // - evaluate() returns Result<StrategyDecision> requiring ? operator handling
+        //
+        // For now, delegate to legacy implementation to maintain backward compatibility.
+
+        self.sanitize_file(
+            file_id,
+            policy,
+            &state.pdf_sanitizer,
+            &state.office_sanitizer,
+            &state.zip_scanner,
+        ).await
     }
 }

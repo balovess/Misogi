@@ -5,6 +5,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use crate::state::SharedState;
+use misogi_cdr::{SanitizationReport};
 
 #[derive(Serialize)]
 pub struct UploadResponse {
@@ -38,6 +39,42 @@ pub struct TransferResponse {
 pub struct HealthResponse {
     pub status: String,
     pub role: String,
+}
+
+#[derive(Serialize)]
+pub struct SanitizeResponse {
+    pub file_id: String,
+    pub success: bool,
+    pub original_filename: String,
+    pub original_hash: String,
+    pub sanitized_hash: String,
+    pub policy: String,
+    pub actions_taken: Vec<String>,
+    pub warnings: Vec<String>,
+    pub processing_time_ms: u64,
+}
+
+impl From<SanitizationReport> for SanitizeResponse {
+    fn from(report: SanitizationReport) -> Self {
+        Self {
+            file_id: report.file_id,
+            success: report.success,
+            original_filename: report.original_filename,
+            original_hash: report.original_hash,
+            sanitized_hash: report.sanitized_hash,
+            policy: format!("{:?}", report.policy),
+            actions_taken: report.actions_taken.iter().map(|a| format!("{:?}", a)).collect(),
+            warnings: report.warnings,
+            processing_time_ms: report.processing_time_ms,
+        }
+    }
+}
+
+#[derive(Serialize)]
+pub struct PolicyInfo {
+    pub id: String,
+    pub name: String,
+    pub description: String,
 }
 
 pub async fn upload(
@@ -80,6 +117,39 @@ pub async fn upload(
         .complete_upload(&file_id, &state)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    if state.config.auto_sanitize {
+        let sanitize_file_id = file_id.clone();
+        let sanitize_state = state.clone();
+        tokio::spawn(async move {
+            // Use legacy sanitizer (backward compatible)
+            // Task 5.14 Note: PII detection and CDR strategy chain integration
+            // is pending API alignment work. Currently delegates to direct sanitizers.
+            match sanitize_state.uploader.sanitize_file(
+                &sanitize_file_id,
+                &sanitize_state.sanitization_policy,
+                &sanitize_state.pdf_sanitizer,
+                &sanitize_state.office_sanitizer,
+                &sanitize_state.zip_scanner,
+            ).await {
+                Ok(report) => {
+                    tracing::info!(
+                        file_id = %sanitize_file_id,
+                        actions = report.actions_taken.len(),
+                        "File sanitized successfully"
+                    );
+                    if !report.warnings.is_empty() {
+                        for warning in &report.warnings {
+                            tracing::warn!(file_id = %sanitize_file_id, %warning, "Sanitization warning");
+                        }
+                    }
+                }
+                Err(e) => {
+                    tracing::error!(file_id = %sanitize_file_id, error = %e, "Sanitization failed");
+                }
+            }
+        });
+    }
 
     Ok((
         StatusCode::OK,
@@ -166,7 +236,8 @@ pub async fn trigger_transfer(
 
     tracing::info!(file_id = %file_id, "Transfer triggered");
 
-    if let Some(ref receiver_addr) = state.config.receiver_addr {
+    // Task 5.14: Use tunnel_remote_addr for TCP mode (backward compatible)
+    if let Some(ref receiver_addr) = state.config.tunnel_remote_addr {
         let task_state = state.clone();
         let task_file_id = file_id.clone();
         let task_receiver_addr = receiver_addr.clone();
@@ -198,4 +269,59 @@ pub async fn health() -> Json<HealthResponse> {
         status: "ok".to_string(),
         role: "sender".to_string(),
     })
+}
+
+pub async fn sanitize_file(
+    Path(file_id): Path<String>,
+    State(state): State<SharedState>,
+) -> Result<(StatusCode, Json<SanitizeResponse>), (StatusCode, String)> {
+    let exists = state.get_file(&file_id).await.ok_or_else(|| {
+        (StatusCode::NOT_FOUND, format!("File not found: {}", file_id))
+    })?;
+
+    if exists.status != misogi_core::FileStatus::Ready {
+        return Err((
+            StatusCode::CONFLICT,
+            format!("File is not ready for sanitization. Current status: {:?}", exists.status),
+        ));
+    }
+
+    let report = state.uploader
+        .sanitize_file(
+            &file_id,
+            &state.sanitization_policy,
+            &state.pdf_sanitizer,
+            &state.office_sanitizer,
+            &state.zip_scanner,
+        )
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    tracing::info!(
+        file_id = %file_id,
+        actions = report.actions_taken.len(),
+        "Manual sanitization completed"
+    );
+
+    Ok((StatusCode::OK, Json(SanitizeResponse::from(report))))
+}
+
+pub async fn list_policies(State(_state): State<SharedState>) -> Json<Vec<PolicyInfo>> {
+    Json(vec![
+        PolicyInfo {
+            id: "stripActiveContent".to_string(),
+            name: "Strip Active Content".to_string(),
+            description: "Remove JavaScript, VBA macros, and embedded scripts while preserving document editability. This is the default mode compatible with VOTIRO's standard behavior.".to_string(),
+        },
+        PolicyInfo {
+            id: "convertToFlat".to_string(),
+            name: "Convert to Flat".to_string(),
+            description: "Convert document to flat/read-only format, destroying all interactive elements including form fields, annotations, hyperlinks, bookmarks, and embedded fonts.".to_string(),
+        },
+        PolicyInfo {
+            id: "textOnly".to_string(),
+            name: "Text Only".to_string(),
+            description: "Extract text content only, discarding all formatting, images, tables, and layout information.".to_string(),
+        },
+    ])
 }

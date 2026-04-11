@@ -41,7 +41,7 @@ async fn run_server(config: ReceiverConfig) {
         role = "receiver",
         mode = "server",
         addr = %config.server_addr,
-        download_dir = %config.download_dir,
+        download_dir = %config.download_dir.display(),
         storage_dir = %config.storage_dir,
         tunnel_port = config.tunnel_port,
         "Misogi Receiver starting in server mode"
@@ -74,7 +74,7 @@ async fn run_daemon_mode(config: ReceiverConfig) {
     tracing::info!(
         role = "receiver",
         mode = "daemon",
-        download_dir = %config.download_dir,
+        download_dir = %config.download_dir.display(),
         output_dir = ?config.output_dir.as_deref(),
         "Misogi Receiver starting in daemon mode"
     );

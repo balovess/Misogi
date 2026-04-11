@@ -1,0 +1,21 @@
+[package]
+name = "misogi-cdr"
+version = "0.1.0"
+edition = "2024"
+description = "Content Disarm and Reconstruction (CDR) engine for Misogi secure file transfer"
+
+[dependencies]
+misogi-core = { path = "../misogi-core" }
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tracing = "0.1"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4"] }
+async-trait = "0.1"
+nom = "7"
+zip = "2"
+md-5 = "0.7"
+bytes = "1"
+thiserror = "2"
+tempfile = "3"

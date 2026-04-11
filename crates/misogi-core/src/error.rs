@@ -28,6 +28,15 @@ pub enum MisogiError {
 
     #[error("Serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
+
+    #[error("Security violation: {0}")]
+    SecurityViolation(String),
+
+    #[error("Poison error: {0}")]
+    PoisonError(String),
+
+    #[error("Configuration error: {0}")]
+    Configuration(String),
 }
 
 pub type Result<T> = std::result::Result<T, MisogiError>;

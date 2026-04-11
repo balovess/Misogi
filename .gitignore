@@ -1,25 +1,6 @@
-# Build outputs
+.trae/
+.gitignore
+PRD1.txt
 target/
-*.o
-*.so
-*.exe
-*.dll
-*.pdb
-
-# IDE and editor files
-.idea/
-.vscode/
-*.swp
-*.swo
-*~
-
-# OS files
-.DS_Store
-Thumbs.db
-
-# Logs
-*.log
-
-# Environment files
-.env
-.env.local
+PRD.txt
+protoc.zip

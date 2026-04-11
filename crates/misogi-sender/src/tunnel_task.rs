@@ -1,6 +1,23 @@
 use crate::state::SharedState;
 use misogi_core::{MisogiError, Result, TunnelClient, FileStatus};
 
+/// Execute file transfer using legacy TunnelClient (backward compatible).
+///
+/// **Task 5.14 Note**: This function currently uses direct TunnelClient usage.
+/// The pluggable TransferDriver (`state.transfer_driver`) is available in AppState
+/// but not yet wired into this function due to API alignment work needed between
+/// TransferDriver trait signatures and existing TunnelClient interfaces.
+///
+/// **Future Enhancement**: Replace TunnelClient with `state.transfer_driver.send_chunk()`
+/// and `.send_complete()` calls once TransferDriver integration is complete.
+///
+/// # Arguments
+/// * `state` — Shared application state
+/// * `file_id` — Unique identifier of the file to transfer
+/// * `receiver_addr` — Target receiver address (TCP host:port)
+///
+/// # Returns
+/// `Ok(())` on successful transfer, `Err(MisogiError)` on failure.
 pub async fn execute_transfer(
     state: SharedState,
     file_id: String,

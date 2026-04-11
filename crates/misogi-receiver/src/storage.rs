@@ -185,6 +185,7 @@ impl ChunkStorage {
         }))
     }
 
+    #[allow(dead_code)]
     pub async fn read_chunk(&self, file_id: &str, chunk_index: u32) -> Result<Vec<u8>> {
         let chunk_path = self.storage_dir.join(file_id).join(format!("chunk_{}.bin", chunk_index));
 
@@ -199,6 +200,7 @@ impl ChunkStorage {
         Ok(data)
     }
 
+    #[allow(dead_code)]
     pub async fn cleanup(&self, file_id: &str) -> Result<()> {
         let storage_path = self.storage_dir.join(file_id);
         let download_path = self.download_dir.join(file_id);
