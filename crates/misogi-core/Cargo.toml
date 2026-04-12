@@ -54,7 +54,7 @@ rand = "0.8"
 regex = "1"
 
 # Configuration file parsing (used by core: ScannerRegistry, JP calendar)
-toml = "0.8"
+toml = "1.1"
 
 # Web framework (used by versioning deprecation middleware)
 axum = "0.7"
