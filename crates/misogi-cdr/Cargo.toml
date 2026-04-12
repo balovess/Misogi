@@ -13,7 +13,7 @@ tracing = "0.1"
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1", features = ["v4"] }
 async-trait = "0.1"
-nom = "7"
+nom = "8"
 zip = "2"
 md-5 = "0.7"
 bytes = "1"
