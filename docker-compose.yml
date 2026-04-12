@@ -1,0 +1,110 @@
+# =============================================================================
+# Misogi (禊) — Docker Compose Orchestration
+# =============================================================================
+# One-click deployment for sender and receiver nodes.
+#
+# Quick Start:
+#   docker compose up -d              # Start both services
+#   docker compose up -d sender       # Start only sender
+#   docker compose up -d receiver     # Start only receiver
+#   docker compose logs -f            # Tail all logs
+#
+# Custom Configuration:
+#   cp docker/env.example .env
+#   # Edit .env with your settings
+#   docker compose up -d
+# =============================================================================
+
+services:
+  # ===========================================================================
+  # Sender Node — File upload and transfer initiation
+  # ===========================================================================
+  sender:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: misogi:latest
+    container_name: misogi-sender
+    restart: unless-stopped
+    entrypoint: ["misogi-sender"]
+    command: ["--mode", "server"]
+    ports:
+      - "${SENDER_PORT:-3001}:3001"
+    volumes:
+      - sender_uploads:/data/uploads
+      - sender_staging:/data/staging
+    environment:
+      - MISOGI_SERVER_ADDR=0.0.0.0:3001
+      - MISOGI_UPLOAD_DIR=/data/uploads
+      - MISOGI_STAGING_DIR=/data/staging
+      - MISOGI_LOG_LEVEL=${MISOGI_LOG_LEVEL:-info}
+      - MISOGI_TRANSFER_DRIVER_TYPE=${MISOGI_SENDER_DRIVER_TYPE:-direct_tcp}
+      - MISOGI_TUNNEL_REMOTE_ADDR=${MISOGI_TUNNEL_REMOTE_ADDR:-}
+      - MISOGI_TUNNEL_AUTH_TOKEN=${MISOGI_TUNNEL_AUTH_TOKEN:-}
+      - MISOGI_LOG_FORMAT=${MISOGI_LOG_FORMAT:-json}
+      - MISOGI_PII_ENABLED=${MISOGI_PII_ENABLED:-false}
+      - RUST_LOG=${RUST_LOG:-info}
+    healthcheck:
+      test: ["CMD", "/usr/bin/curl", "-f", "http://localhost:3001/api/v1/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - misogi-net
+
+  # ===========================================================================
+  # Receiver Node — File reception and storage
+  # ===========================================================================
+  receiver:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: misogi:latest
+    container_name: misogi-receiver
+    restart: unless-stopped
+    entrypoint: ["misogi-receiver"]
+    command: ["--mode", "server"]
+    ports:
+      - "${RECEIVER_PORT:-3002}:3002"
+      - "${TUNNEL_PORT:-9000}:9000"
+    volumes:
+      - receiver_chunks:/data/chunks
+      - receiver_downloads:/data/downloads
+    environment:
+      - MISOGI_SERVER_ADDR=0.0.0.0:3002
+      - MISOGI_CHUNK_DIR=/data/chunks
+      - MISOGI_DOWNLOAD_DIR=/data/downloads
+      - MISOGI_LOG_LEVEL=${MISOGI_LOG_LEVEL:-info}
+      - MISOGI_TRANSFER_DRIVER_TYPE=${MISOGI_RECEIVER_DRIVER_TYPE:-direct_tcp}
+      - MISOGI_TUNNEL_AUTH_TOKEN=${MISOGI_TUNNEL_AUTH_TOKEN:-}
+      - MISOGI_LOG_FORMAT=${MISOGI_LOG_FORMAT:-json}
+      - RUST_LOG=${RUST_LOG:-info}
+    healthcheck:
+      test: ["CMD", "/usr/bin/curl", "-f", "http://localhost:3002/api/v1/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - misogi-net
+
+# =============================================================================
+# Persistent Volumes
+# =============================================================================
+volumes:
+  sender_uploads:
+    driver: local
+  sender_staging:
+    driver: local
+  receiver_chunks:
+    driver: local
+  receiver_downloads:
+    driver: local
+
+# =============================================================================
+# Network
+# =============================================================================
+networks:
+  misogi-net:
+    driver: bridge
