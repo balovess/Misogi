@@ -14,7 +14,7 @@ chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1", features = ["v4"] }
 async-trait = "0.1"
 nom = "7"
-zip = "2"
+zip = "8"
 md-5 = "0.7"
 bytes = "1"
 thiserror = "2"
