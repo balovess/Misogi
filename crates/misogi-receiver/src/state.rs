@@ -36,6 +36,7 @@ pub struct AppState {
     /// Registry of received files awaiting download or already completed.
     ///
     /// Protected by `RwLock` for concurrent read/write access.
+    #[allow(dead_code)]
     pub files: RwLock<Vec<FileInfo>>,
 
     /// Chunk storage backend managing file assembly and persistence.
@@ -60,7 +61,8 @@ pub struct AppState {
     /// **Typical Configuration**:
     /// - TCP mode: `None` (default, backward compatible)
     /// - Storage relay mode: Future enhancement via `StorageRelayDriver`
-    pub transfer_driver: Option<String>, // Placeholder; will become Arc<dyn TransferDriver<Config = ConcreteConfig>>
+    #[allow(dead_code)]
+    pub transfer_driver: Option<String>,
 }
 
 /// Shared reference to application state, suitable for Axum's `.with_state()`.

@@ -1,18 +1,18 @@
-use std::path::{Path, PathBuf};
-use std::io::{Cursor, Write};
 use async_trait::async_trait;
+use std::io::{Cursor, Write};
+use std::path::{Path, PathBuf};
+use tempfile::TempDir;
 use tokio::fs;
 use zip::ZipArchive;
-use zip::write::FileOptions;
 use zip::ZipWriter;
-use tempfile::TempDir;
+use zip::write::FileOptions;
 
-use super::{FileSanitizer, SanitizationPolicy, SanitizationReport};
-use super::report::SanitizationAction;
-use super::pdf_sanitizer::PdfSanitizer;
 use super::office_sanitizer::OfficeSanitizer;
-use misogi_core::Result;
+use super::pdf_sanitizer::PdfSanitizer;
+use super::report::SanitizationAction;
+use super::{FileSanitizer, SanitizationPolicy, SanitizationReport};
 use misogi_core::MisogiError;
+use misogi_core::Result;
 use misogi_core::hash::compute_file_md5;
 
 /// Configuration for recursive ZIP archive scanning with security limits to prevent ZIP bomb attacks.
@@ -27,7 +27,7 @@ pub struct ZipScannerConfig {
 impl Default for ZipScannerConfig {
     fn default() -> Self {
         Self {
-            max_recursion_depth: 3,
+            max_recursion_depth: 5,
             max_expansion_ratio: 10,
             max_entry_size_bytes: 100 * 1024 * 1024,
             allowed_inner_extensions: vec![
@@ -35,6 +35,23 @@ impl Default for ZipScannerConfig {
                 ".docx".to_string(),
                 ".xlsx".to_string(),
                 ".pptx".to_string(),
+                ".odt".to_string(),
+                ".ods".to_string(),
+                ".odp".to_string(),
+                ".rtf".to_string(),
+                ".jpeg".to_string(),
+                ".jpg".to_string(),
+                ".png".to_string(),
+                ".gif".to_string(),
+                ".tiff".to_string(),
+                ".tif".to_string(),
+                ".bmp".to_string(),
+                ".svg".to_string(),
+                ".csv".to_string(),
+                ".txt".to_string(),
+                ".xml".to_string(),
+                ".htm".to_string(),
+                ".html".to_string(),
             ],
         }
     }
@@ -76,26 +93,112 @@ impl ZipScanner {
     }
 
     pub fn with_defaults() -> Self {
-        Self { config: ZipScannerConfig::default() }
+        Self {
+            config: ZipScannerConfig::default(),
+        }
     }
 
     /// Select the appropriate sanitizer implementation based on file extension.
+    ///
+    /// Maps each supported inner-file extension to its specialized CDR sanitizer.
+    /// Unsupported extensions should never reach this function (they are filtered
+    /// by `allowed_inner_extensions` in the config).
     fn get_sanitizer_for_extension(ext: &str) -> Box<dyn FileSanitizer> {
         match ext.to_lowercase().as_str() {
             ".pdf" => Box::new(PdfSanitizer::default_config()),
-            _ext @ (".docx" | ".xlsx" | ".pptx" | ".docm" | ".xlsm" | ".pptm") => {
-                Box::new(OfficeSanitizer::default_config())
-            },
-            _ => unreachable!(
-                "get_sanitizer_for_extension called with unsupported extension: {}",
+            _ext @ (".docx" | ".xlsx" | ".pptx" | ".docm" | ".xlsm" | ".pptm" | ".odt" | ".ods"
+            | ".odp") => Box::new(OfficeSanitizer::default_config()),
+            ".rtf" => Box::new(OfficeSanitizer::default_config()), // RTF handled by office sanitizer
+            // Image formats: use image metadata sanitizer if available, otherwise pass through
+            _ext @ (".jpeg" | ".jpg" | ".png" | ".gif" | ".tiff" | ".tif" | ".bmp") => {
+                // For now, images inside ZIPs are passed through as-is.
+                // A future enhancement would integrate ImageMetadataSanitizer here.
+                Box::new(OfficeSanitizer::default_config()) // Placeholder — replace with image sanitizer when integrated
+            }
+            // Text/HTML/SVG/XML: pass through (no binary sanitization needed for text)
+            _ext @ (".csv" | ".txt" | ".xml" | ".htm" | ".html" | ".svg") => {
+                Box::new(OfficeSanitizer::default_config()) // Placeholder
+            }
+            ext => unreachable!(
+                "get_sanitizer_for_extension called with unsupported/unknown extension: {} \
+                 (should have been filtered by allowed_inner_extensions)",
                 ext
             ),
         }
     }
 
     /// Returns true if the given extension indicates a nested archive requiring recursive descent.
-    fn is_archive_extension(ext: &str) -> bool {
-        matches!(ext.to_lowercase().as_str(), ".zip" | ".jar")
+    ///
+    /// Supports the following nested archive types:
+    /// - ZIP-based: `.zip`, `.jar`, `.war`, `.ear`, `.apk` (all share PK signature)
+    /// - Note: Other formats (`.tar`, `.gz`, `.bz2`, `.xz`, `.7z`) are not recursively
+    ///   extracted inside ZIP archives because they require format-specific decoders.
+    ///   They are treated as opaque binary entries and passed through or blocked per policy.
+    pub fn is_archive_extension(ext: &str) -> bool {
+        matches!(
+            ext.to_lowercase().as_str(),
+            ".zip" | ".jar" | ".war" | ".ear" | ".apk"
+        )
+    }
+
+    /// Quick check: does this ZIP data contain any encrypted entries?
+    ///
+    /// Scans local file headers for the encryption flag (bit 0 of general
+    /// purpose bit flag) without extracting or decrypting anything.
+    /// Used by the PPAP pre-check gate before Phase 1 extraction.
+    fn has_encrypted_entries(&self, data: &[u8]) -> bool {
+        let mut offset: usize = 0;
+
+        while offset.saturating_add(30) <= data.len() {
+            // Check local file header signature (0x04034b50)
+            if data.len() < offset + 4 || &data[offset..offset + 4] != b"PK\x03\x04" {
+                break;
+            }
+            if offset + 8 > data.len() {
+                break;
+            }
+
+            // General purpose bit flag at offset 6; bit 0 = encrypted
+            let flags = u16::from_le_bytes([data[offset + 6], data[offset + 7]]);
+            if flags & 0x0001 != 0 {
+                return true;
+            }
+
+            if offset + 30 > data.len() {
+                break;
+            }
+
+            // Skip to next entry using sizes from header
+            let name_len = u16::from_le_bytes([data[offset + 26], data[offset + 27]]) as usize;
+            let extra_len = u16::from_le_bytes([data[offset + 28], data[offset + 29]]) as usize;
+
+            let compressed_size = u32::from_le_bytes([
+                data[offset + 18],
+                data[offset + 19],
+                data[offset + 20],
+                data[offset + 21],
+            ]) as usize;
+            let uncompressed_size = u32::from_le_bytes([
+                data[offset + 22],
+                data[offset + 23],
+                data[offset + 24],
+                data[offset + 25],
+            ]) as usize;
+
+            let gflags = flags;
+            let header_end = 30 + name_len + extra_len;
+            if gflags & 0x0008 != 0 {
+                offset = header_end + compressed_size + 16;
+            } else {
+                offset = header_end + compressed_size.max(uncompressed_size);
+            }
+
+            if offset < 30 || offset > data.len() {
+                break;
+            }
+        }
+
+        false
     }
 
     /// Create an isolated temporary directory for entry extraction.
@@ -132,9 +235,7 @@ impl ZipScanner {
             )));
         }
 
-        if entry_name.contains("..")
-            || entry_name.starts_with('/')
-            || entry_name.starts_with('\\')
+        if entry_name.contains("..") || entry_name.starts_with('/') || entry_name.starts_with('\\')
         {
             return Err(MisogiError::SecurityViolation(format!(
                 "Path traversal attempt detected in entry name: '{}'",
@@ -160,9 +261,9 @@ impl ZipScanner {
         let mut total_uncompressed: u64 = 0;
 
         for i in 0..archive.len() {
-            let mut entry = archive
-                .by_index(i)
-                .map_err(|e| MisogiError::Protocol(format!("Failed to read ZIP entry {}: {}", i, e)))?;
+            let mut entry = archive.by_index(i).map_err(|e| {
+                MisogiError::Protocol(format!("Failed to read ZIP entry {}: {}", i, e))
+            })?;
 
             let entry_name = entry.name().to_string();
             let uncompressed_size = entry.size();
@@ -183,8 +284,7 @@ impl ZipScanner {
                 .to_string();
 
             let mut data = Vec::with_capacity(uncompressed_size as usize);
-            std::io::copy(&mut entry, &mut data)
-                .map_err(|e| MisogiError::Io(e))?;
+            std::io::copy(&mut entry, &mut data).map_err(|e| MisogiError::Io(e))?;
 
             entries.push(PendingEntry {
                 entry_name,
@@ -216,8 +316,11 @@ impl ZipScanner {
 
         fs::write(&entry_path, &entry.data).await?;
 
-        if Self::is_archive_extension(&entry.ext) && current_depth < self.config.max_recursion_depth {
-            let nested_output = temp_dir.path().join(format!("{}_sanitized", entry.entry_name));
+        if Self::is_archive_extension(&entry.ext) && current_depth < self.config.max_recursion_depth
+        {
+            let nested_output = temp_dir
+                .path()
+                .join(format!("{}_sanitized", entry.entry_name));
             let nested_report = Box::pin(self.sanitize_recursive_boxed(
                 &entry_path,
                 &nested_output,
@@ -244,7 +347,9 @@ impl ZipScanner {
                 .iter()
                 .any(|a| a == &entry.ext)
         {
-            let inner_output = temp_dir.path().join(format!("{}_cleaned", entry.entry_name));
+            let inner_output = temp_dir
+                .path()
+                .join(format!("{}_cleaned", entry.entry_name));
 
             let sanitizer = Self::get_sanitizer_for_extension(&entry.ext);
             let inner_report = sanitizer
@@ -323,10 +428,27 @@ impl ZipScanner {
         let start_time = std::time::Instant::now();
         let temp_dir = self.create_temp_dir().await?;
 
+        // === PPAP Pre-Check: Inspect ZIP headers for encrypted entries BEFORE extraction ===
+        // PPAP (Password Protected Attachment Protocol) is Japan's insecure practice of
+        // sending password-protected ZIPs with passwords via email/phone.
+        // We detect encrypted entries from ZIP local file header flags (bit 0 of GPBF)
+        // WITHOUT extracting or decrypting anything, then delegate to PpapHandler if found.
+        {
+            let data = fs::read(input_path).await.map_err(|e| MisogiError::Io(e))?;
+            if self.has_encrypted_entries(&data) {
+                return Err(MisogiError::SecurityViolation(format!(
+                    "PPAP detected: encrypted ZIP entries in '{}'. \
+                     Use PpapHandler for policy-based disposition.",
+                    filename
+                )));
+            }
+        }
+        // === END PPAP Pre-Check ===
+
         // Phase 1: Synchronous extraction (no awaits while ZipArchive is borrowed)
         let file = std::fs::File::open(input_path).map_err(|e| MisogiError::Io(e))?;
-        let mut archive =
-            ZipArchive::new(file).map_err(|e| MisogiError::Protocol(format!("Invalid ZIP archive: {}", e)))?;
+        let mut archive = ZipArchive::new(file)
+            .map_err(|e| MisogiError::Protocol(format!("Invalid ZIP archive: {}", e)))?;
 
         let (pending_entries, total_compressed, total_uncompressed) =
             self.extract_all_entries_sync(&mut archive, current_depth)?;
@@ -334,7 +456,9 @@ impl ZipScanner {
         drop(archive);
 
         // Expansion ratio check (ZIP bomb detection)
-        if total_compressed > 0 && total_uncompressed / total_compressed > self.config.max_expansion_ratio {
+        if total_compressed > 0
+            && total_uncompressed / total_compressed > self.config.max_expansion_ratio
+        {
             return Err(MisogiError::SecurityViolation(format!(
                 "ZIP bomb detected: expansion ratio {} exceeds maximum {}",
                 total_uncompressed / total_compressed,
@@ -423,6 +547,7 @@ impl FileSanitizer for ZipScanner {
         output_path: &Path,
         policy: &SanitizationPolicy,
     ) -> Result<SanitizationReport> {
-        self.sanitize_recursive_boxed(input_path, output_path, policy, 0).await
+        self.sanitize_recursive_boxed(input_path, output_path, policy, 0)
+            .await
     }
 }

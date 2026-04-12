@@ -13,12 +13,31 @@ pub mod file_types;
 pub mod pii;
 pub mod engine;
 pub mod log_engine;
+pub mod fec;
+pub mod blast;
+pub mod plugin_registry;
+pub mod versioning;
+pub mod scanners;
+pub mod storage;
 
-#[cfg_attr(not(any(feature = "jp_contrib", feature = "intl_contrib")), allow(unexpected_cfgs))]
 #[cfg(any(feature = "jp_contrib", feature = "intl_contrib"))]
 pub mod contrib;
 pub mod proto {
     tonic::include_proto!("misogi.file_transfer.v1");
+}
+
+// V1 type re-export at crate root — required by V2's generated gRPC code
+// which references cross-version messages via super::super::v1::* paths.
+pub mod v1 {
+    pub use crate::proto::*;
+}
+
+/// V2 protocol definitions — future extension point for AI-enhanced features.
+///
+/// When V2 reaches production readiness, this module will expose the full
+/// V2 gRPC service contracts defined in `proto/v2/misogi.proto`.
+pub mod proto_v2 {
+    tonic::include_proto!("misogi.file_transfer.v2");
 }
 
 pub use error::{MisogiError, Result};
@@ -35,5 +54,15 @@ pub use traits::{
     PIIAction, PIIMatch, PIIScanResult, PIIDetector,
     LogFormatter, ApprovalTrigger, Holiday, HolidayCategory, CalendarProvider,
     DetectedEncoding, EncodingHandler,
+    JtdConverter, JtdConversionResult, JtdConversionError,
 };
+pub use traits::jtd_pipeline::{
+    JtdConversionPipeline, JtdFailurePolicy, JtdPipelineConfig, PipelineOutput,
+    JtdConverterType, should_convert_jtd,
+};
+pub use traits::jtd_dummy::DummyAction;
+pub use traits::storage::{StorageBackend, StorageInfo, StorageError};
+pub use storage::{LocalConfig, LocalStorage};
 pub use engine::*;
+pub use scanners::*;
+pub use storage::*;

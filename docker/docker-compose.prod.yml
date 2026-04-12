@@ -1,0 +1,344 @@
+# =============================================================================
+# Misogi (禊) — Production Docker Compose Orchestration
+# =============================================================================
+# Full production stack: CDR services + database + queue + monitoring.
+#
+# Quick Start:
+#   cp docker/.env.example .env
+#   # Edit .env with your secrets and configuration
+#   docker compose -f docker/docker-compose.prod.yml up -d
+#
+# Services:
+#   misogi-sender     gRPC sender + REST Admin API (ports 50051, 8080)
+#   misogi-receiver  gRPC receiver (port 50052)
+#   misogi-smtp      SMTP email gateway (ports 25, 587)
+#   postgres         Audit log persistence (port 5432)
+#   redis            Job queue backend (port 6379)
+#   clamav           External scanner example (port 3310) [scanner profile]
+#   prometheus       Metrics aggregation (port 9090)
+#   grafana          Dashboard visualization (port 3000)
+#
+# Profiles:
+#   default          Core services (sender, receiver, smtp, postgres, redis)
+#   scanner          Adds ClamAV external scanner (+ prometheus + grafana)
+#   monitoring       Adds Prometheus + Grafana only
+# =============================================================================
+
+services:
+  # ===========================================================================
+  # Misogi Sender — gRPC Service + REST Admin API
+  # ===========================================================================
+  misogi-sender:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.prod
+    image: misogi:prod
+    container_name: misogi-sender
+    restart: unless-stopped
+    entrypoint: ["misogi-sender"]
+    command: ["--config", "/app/config/config.toml"]
+    ports:
+      - "${SENDER_GRPC_PORT:-50051}:50051"
+      - "${REST_API_PORT:-8080}:8080"
+    volumes:
+      - sender_data:/app/data
+      - ../config:/app/config:ro
+    environment:
+      - MISOGI_LOG_LEVEL=${MISOGI_LOG_LEVEL:-info}
+      - RUST_LOG=${RUST_LOG:-info}
+      - MISOGI_SERVER_ADDR=0.0.0.0:50051
+      - REST_API_BIND_ADDR=0.0.0.0:8080
+      - DATABASE_URL=${DATABASE_URL:-postgres://misogi:${POSTGRES_PASSWORD}@postgres:5432/misogi_audit}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
+      - JWT_ISSUER=${JWT_ISSUER:-misogi-auth}
+      - JWT_AUDIENCE=${JWT_AUDIENCE:-misogi-api}
+      - RSA_PUBLIC_KEY_PATH=/app/config/keys/public.pem
+      - SCANNER_CLAMAV_ADDR=${CLAMAV_ADDR:-clamav:3310}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/v1/health/liveness"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - misogi-net
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+        reservations:
+          memory: 256M
+          cpus: "0.25"
+
+  # ===========================================================================
+  # Misogi Receiver — gRPC File Reception Service
+  # ===========================================================================
+  misogi-receiver:
+    image: misogi:prod
+    container_name: misogi-receiver
+    restart: unless-stopped
+    entrypoint: ["misogi-receiver"]
+    command: ["--config", "/app/config/config.toml"]
+    ports:
+      - "${RECEIVER_GRPC_PORT:-50052}:50052"
+    volumes:
+      - receiver_data:/app/data
+      - ../config:/app/config:ro
+    environment:
+      - MISOGI_LOG_LEVEL=${MISOGI_LOG_LEVEL:-info}
+      - RUST_LOG=${RUST_LOG:-info}
+      - MISOGI_SERVER_ADDR=0.0.0.0:50052
+      - DATABASE_URL=${DATABASE_URL:-postgres://misogi:${POSTGRES_PASSWORD}@postgres:5432/misogi_audit}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:50052/health"] || exit 0
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - misogi-net
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+        reservations:
+          memory: 256M
+          cpus: "0.25"
+
+  # ===========================================================================
+  # Misogi SMTP — Email Sanitization Gateway
+  # ===========================================================================
+  misogi-smtp:
+    image: misogi:prod
+    container_name: misogi-smtp
+    restart: unless-stopped
+    entrypoint: ["misogi-smtp"]
+    command: ["--config", "/app/config/smtp.toml"]
+    ports:
+      - "${SMTP_PORT:-25}:25"
+      - "${SMTP_SUBMISSION_PORT:-587}:587"
+    volumes:
+      - smtp_maildrop:/app/maildrop
+      - smtp_queue:/app/queue
+      - ../config:/app/config:ro
+    environment:
+      - MISOGI_LOG_LEVEL=${MISOGI_LOG_LEVEL:-info}
+      - RUST_LOG=${RUST_LOG:-info}
+      - SMTP_LISTEN_ADDR=0.0.0.0:25
+      - SMTP_HOSTNAME=${SMTP_HOSTNAME:-mail-misogi.local}
+      - SMTP_RELAY_HOST=${SMTP_RELAY_HOST:-}
+      - SMTP_RELAY_PORT=${SMTP_RELAY_PORT:-587}
+      - SMTP_MAX_MESSAGE_SIZE=${SMTP_MAX_MESSAGE_SIZE:-52428800}
+      - DATABASE_URL=${DATABASE_URL:-postgres://misogi:${POSTGRES_PASSWORD}@postgres:5432/misogi_audit}
+    healthcheck:
+      test: ["CMD", "sh", "-c", "echo QUIT | nc localhost 25 | grep -q 220"] || exit 0
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - misogi-net
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+          cpus: "0.5"
+        reservations:
+          memory: 128M
+          cpus: "0.1"
+
+  # ===========================================================================
+  # PostgreSQL — Audit Log & Metadata Persistence
+  # ===========================================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: misogi-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-misogi_audit}
+      POSTGRES_USER: ${POSTGRES_USER:-misogi}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-in-production}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./init-sql:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-misogi} -d ${POSTGRES_DB:-misogi_audit}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - misogi-net
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.5"
+
+  # ===========================================================================
+  # Redis — Job Queue & Session Cache Backend
+  # ===========================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: misogi-redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --appendonly yes
+      --appendfsync everysec
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --requirepass ${REDIS_PASSWORD:-change-me-in-production}
+    volumes:
+      - redisdata:/data
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-change-me-in-production}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - misogi-net
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+          cpus: "0.25"
+
+  # ===========================================================================
+  # ClamAV — External Scanner Example (Optional)
+  # ===========================================================================
+  clamav:
+    profile: ["scanner", "monitoring"]
+    image: clamav/clamav:latest
+    container_name: misogi-clamav
+    restart: unless-stopped
+    environment:
+      CLAMAV_NO_CLAMD: "no"
+      CLAMAV_NO_FRESHCLAMD: "no"
+      FRESHCLAMD_UPDATE_INTERVAL_HOURS: "2"
+    volumes:
+      - clamav_lib:/var/lib/clamav
+      - clamav_db:/var/run/clamav
+    ports:
+      - "${CLAMAV_PORT:-3310}:3310"
+    healthcheck:
+      test: ["CMD-SHELL", "clamdscan --version || freshclam --version"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - misogi-net
+
+  # ===========================================================================
+  # Prometheus — Metrics Collection & Alerting
+  # ===========================================================================
+  prometheus:
+    profile: ["scanner", "monitoring"]
+    image: prom/prometheus:v2.50.0
+    container_name: misogi-prometheus
+    restart: unless-stopped
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - promdata:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=30d"
+      - "--web.enable-lifecycle"
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    depends_on:
+      - misogi-sender
+    networks:
+      - misogi-net
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.5"
+
+  # ===========================================================================
+  # Grafana — Dashboard & Visualization
+  # ===========================================================================
+  grafana:
+    profile: ["scanner", "monitoring"]
+    image: grafana/grafana:10.3.0-alpine
+    container_name: misogi-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-change-me-in-production}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_INSTALL_PLUGINS: grafana-piechart-panel
+    volumes:
+      - grafanadata:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../helm/misogi/files/grafana-dashboards:/etc/grafana/provisioning/dashboards/misogi:ro
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - misogi-net
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.25"
+
+# =============================================================================
+# Persistent Volumes
+# =============================================================================
+volumes:
+  sender_data:
+    driver: local
+  receiver_data:
+    driver: local
+  smtp_maildrop:
+    driver: local
+  smtp_queue:
+    driver: local
+  pgdata:
+    driver: local
+  redisdata:
+    driver: local
+  clamav_lib:
+    driver: local
+  clamav_db:
+    driver: local
+  promdata:
+    driver: local
+  grafanadata:
+    driver: local
+
+# =============================================================================
+# Network
+# =============================================================================
+networks:
+  misogi-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16

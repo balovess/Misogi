@@ -1,0 +1,44 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "misogi.smtp.fullname" . }}
+  labels:
+    {{- include "misogi.smtp.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: smtp
+      port: {{ .Values.smtpConfig.smtpPort }}
+      targetPort: smtp
+      protocol: TCP
+    - name: smtp-submission
+      port: {{ .Values.smtpConfig.smtpSubmissionPort }}
+      targetPort: smtp-submission
+      protocol: TCP
+    - name: metrics
+      port: 8080
+      targetPort: metrics
+      protocol: TCP
+  selector:
+    {{- include "misogi.smtp.selectorLabels" . | nindent 4 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "misogi.smtp.fullname" . }}-loadbalancer
+  labels:
+    {{- include "misogi.smtp.labels" . | nindent 4 }}
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  ports:
+    - name: smtp
+      port: 25
+      targetPort: smtp
+      protocol: TCP
+    - name: smtp-submission
+      port: 587
+      targetPort: smtp-submission
+      protocol: TCP
+  selector:
+    {{- include "misogi.smtp.selectorLabels" . | nindent 4 }}

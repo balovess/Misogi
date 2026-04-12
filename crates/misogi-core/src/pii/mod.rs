@@ -39,8 +39,11 @@ use regex::Regex;
 
 use crate::error::{MisogiError, Result};
 use crate::traits::{
-    PIIAction, PIIMatch, PIIScanResult, PIIDetector,
+    PIIMatch, PIIScanResult,
 };
+
+// Re-export PIIAction and PIIDetector for WASM FFI layer and external consumers
+pub use crate::traits::{PIIAction, PIIDetector};
 
 // =============================================================================
 // A. PIIRule

@@ -420,6 +420,515 @@ impl MagicNumberRegistry {
             Some("Windows Installer Package".to_string()),
         ));
 
+        // =====================================================================
+        // Extended Document Formats (Phase II — 50+ format coverage)
+        // =====================================================================
+
+        // --- Rich Text & ODF Documents ---
+        registry.register(MagicNumberEntry::new(
+            "rtf",
+            Some("7B5C727466".to_string()), // {\rtf
+            true,
+            Some("office-cdr".to_string()),
+            Some("Rich Text Format".to_string()),
+        ));
+
+        registry.register(MagicNumberEntry::new(
+            "odt",
+            Some("504B0304".to_string()), // ZIP container (ODF)
+            true,
+            Some("office-cdr".to_string()),
+            Some("OpenDocument Text Document".to_string()),
+        ));
+
+        registry.register(MagicNumberEntry::new(
+            "ods",
+            Some("504B0304".to_string()),
+            true,
+            Some("office-cdr".to_string()),
+            Some("OpenDocument Spreadsheet".to_string()),
+        ));
+
+        registry.register(MagicNumberEntry::new(
+            "odp",
+            Some("504B0304".to_string()),
+            true,
+            Some("office-cdr".to_string()),
+            Some("OpenDocument Presentation".to_string()),
+        ));
+
+        registry.register(MagicNumberEntry::new(
+            "hwp",
+            Some("48575020".to_string()), // HWP (Korean)
+            true,
+            Some("office-cdr".to_string()),
+            Some("HWP Word Processor Document (Korean)".to_string()),
+        ));
+
+        // --- eBook Formats ---
+        registry.register(MagicNumberEntry::new(
+            "epub",
+            Some("504B0304".to_string()), // ZIP container
+            true,
+            Some("zip-scanner".to_string()),
+            Some("EPUB eBook".to_string()),
+        ));
+
+        registry.register(MagicNumberEntry::new(
+            "fb2",
+            Some("3C3F786D6C".to_string()), // <?xml
+            false,
+            None,
+            Some("FictionBook 2.0".to_string()),
+        ));
+
+        // --- XML Paper Specification ---
+        registry.register(MagicNumberEntry::new(
+            "xps",
+            Some("504B0304".to_string()), // ZIP-based OOXML
+            true,
+            Some("zip-scanner".to_string()),
+            Some("XML Paper Specification (XPS)".to_string()),
+        ));
+
+        registry.register(MagicNumberEntry::new(
+            "oxps",
+            Some("504B0304".to_string()),
+            true,
+            Some("zip-scanner".to_string()),
+            Some("Open XPS".to_string()),
+        ));
+
+        // --- Plain Text Formats (extension-only detection) ---
+        registry.register(MagicNumberEntry::new(
+            "md",
+            None, // No magic bytes for Markdown
+            false,
+            None,
+            Some("Markdown Document".to_string()),
+        ));
+
+        registry.register(MagicNumberEntry::new(
+            "log",
+            None,
+            false,
+            None,
+            Some("Log File".to_string()),
+        ));
+
+        // =====================================================================
+        // Extended Image Formats
+        // =====================================================================
+
+        registry.register(MagicNumberEntry::new(
+            "ico",
+            Some("00000100".to_string()), // ICO header
+            true,
+            Some("image-metadata-sanitizer".to_string()),
+            Some("Windows Icon".to_string()),
+        ));
+
+        registry.register(MagicNumberEntry::new(
+            "icns",
+            Some("69636E73".to_string()), // icns
+            true,
+            Some("image-metadata-sanitizer".to_string()),
+            Some("macOS Icon".to_string()),
+        ));
+
+        registry.register(MagicNumberEntry::new(
+            "heic",
+            Some("66747970".to_string()), // ftyp at offset 4
+            true,
+            Some("image-metadata-sanitizer".to_string()),
+            Some("HEIF/HEIC Image (High Efficiency Image Coding)".to_string()),
+        ));
+
+        registry.register(MagicNumberEntry::new(
+            "heif",
+            Some("66747970".to_string()),
+            true,
+            Some("image-metadata-sanitizer".to_string()),
+            Some("HEIF Image Format".to_string()),
+        ));
+
+        registry.register(MagicNumberEntry::new(
+            "svg",
+            Some("3C737667".to_string()), // <svg
+            false,
+            Some("svg-sanitizer".to_string()),
+            Some("Scalable Vector Graphics (script sanitization required)".to_string()),
+        ));
+
+        registry.register(MagicNumberEntry::new(
+            "avif",
+            Some("0000001866797061".to_string()), // ftypavif
+            true,
+            Some("image-metadata-sanitizer".to_string()),
+            Some("AV1 Image File Format".to_string()),
+        ));
+
+        registry.register(MagicNumberEntry::new(
+            "webp",
+            Some("52494646".to_string()), // RIFF....WEBP
+            true,
+            Some("image-metadata-sanitizer".to_string()),
+            Some("WebP Image".to_string()),
+        ));
+
+        // =====================================================================
+        // Extended Archive / Compression Formats
+        // =====================================================================
+
+        registry.register(MagicNumberEntry::new(
+            "tar",
+            Some("7573746172".to_string()), // ustar at offset 257
+            false,
+            Some("zip-scanner".to_string()),
+            Some("TAR Archive".to_string()),
+        ));
+
+        registry.register(MagicNumberEntry::new(
+            "gz",
+            Some("1F8B08".to_string()),
+            true,
+            Some("zip-scanner".to_string()),
+            Some("GZIP Compressed".to_string()),
+        ));
+
+        registry.register(MagicNumberEntry::new(
+            "bz2",
+            Some("425A68".to_string()), // BZh
+            true,
+            Some("zip-scanner".to_string()),
+            Some("BZIP2 Compressed".to_string()),
+        ));
+
+        registry.register(MagicNumberEntry::new(
+            "xz",
+            Some("FD377A585E00".to_string()),
+            true,
+            Some("zip-scanner".to_string()),
+            Some("XZ Compressed".to_string()),
+        ));
+
+        registry.register(MagicNumberEntry::new(
+            "iso",
+            Some("4344303031".to_string()), // CD001 at offset 32768
+            false,
+            None,
+            Some("ISO 9660 Disc Image".to_string()),
+        ));
+
+        registry.register(MagicNumberEntry::new(
+            "dmg",
+            Some("78DA".to_string()), // zlib header (approximate)
+            false,
+            None,
+            Some("macOS Disk Image".to_string()),
+        ));
+
+        registry.register(MagicNumberEntry::new(
+            "squashfs",
+            Some("73717368".to_string()), // sqsh
+            true,
+            None,
+            Some("SquashFS Filesystem".to_string()),
+        ));
+
+        // =====================================================================
+        // Video / Audio Formats (detect + block or metadata-strip only)
+        // =====================================================================
+
+        registry.register(MagicNumberEntry::new(
+            "mp4",
+            Some("66747970".to_string()), // ftyp at offset 4
+            true,
+            Some("media-metadata-sanitizer".to_string()),
+            Some("MPEG-4 Video (metadata strip: moov atom)".to_string()),
+        ));
+
+        registry.register(MagicNumberEntry::new(
+            "m4a",
+            Some("66747970".to_string()),
+            true,
+            Some("media-metadata-sanitizer".to_string()),
+            Some("MPEG-4 Audio".to_string()),
+        ));
+
+        registry.register(MagicNumberEntry::new(
+            "mov",
+            Some("66747970".to_string()),
+            true,
+            Some("media-metadata-sanitizer".to_string()),
+            Some("QuickTime Movie".to_string()),
+        ));
+
+        registry.register(MagicNumberEntry::new(
+            "mkv",
+            Some("1A45DFA3".to_string()), // EBML
+            true,
+            Some("media-metadata-sanitizer".to_string()),
+            Some("Matroska Video (metadata strip)".to_string()),
+        ));
+
+        registry.register(MagicNumberEntry::new(
+            "mp3",
+            Some("FFFB".to_string()), // MPEG audio frame sync
+            true,
+            Some("media-metadata-sanitizer".to_string()),
+            Some("MPEG Audio Layer III (ID3 tag strip)".to_string()),
+        ));
+
+        registry.register(MagicNumberEntry::new(
+            "flac",
+            Some("664C6143".to_string()), // fLaC
+            true,
+            Some("media-metadata-sanitizer".to_string()),
+            Some("Free Lossless Audio Codec (VORBIS_COMMENT strip)".to_string()),
+        ));
+
+        registry.register(MagicNumberEntry::new(
+            "avi",
+            Some("52494646".to_string()), // RIFF....AVI
+            true,
+            None,
+            Some("Audio Video Interleave".to_string()),
+        ));
+
+        registry.register(MagicNumberEntry::new(
+            "wav",
+            Some("52494646".to_string()), // RIFF....WAVE
+            true,
+            None,
+            Some("Waveform Audio File Format".to_string()),
+        ));
+
+        registry.register(MagicNumberEntry::new(
+            "ogg",
+            Some("4F676753".to_string()), // OggS
+            true,
+            None,
+            Some("Ogg Vorbis/Theora Container".to_string()),
+        ));
+
+        registry.register(MagicNumberEntry::new(
+            "flv",
+            Some("464C5601".to_string()), // FLV
+            true,
+            None,
+            Some("Flash Video".to_string()),
+        ));
+
+        // Also register ID3-tagged MP3 variant
+        registry.register(MagicNumberEntry::new(
+            "mp3",
+            Some("494433".to_string()), // ID3
+            false,
+            Some("media-metadata-sanitizer".to_string()),
+            Some("MP3 with ID3 Tag".to_string()),
+        ));
+
+        // =====================================================================
+        // Code / Script Formats (detect + block — executable code)
+        // =====================================================================
+
+        registry.register(MagicNumberEntry::new(
+            "js",
+            None, // Content-pattern detection
+            false,
+            None, // Blocked
+            Some("JavaScript Source (blocked: executable code)".to_string()),
+        ));
+
+        registry.register(MagicNumberEntry::new(
+            "mjs",
+            None,
+            false,
+            None,
+            Some("JavaScript ES Module (blocked)".to_string()),
+        ));
+
+        registry.register(MagicNumberEntry::new(
+            "cjs",
+            None,
+            false,
+            None,
+            Some("CommonJS Module (blocked)".to_string()),
+        ));
+
+        registry.register(MagicNumberEntry::new(
+            "ts",
+            None,
+            false,
+            None,
+            Some("TypeScript Source (blocked: executable code)".to_string()),
+        ));
+
+        registry.register(MagicNumberEntry::new(
+            "tsx",
+            None,
+            false,
+            None,
+            Some("TypeScript JSX (blocked)".to_string()),
+        ));
+
+        registry.register(MagicNumberEntry::new(
+            "jsx",
+            None,
+            false,
+            None,
+            Some("JavaScript JSX (blocked)".to_string()),
+        ));
+
+        registry.register(MagicNumberEntry::new(
+            "py",
+            None,
+            false,
+            None,
+            Some("Python Script (blocked: executable code)".to_string()),
+        ));
+
+        registry.register(MagicNumberEntry::new(
+            "pyw",
+            None,
+            false,
+            None,
+            Some("Python GUI Script (blocked)".to_string()),
+        ));
+
+        registry.register(MagicNumberEntry::new(
+            "sh",
+            None,
+            false,
+            None,
+            Some("Bourne Shell Script (blocked: executable code)".to_string()),
+        ));
+
+        registry.register(MagicNumberEntry::new(
+            "bash",
+            None,
+            false,
+            None,
+            Some("Bash Script (blocked)".to_string()),
+        ));
+
+        registry.register(MagicNumberEntry::new(
+            "zsh",
+            None,
+            false,
+            None,
+            Some("Z Shell Script (blocked)".to_string()),
+        ));
+
+        registry.register(MagicNumberEntry::new(
+            "ps1",
+            None,
+            false,
+            None,
+            Some("PowerShell Script (blocked: executable code)".to_string()),
+        ));
+
+        registry.register(MagicNumberEntry::new(
+            "bat",
+            None,
+            false,
+            None,
+            Some("Windows Batch File (blocked: executable code)".to_string()),
+        ));
+
+        registry.register(MagicNumberEntry::new(
+            "cmd",
+            None,
+            false,
+            None,
+            Some("Windows CMD Script (blocked)".to_string()),
+        ));
+
+        registry.register(MagicNumberEntry::new(
+            "vbs",
+            None,
+            false,
+            None,
+            Some("VBScript (blocked: executable code)".to_string()),
+        ));
+
+        registry.register(MagicNumberEntry::new(
+            "vbe",
+            None,
+            false,
+            None,
+            Some("VBScript Encoded (blocked)".to_string()),
+        ));
+
+        registry.register(MagicNumberEntry::new(
+            "htm",
+            None,
+            false,
+            Some("html-sanitizer".to_string()),
+            Some("HTML (script stripping required)".to_string()),
+        ));
+
+        registry.register(MagicNumberEntry::new(
+            "html",
+            None,
+            false,
+            Some("html-sanitizer".to_string()),
+            Some("HyperText Markup Language (script stripping required)".to_string()),
+        ));
+
+        // =====================================================================
+        // Additional Binary Executable / Blocked Formats
+        // =====================================================================
+
+        registry.register(MagicNumberEntry::new(
+            "dll",
+            Some("4D5A".to_string()), // PE (same as EXE)
+            true,
+            None, // Blocked
+            Some("Windows Dynamic Link Library".to_string()),
+        ));
+
+        registry.register(MagicNumberEntry::new(
+            "elf",
+            Some("7F454C46".to_string()), // \x7FELF
+            true,
+            None, // Blocked
+            Some("Executable and Linkable Format (Linux/BSD binary)".to_string()),
+        ));
+
+        registry.register(MagicNumberEntry::new(
+            "mach-o",
+            Some("FEEDFACE".to_string()), // Mach-O 32-bit big-endian
+            true,
+            None, // Blocked
+            Some("Mach-O Object File (macOS/iOS binary)".to_string()),
+        ));
+
+        registry.register(MagicNumberEntry::new(
+            "mach-o",
+            Some("CEFAEDFE".to_string()), // Mach-O 32-bit little-endian
+            true,
+            None,
+            Some("Mach-O Object File (little-endian)".to_string()),
+        ));
+
+        registry.register(MagicNumberEntry::new(
+            "mach-o",
+            Some("CAFEBABE".to_string()), // Mach-O 64-bit / Java class
+            true,
+            None,
+            Some("Mach-O 64-bit / Java Class File".to_string()),
+        ));
+
+        registry.register(MagicNumberEntry::new(
+            "class",
+            Some("CAFEBABE".to_string()), // Java class file magic
+            true,
+            None, // Blocked
+            Some("Java Compiled Class (blocked: executable bytecode)".to_string()),
+        ));
+
         registry
     }
 
@@ -428,8 +937,9 @@ impl MagicNumberRegistry {
     // =========================================================================
 
     /// Map a file extension to its standard MIME type string.
-    fn mime_for_extension(&self, extension: &str) -> String {
+    pub fn mime_for_extension(&self, extension: &str) -> String {
         match extension.to_lowercase().as_str() {
+            // --- Documents ---
             "pdf" => "application/pdf".to_string(),
             "docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document".to_string(),
             "xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet".to_string(),
@@ -437,16 +947,80 @@ impl MagicNumberRegistry {
             "doc" => "application/msword".to_string(),
             "xls" => "application/vnd.ms-excel".to_string(),
             "jtd" => "application/x-ichitaro".to_string(),
+            "rtf" => "application/rtf".to_string(),
+            "odt" => "application/vnd.oasis.opendocument.text".to_string(),
+            "ods" => "application/vnd.oasis.opendocument.spreadsheet".to_string(),
+            "odp" => "application/vnd.oasis.opendocument.presentation".to_string(),
+            "hwp" => "application/x-hwp".to_string(),
+            "epub" => "application/epub+zip".to_string(),
+            "fb2" => "application/x-fictionbook+xml".to_string(),
+            "xps" => "application/vnd.ms-xpsdocument".to_string(),
+            "oxps" => "application/oxps".to_string(),
+
+            // --- Images ---
             "jpeg" | "jpg" => "image/jpeg".to_string(),
             "png" => "image/png".to_string(),
             "gif" => "image/gif".to_string(),
             "tiff" | "tif" => "image/tiff".to_string(),
             "bmp" => "image/bmp".to_string(),
+            "ico" => "image/x-icon".to_string(),
+            "icns" => "image/icns".to_string(),
+            "heic" | "heif" => "image/heic".to_string(),
+            "svg" => "image/svg+xml".to_string(),
+            "avif" => "image/avif".to_string(),
+            "webp" => "image/webp".to_string(),
+
+            // --- Archives ---
             "zip" => "application/zip".to_string(),
+            "rar" => "application/vnd.rar".to_string(),
+            "7z" => "application/x-7z-compressed".to_string(),
+            "tar" => "application/x-tar".to_string(),
+            "gz" => "application/gzip".to_string(),
+            "bz2" => "application/x-bzip2".to_string(),
+            "xz" => "application/x-xz".to_string(),
+            "iso" => "application/x-iso9660-image".to_string(),
+            "dmg" => "application/x-apple-diskimage".to_string(),
+            "squashfs" => "application/vnd.squashfs".to_string(),
+
+            // --- Text ---
             "txt" => "text/plain".to_string(),
             "csv" => "text/csv".to_string(),
             "xml" => "application/xml".to_string(),
+            "md" => "text/markdown".to_string(),
+            "log" => "text/plain".to_string(),
+
+            // --- Video / Audio ---
+            "mp4" => "video/mp4".to_string(),
+            "m4a" => "audio/mp4".to_string(),
+            "mov" => "video/quicktime".to_string(),
+            "mkv" => "video/x-matroska".to_string(),
+            "mp3" => "audio/mpeg".to_string(),
+            "flac" => "audio/flac".to_string(),
+            "avi" => "video/x-msvideo".to_string(),
+            "wav" => "audio/wav".to_string(),
+            "ogg" => "audio/ogg".to_string(),
+            "flv" => "video/x-flv".to_string(),
+
+            // --- Code / Scripts (blocked) ---
+            "js" | "mjs" | "cjs" => "application/javascript".to_string(),
+            "ts" => "application/typescript".to_string(),
+            "tsx" | "jsx" => "text/jsx".to_string(),
+            "py" | "pyw" => "text/x-python".to_string(),
+            "sh" | "bash" | "zsh" => "application/x-sh".to_string(),
+            "ps1" => "application/x-powershell".to_string(),
+            "bat" | "cmd" => "application/x-msdos-program".to_string(),
+            "vbs" | "vbe" => "application/vbscript".to_string(),
+            "htm" | "html" => "text/html".to_string(),
+
+            // --- Executables (blocked) ---
             "exe" => "application/vnd.microsoft.portable-executable".to_string(),
+            "dll" => "application/vnd.microsoft.portable-executable".to_string(),
+            "msi" => "application/x-msi".to_string(),
+            "elf" => "application/x-elf".to_string(),
+            "mach-o" => "application/x-mach-binary".to_string(),
+            "class" => "application/java-vm".to_string(),
+            "dwg" => "application/dwg".to_string(),
+
             _ => format!("application/x-{}", extension),
         }
     }

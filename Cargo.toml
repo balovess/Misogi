@@ -3,7 +3,13 @@ resolver = "2"
 members = [
     "crates/misogi-core",
     "crates/misogi-cdr",
+    "crates/misogi-macros",
     "crates/misogi-sender",
     "crates/misogi-receiver",
-    "crates/misogi-auth",
+    "crates/misogi-smtp",
+    "crates/misogi-wasm",
+    "crates/misogi-rest-api",
+    "crates/misogi-nocode",
+    "crates/misogi-bootstrap",
+    "crates/misogi-config",
 ]

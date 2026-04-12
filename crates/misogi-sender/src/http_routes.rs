@@ -118,6 +118,79 @@ pub async fn upload(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
+    // ---- Phase 8: JTD (Ichitaro) Conversion ----
+    // Detect .jtd files and convert to PDF before CDR processing.
+    // This runs after file assembly but before sanitization, ensuring
+    // the CDR pipeline receives a PDF instead of a proprietary format.
+    //
+    // Note: The uploader stores files as chunks; we reassemble into a temp file
+    // for JTD processing since complete_upload() removes its internal temp file.
+    let _effective_file_id = {
+        // Reassemble the uploaded file from chunks for JTD detection/conversion
+        let file_dir = state.uploader.storage_dir().join(&file_id);
+        let assembled_path = file_dir.join(&filename);
+
+        // Reassemble chunks into the target file path if not already present
+        if !assembled_path.exists() {
+            // Read all chunks and write them sequentially
+            let mut assembled_file = tokio::fs::File::create(&assembled_path).await
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create assembled file: {e}")))?;
+            use tokio::io::AsyncWriteExt;
+            for i in 0..manifest.chunk_count {
+                let chunk_path = file_dir.join(format!("chunk_{}.bin", i));
+                if chunk_path.exists() {
+                    let chunk_data = tokio::fs::read(&chunk_path).await
+                        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to read chunk {i}: {e}")))?;
+                    assembled_file.write_all(&chunk_data).await
+                        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to write chunk {i}: {e}")))?;
+                }
+            }
+            assembled_file.flush().await
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to flush assembled file: {e}")))?;
+        }
+
+        let jtd_result = crate::jtd_handler::handle_jtd_upload(
+            &assembled_path,
+            &state.config,
+        ).await;
+
+        match jtd_result {
+            crate::jtd_handler::JtdHandleResult::NotJtd { .. } => {
+                // Non-JTD file -- proceed normally with original path
+                file_id.clone()
+            }
+            crate::jtd_handler::JtdHandleResult::SkippedWithWarning { original_path, .. } => {
+                // JTD detected but conversion disabled -- continue with original
+                tracing::warn!(
+                    file_id = %file_id,
+                    path = %original_path.display(),
+                    "JTD file proceeding without conversion"
+                );
+                file_id.clone()
+            }
+            crate::jtd_handler::JtdHandleResult::Converted { pdf_path, .. } => {
+                // Conversion succeeded -- log and continue with PDF path
+                tracing::info!(
+                    file_id = %file_id,
+                    pdf_path = %pdf_path.display(),
+                    "JTD converted to PDF; CDR will process the converted file"
+                );
+                // Note: The sanitized output will be based on the converted PDF.
+                // The original JTD file remains in storage for audit trail purposes.
+                file_id.clone()
+            }
+            crate::jtd_handler::JtdHandleResult::ConversionFailed { error_message } => {
+                // Conversion failed with abort policy -- return error to client
+                tracing::error!(
+                    file_id = %file_id,
+                    "JTD conversion aborted: {}",
+                    error_message
+                );
+                return Err((StatusCode::UNPROCESSABLE_ENTITY, error_message));
+            }
+        }
+    };
+
     if state.config.auto_sanitize {
         let sanitize_file_id = file_id.clone();
         let sanitize_state = state.clone();
@@ -324,4 +397,129 @@ pub async fn list_policies(State(_state): State<SharedState>) -> Json<Vec<Policy
             description: "Extract text content only, discarding all formatting, images, tables, and layout information.".to_string(),
         },
     ])
+}
+
+// =============================================================================
+// PPAP (Password Protected Attachment Protocol) API Endpoints
+// =============================================================================
+
+/// Response for the PPAP detection endpoint.
+#[derive(Serialize)]
+pub struct PpapDetectResponse {
+    pub is_ppap: bool,
+    pub confidence: f64,
+    pub indicator_count: usize,
+    pub encryption_method: Option<String>,
+    pub reason: String,
+}
+
+/// Response for the PPAP statistics endpoint.
+#[derive(Serialize)]
+pub struct PpapStatisticsResponse {
+    pub total_scanned: u64,
+    pub ppap_detected: u64,
+    pub ppap_blocked: u64,
+    pub ppap_sanitized: u64,
+    pub ppap_quarantined: u64,
+    pub ppap_converted: u64,
+}
+
+/// Standalone PPAP detection endpoint.
+///
+/// Scans an uploaded file for PPAP indicators without triggering any policy action.
+/// Useful for admin UI preview or CI/CD pipeline integration.
+///
+/// # Example
+///
+/// ```bash
+/// curl -X POST http://localhost:3001/api/v1/ppap/detect \
+///   -F "file=@sensitive.zip"
+/// ```
+pub async fn ppap_detect(
+    State(state): State<SharedState>,
+    mut form: Multipart,
+) -> Result<(StatusCode, Json<PpapDetectResponse>), (StatusCode, Json<serde_json::Value>)> {
+    // Extract uploaded file from multipart form
+    let file = match form.next_field().await {
+        Ok(Some(field)) => field,
+        Ok(None) => {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({"error": "No file uploaded"})),
+            ));
+        }
+        Err(e) => {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({"error": format!("Invalid upload: {}", e)})),
+            ));
+        }
+    };
+
+    let _filename = file
+        .file_name()
+        .map(|n| n.to_string())
+        .unwrap_or_else(|| "unknown".to_string());
+
+    let data = match file.bytes().await {
+        Ok(d) => d,
+        Err(e) => {
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": format!("Failed to read file: {}", e)})),
+            ));
+        }
+    };
+
+    // Write to temp file and run detection (detector works on file paths)
+    let tmp_path = state.config.upload_dir.join(format!("ppap_scan_{}", uuid::Uuid::new_v4()));
+    if let Err(e) = tokio::fs::write(&tmp_path, &data).await {
+        return Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"error": format!("Failed to write temp file: {}", e)})),
+        ));
+    }
+
+    let detector = misogi_cdr::PpapDetector::new();
+    let result = match detector.detect(&tmp_path).await {
+        Ok(r) => r,
+        Err(e) => {
+            let _ = tokio::fs::remove_file(&tmp_path).await;
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": format!("Detection failed: {}", e)})),
+            ));
+        }
+    };
+
+    let _ = tokio::fs::remove_file(&tmp_path).await;
+
+    Ok((
+        StatusCode::OK,
+        Json(PpapDetectResponse {
+            is_ppap: result.is_ppap,
+            confidence: result.confidence,
+            indicator_count: result.indicators.len(),
+            encryption_method: result.encryption_method.clone(),
+            reason: result.reason,
+        }),
+    ))
+}
+
+/// PPAP statistics endpoint.
+///
+/// Returns aggregated metrics about PPAP detection and handling activity.
+/// Used by admin dashboards to track PPAP elimination progress.
+pub async fn ppap_statistics(
+    State(_state): State<SharedState>,
+) -> Json<PpapStatisticsResponse> {
+    // TODO: Replace with actual statistics from in-memory counter / database
+    Json(PpapStatisticsResponse {
+        total_scanned: 0,
+        ppap_detected: 0,
+        ppap_blocked: 0,
+        ppap_sanitized: 0,
+        ppap_quarantined: 0,
+        ppap_converted: 0,
+    })
 }

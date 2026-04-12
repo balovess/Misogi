@@ -22,6 +22,7 @@ pub struct ChunkDataPayload {
     pub md5: String,
 }
 
+#[derive(Debug)]
 pub struct TunnelClient {
     stream: Option<TcpStream>,
     receiver_addr: String,

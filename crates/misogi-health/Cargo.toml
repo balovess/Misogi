@@ -1,0 +1,37 @@
+[package]
+name = "misogi-health"
+version = "0.1.0"
+edition = "2024"
+description = "Kubernetes-compatible health monitoring system for Misogi secure file transfer"
+
+[dependencies]
+# --- Serialization ---
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# --- Timestamps ---
+chrono = { version = "0.4", features = ["serde"] }
+
+# --- Error handling ---
+thiserror = "2"
+
+# --- Structured logging ---
+tracing = "0.1"
+
+# --- Async runtime (always available for checker) ---
+tokio = { version = "1", features = ["time", "sync"] }
+futures = "0.3"
+
+# --- HTTP framework (feature-gated) ---
+axum = { version = "0.7", optional = true }
+async-trait = { version = "0.1", optional = true }
+
+# --- Internal workspace crates (optional, for built-in checkables) ---
+misogi-auth = { path = "../misogi-auth", optional = true }
+misogi-core = { path = "../misogi-core", optional = true }
+misogi-cdr = { path = "../misogi-cdr", optional = true }
+
+[features]
+default = []
+http = ["dep:axum", "dep:async-trait"]
+full = ["http"]

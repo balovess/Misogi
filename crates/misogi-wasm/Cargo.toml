@@ -1,0 +1,19 @@
+[package]
+name = "misogi-wasm"
+version = "0.1.0"
+edition = "2024"
+description = "Sandboxed WASM plugin runtime for Misogi CDR parser hot-loading"
+
+[dependencies]
+wasmi = "1.0.9"
+async-trait = "0.1"
+tokio = { version = "1", features = ["sync"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tracing = "0.1"
+bytes = "1"
+misogi-cdr = { path = "../misogi-cdr" }
+
+[dev-dependencies]
+tempfile = "3"

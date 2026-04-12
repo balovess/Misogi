@@ -1,0 +1,270 @@
+//! Misogi V2 Protocol Definition — Future Extension Point.
+//!
+//! This file defines the V2 gRPC service contracts with AI-enhanced
+//! semantic sanitization capabilities. It is intentionally kept as a
+//! **skeleton** — full implementation will be developed when V2 features
+//! reach production readiness.
+//!
+//! # Relationship to V1
+//!
+//! V2 is designed to be **forward-compatible** with V1:
+//! - V2 message field numbers start at 5+ (after V1's last field)
+//! - V2 services can import and extend V1 messages
+//! - Clients using V1 can communicate with V2 servers via CompatibilityAdapter
+//!
+//! # New Capabilities in V2 (Planned)
+//!
+//! | Feature | V1 | V2 |
+//! |---------|----|----|
+//! | Basic upload | ✅ | ✅ (enhanced) |
+//! | Content-type hinting | ❌ | ✅ |
+//! | Extensible metadata map | ❌ | ✅ |
+//! | AI pre-scan request | ❌ | ✅ |
+//! | Semantic sanitization flag | ❌ | ✅ |
+//! | Enhanced upload response | ❌ | ✅ |
+//!
+//! # Migration Path
+//!
+//! ```text
+//! Now:     V1 (stable, production)
+//!          ↓
+//! 2025-Q3: V2 (beta, parallel deployment)
+//!          ↓
+//! 2027-Q3: V1 sunset (hard deprecation)
+//! ```
+
+syntax = "proto3";
+
+package misogi.file_transfer.v2;
+
+import "google/protobuf/empty.proto";
+import "v1/misogi.proto";
+
+// =============================================================================
+// V2 Services
+// =============================================================================
+
+// SenderServiceV2 extends V1's SenderService with AI-enhanced capabilities.
+//
+// Key differences from V1.SenderService:
+// - UploadV2 accepts ChunkV2 with extended metadata
+// - PreScan enables client-side ML analysis before upload
+// - UploadResponseV2 carries AI processing results
+service SenderServiceV2 {
+  // UploadV2 accepts extended chunks with metadata and content hints.
+  //
+  // Backward compatible: V2 clients can send ChunkV2 which includes
+  // all V1 Chunk fields (1-4) plus extensions (5-7).
+  // The server's CompatibilityAdapter downgrades to V1 if needed.
+  rpc UploadV2(stream ChunkV2) returns (UploadResponseV2);
+
+  // PreScan performs AI-powered content analysis before full upload.
+  //
+  // Returns risk assessment, PII detection summary, and recommended
+  // sanitization policy without transferring the actual file content.
+  rpc PreScan(PreScanRequest) returns (PreScanResponse);
+
+  // --- V1-compatible shims (delegate to V1 implementation) ---
+  rpc Upload(stream misogi.file_transfer.v1.Chunk)
+      returns (misogi.file_transfer.v1.UploadResponse);
+
+  rpc GetFileStatus(misogi.file_transfer.v1.FileIdRequest)
+      returns (misogi.file_transfer.v1.FileStatusResponse);
+
+  rpc ListFiles(misogi.file_transfer.v1.ListFilesRequest)
+      returns (misogi.file_transfer.v1.ListFilesResponse);
+
+  rpc TriggerTransfer(misogi.file_transfer.v1.FileIdRequest)
+      returns (misogi.file_transfer.v1.TransferResponse);
+}
+
+// ReceiverServiceV2 extends V1's ReceiverService with enhanced streaming.
+service ReceiverServiceV2 {
+  // ReceiveChunkV2 accepts V2 chunks with extended metadata.
+  rpc ReceiveChunkV2(stream ChunkDataV2) returns (stream ChunkAckV2);
+
+  // DownloadFileV2 includes progress tracking in response headers.
+  rpc DownloadFileV2(FileIdRequestV2) returns (stream FileChunkV2);
+
+  // --- V1-compatible shims ---
+  rpc ReceiveChunk(stream misogi.file_transfer.v1.ChunkData)
+      returns (stream misogi.file_transfer.v1.ChunkAck);
+
+  rpc DownloadFile(misogi.file_transfer.v1.FileIdRequest)
+      returns (stream misogi.file_transfer.v1.FileChunk);
+
+  rpc ListFiles(google.protobuf.Empty)
+      returns (misogi.file_transfer.v1.ListFilesResponse);
+}
+
+// =============================================================================
+// V2 Messages — Extended Data Types
+// =============================================================================
+
+// ChunkV2 extends V1.Chunk with AI-relevant metadata.
+//
+// Fields 1-4: Identical to V1.Chunk (forward-compatible).
+// Fields 5-7: V2 extensions (stripped by CompatibilityAdapter for V1 receivers).
+message ChunkV2 {
+  // --- V1 core fields (preserved exactly) ---
+  bytes data = 1;
+  string file_id = 2;
+  uint32 chunk_index = 3;
+  string chunk_md5 = 4;
+
+  // --- V2 extensions ---
+  // MIME type hint provided by the client (e.g., "application/pdf").
+  // Helps the CDR engine select appropriate sanitization strategy upfront.
+  string content_type_hint = 5;
+
+  // Extensible key-value metadata map for SIer custom annotations.
+  // Examples: {"department": "finance", "classification": "internal"}
+  map<string, string> metadata = 6;
+
+  // If true, the CDR engine should apply AI-based semantic sanitization
+  // in addition to standard structural sanitization.
+  bool requires_ai_sanitization = 7;
+}
+
+// ChunkDataV2 extends V1.ChunkData with transfer-level metadata.
+message ChunkDataV2 {
+  string file_id = 1;
+  uint32 chunk_index = 2;
+  bytes data = 3;
+  string chunk_md5 = 4;
+
+  // V2: Transfer priority level (0=normal, 1=high, 2=critical).
+  uint32 priority = 5;
+
+  // V2: Checksum algorithm used (default: "md5", options: "sha256", "xxhash64").
+  string checksum_algorithm = 6;
+}
+
+// ChunkAckV2 extends V1.ChunkAck with timing information.
+message ChunkAckV2 {
+  string file_id = 1;
+  uint32 chunk_index = 2;
+  bool success = 3;
+  string error = 4;
+
+  // V2: Server-side processing time in microseconds.
+  uint64 processing_time_us = 5;
+
+  // V2: Queue depth at time of ack (for backpressure signaling).
+  uint32 queue_depth = 6;
+}
+
+// FileChunkV2 extends V1.FileChunk with integrity metadata.
+message FileChunkV2 {
+  bytes data = 1;
+  uint32 offset = 2;
+  uint32 total_size = 3;
+
+  // V2: SHA-256 hash of this chunk (for end-to-end integrity verification).
+  string chunk_sha256 = 5;
+
+  // V2: Compression algorithm used ("none", "zstd", "lz4").
+  string compression = 6;
+}
+
+// =============================================================================
+// V2 Request/Response Types
+// =============================================================================
+
+// UploadResponseV2 extends V1.UploadResponse with AI processing results.
+message UploadResponseV2 {
+  string file_id = 1;
+  string status = 2;
+
+  // V2: Number of chunks that triggered AI analysis.
+  uint32 ai_analyzed_chunks = 3;
+
+  // V2: PII findings count from pre-upload scan.
+  uint32 pii_findings_count = 4;
+
+  // V2: Recommended sanitization policy ID.
+  string recommended_policy_id = 5;
+
+  // V2: Server-assigned API version that processed this request.
+  string processed_by_version = 6;
+}
+
+// PreScanRequest triggers AI content analysis without full upload.
+message PreScanRequest {
+  // Filename (for format detection, not stored).
+  string filename = 1;
+
+  // Declared file size in bytes (for quota pre-check).
+  uint64 declared_size = 2;
+
+  // Content-Type declared by client.
+  string content_type = 3;
+
+  // MD5 hash of the full file content (for deduplication check).
+  string file_md5 = 4;
+
+  // Client-requested scan depth.
+  ScanDepth scan_depth = 5;
+}
+
+// PreScanResponse contains AI analysis results without storing the file.
+message PreScanResponse {
+  // Unique pre-scan session ID (for correlating with subsequent UploadV2).
+  string scan_session_id = 1;
+
+  // Overall risk assessment.
+  RiskLevel risk_level = 2;
+
+  // Number of PII pattern matches found.
+  uint32 pii_match_count = 3;
+
+  // Detected file category (for policy selection).
+  string detected_category = 4;
+
+  // Whether the file would pass current sanitization policies.
+  bool would_pass_sanitization = 5;
+
+  // Recommended sanitization policy ID.
+  string recommended_policy_id = 6;
+
+  // Detailed findings (human-readable summary).
+  string findings_summary = 7;
+}
+
+// FileIdRequestV2 extends V1.FileIdRequest with version awareness.
+message FileIdRequestV2 {
+  string file_id = 1;
+
+  // V2: Requested response format version.
+  string preferred_response_version = 2;
+}
+
+// =============================================================================
+// V2 Enums
+// =============================================================================
+
+// Depth of AI pre-scan analysis.
+enum ScanDepth {
+  SCAN_DEPTH_UNSPECIFIED = 0;
+  // Fast: filename + extension only (~1ms)
+  SCAN_DEPTH_FAST = 1;
+  // Standard: header inspection + known patterns (~10ms)
+  SCAN_DEPTH_STANDARD = 2;
+  // Deep: full content ML analysis (~100ms+)
+  SCAN_DEPTH_DEEP = 3;
+}
+
+// Risk level assessment from AI pre-scan.
+enum RiskLevel {
+  RISK_LEVEL_UNSPECIFIED = 0;
+  // No threats detected.
+  RISK_LEVEL_SAFE = 1;
+  // Minor concerns (e.g., unusual file type).
+  RISK_LEVEL_LOW = 2;
+  // Moderate risk (PII patterns detected).
+  RISK_LEVEL_MEDIUM = 3;
+  // High risk (executable code, macros, or encrypted content).
+  RISK_LEVEL_HIGH = 4;
+  // Critical: known malware signature or classified data pattern.
+  RISK_LEVEL_CRITICAL = 5;
+}

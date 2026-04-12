@@ -1,0 +1,270 @@
+# =============================================================================
+# Misogi Helm Chart — Production Values
+# =============================================================================
+# Configure all aspects of the Misogi CDR platform deployment.
+# Override with: helm install misogi ./helm/misogi -f values-custom.yaml
+# =============================================================================
+
+# ---- Global Settings --------------------------------------------------------
+global:
+  imageRepository: ghcr.io/misogi-dev/misogi
+  imageTag: "0.1.0"
+  imagePullPolicy: IfNotPresent
+  storageClass: ""
+  imagePullSecrets: []
+
+# ---- Misogi Sender Configuration -------------------------------------------
+senderConfig:
+  replicaCount: 2
+
+  image:
+    repository: ""
+    tag: ""
+    pullPolicy: ""
+
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "256Mi"
+    limits:
+      cpu: "1000m"
+      memory: "512Mi"
+
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+  grpcPort: 50051
+  restApiPort: 8080
+
+  extraEnv: []
+  extraVolumeMounts: []
+
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+
+# ---- Misogi Receiver Configuration -----------------------------------------
+receiverConfig:
+  replicaCount: 2
+
+  image:
+    repository: ""
+    tag: ""
+    pullPolicy: ""
+
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "256Mi"
+    limits:
+      cpu: "1000m"
+      memory: "512Mi"
+
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+  grpcPort: 50052
+
+  extraEnv: []
+  extraVolumeMounts: []
+
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+
+# ---- SMTP Gateway Configuration -------------------------------------------
+smtpConfig:
+  replicaCount: 1
+
+  image:
+    repository: ""
+    tag: ""
+    pullPolicy: ""
+
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "384Mi"
+
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+  smtpPort: 25
+  smtpSubmissionPort: 587
+  hostname: "mail-misogi.local"
+  relayHost: ""
+  relayPort: 587
+  maxMessageSize: 52428800
+
+  zonePolicy:
+    internalDomains: []
+    forcePiiScanOnExternal: true
+
+  extraEnv: []
+  extraVolumeMounts: []
+
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 3
+    targetCPUUtilizationPercentage: 70
+
+# ---- Authentication Configuration -----------------------------------------
+auth:
+  jwtIssuer: "misogi-auth"
+  jwtAudience: "misogi-api"
+  rsaPublicKeyPath: "/etc/misogi/keys/public.pem"
+  rsaPrivateKeyPath: "/etc/misogi/keys/private.pem"
+
+  ldap:
+    enabled: false
+    urls: []
+    baseDn: ""
+    bindDn: ""
+    userSearchBase: ""
+    roleMappings: {}
+
+  oidc:
+    enabled: false
+    discoveryUrl: ""
+    clientId: ""
+    redirectUri: ""
+
+  apiKeys: []
+
+# ---- PostgreSQL (Audit Database) ------------------------------------------
+postgresql:
+  enabled: true
+  auth:
+    database: "misogi_audit"
+    username: "misogi"
+    password: ""
+    existingSecret: ""
+  primary:
+    persistence:
+      enabled: true
+      size: 20Gi
+      storageClass: ""
+
+# ---- Redis (Job Queue) ---------------------------------------------------
+redis:
+  enabled: true
+  architecture: standalone
+  auth:
+    password: ""
+    existingSecret: ""
+  master:
+    persistence:
+      enabled: true
+      size: 5Gi
+      storageClass: ""
+
+# ---- External Scanner Configuration ---------------------------------------
+scanner:
+  externalScanners: []
+  # Example:
+  # - name: clamav-primary
+  #   type: clamav
+  #   enabled: true
+  #   address: "clamav:3310"
+  # - name: custom-http-scanner
+  #   type: http_api
+  #   enabled: true
+  #   endpoint: "https://scanner.example.com/api/scan"
+  #   apiKeyHeader: "X-Scanner-Key"
+
+# ---- Ingress Configuration -----------------------------------------------
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "500m"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+  tls:
+    - secretName: misogi-tls
+      hosts:
+        - misogi-api.example.com
+        - misogi-grpc.example.com
+  hosts:
+    - host: misogi-api.example.com
+      paths:
+        - path: /api/
+          pathType: Prefix
+          service: sender
+          port: 8080
+    - host: misogi-grpc.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+          service: sender
+          port: 50051
+
+# ---- Horizontal Pod Autoscaler --------------------------------------------
+hpa:
+  enabled: true
+
+# ---- Pod Disruption Budget -----------------------------------------------
+pdb:
+  enabled: true
+  minAvailable: 1
+
+# ---- Network Policy ------------------------------------------------------
+networkPolicy:
+  enabled: true
+  ingressNamespaces:
+    - ingress-nginx
+  egressRules:
+    allowToPostgres: true
+    allowToRedis: true
+    allowToExternalScanners: true
+    scannerPorts:
+      - 3310
+
+# ---- ServiceMonitor (Prometheus Operator) ---------------------------------
+serviceMonitor:
+  enabled: false
+  interval: 15s
+  labels:
+    release: prometheus
+  namespace: monitoring
+
+# ---- Grafana Dashboard Provisioning --------------------------------------
+grafana:
+  enabled: true
+  adminUser: admin
+  adminPassword: ""
+  dashboardConfigMaps:
+    - name: misogi-dashboards
+      key: "misogi-overview.json"
+    - name: misogi-dashboards
+      key: "misogi-scanner-health.json"
+    - name: misogi-dashboards
+      key: "misogi-latency.json"
+  plugins: []
+
+# ---- Default Resource Settings -------------------------------------------
+resources: {}
+
+# ---- Node / Affinity Overrides --------------------------------------------
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# ---- Service Account -----------------------------------------------------
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}

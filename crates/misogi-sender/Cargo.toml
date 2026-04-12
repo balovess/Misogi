@@ -30,5 +30,9 @@ misogi-cdr = { path = "../misogi-cdr" }
 uuid = { version = "1", features = ["v4"] }
 chrono = "0.4"
 
+[features]
+default = []
+jp_contrib = ["misogi-core/jp_contrib"]
+
 [dev-dependencies]
 tempfile = "3"

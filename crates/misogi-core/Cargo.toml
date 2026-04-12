@@ -10,7 +10,7 @@ md-5 = "0.10"
 serde = { version = "1", features = ["derive"] }
 bytes = "1"
 prost = "0.13"
-tonic = "0.12"
+tonic = { version = "0.12", features = ["tls"] }
 uuid = { version = "1", features = ["v4"] }
 thiserror = "2"
 chrono = { version = "0.4", features = ["serde"] }
@@ -20,24 +20,88 @@ serde_json = "1.0.149"
 futures = "0.3"
 async-trait = "0.1"
 
-# Japanese compliance module dependencies
-ipnetwork = "0.21"                 # IP CIDR matching for vendor isolation (Task 5.10)
-encoding_rs = "0.8"                # Japanese encoding detection/conversion (Task 5.11)
-regex = "1"                        # Pattern matching for Wareki detection (Task 5.9)
-toml = "0.8"                       # Configuration file parsing (Task 5.9)
-tera = "1"                         # Template engine for log formatting (Task 5.4)
-encoding_rs_io = "0.1"             # Stream encoding support (Task 5.4)
+# For plugin registry (lazy global initialization)
+once_cell = "1"
+
+# For plugin registry (high-performance RwLock)
+parking_lot = "0.12"
+
+# For HTTP REST API scanner adapter
+reqwest = { version = "0.12", features = ["json", "multipart"] }
+
+# For ZIP archive processing
 zip = "2"
+# For SHA-256 hashing
 sha2 = "0.10"
+# For hex encoding/decoding
 hex = "0.4"
+# For temporary file handling
 tempfile = "3"
+
+# For FEC (Reed-Solomon erasure coding over GF(256))
+reed-solomon-erasure = "4"
+
+# For bitflags (BlastFlags in UDP Blast protocol)
+bitflags = "2"
+
+# For CRC32 checksum in Blast packet validation
+crc32fast = "1"
+
+# For random jitter in Blast sender repeat timing
+rand = "0.8"
+
+# Pattern matching (used by core: PII scanner, command_line_adapter, JP calendar)
+regex = "1"
+
+# Configuration file parsing (used by core: ScannerRegistry, JP calendar)
+toml = "0.8"
+
+# Web framework (used by versioning deprecation middleware)
+axum = "0.7"
+
+# Tower service abstraction (used by gRPC version interceptor)
+tower = "0.4"
+
+# HTTP body utilities (used by gRPC interceptor for empty body creation)
+http-body-util = "0.1"
+
+# Template engine for log formatting (used by core: TemplateLogFormatter)
+tera = "1"
+
+# Japanese compliance module dependencies (optional, gated behind jp_contrib feature)
+ipnetwork = { version = "0.21", optional = true }       # IP CIDR matching for vendor isolation
+encoding_rs = { version = "0.8", optional = true }      # Japanese encoding detection/conversion
+encoding_rs_io = { version = "0.1", optional = true }   # Stream encoding support
+
+# AWS SDK for S3/MinIO/R2 storage backend (optional, gated behind storage-s3 feature)
+aws-config = { version = "1", optional = true }          # AWS SDK configuration loader
+aws-sdk-s3 = { version = "1", optional = true }          # S3 client crate
+aws-smithy-types = { version = "1", optional = true }    # Smithy primitives (DateTime, Blob)
+aws-types = { version = "1", optional = true }           # AWS shared types (Region)
+aws-credential-types = { version = "1", optional = true } # AWS credentials (for static credential provider)
 
 [build-dependencies]
 prost-build = "0.13"
 tonic-build = { version = "0.12", features = ["transport"] }
 
 [features]
-default = ["jp_contrib"]
-jp_contrib = []
+default = []
+jp_contrib = [
+    "dep:ipnetwork",
+    "dep:encoding_rs",
+    "dep:encoding_rs_io",
+]
 intl_contrib = []
 clamav = []
+
+# gRPC version-aware interceptor (Pillar 5: Versioning)
+grpc = []
+
+# S3/MinIO/R2 cloud storage backend (Pillar 2: Storage)
+storage-s3 = [
+    "dep:aws-config",
+    "dep:aws-sdk-s3",
+    "dep:aws-smithy-types",
+    "dep:aws-types",
+    "dep:aws-credential-types",
+]

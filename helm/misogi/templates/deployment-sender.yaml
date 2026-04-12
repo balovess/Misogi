@@ -1,0 +1,126 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "misogi.sender.fullname" . }}
+  labels:
+    {{- include "misogi.sender.labels" . | nindent 4 }}
+spec:
+  {{- if not (and .Values.senderConfig.autoscaling.enabled .Values.hpa.enabled) }}
+  replicas: {{ .Values.senderConfig.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "misogi.sender.selectorLabels" . | nindent 6 }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "{{ .Values.senderConfig.restApiPort }}"
+        prometheus.io/path: "/metrics"
+      labels:
+        {{- include "misogi.sender.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "misogi.serviceAccountName" . }}
+      {{- with .Values.senderConfig.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.senderConfig.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.senderConfig.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: sender
+          image: "{{ .Values.global.imageRepository }}:{{ .Values.global.imageTag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          command: ["misogi-sender"]
+          args: ["--config", "/etc/misogi/config.toml"]
+          ports:
+            - name: grpc
+              containerPort: {{ .Values.senderConfig.grpcPort }}
+              protocol: TCP
+            - name: rest-api
+              containerPort: {{ .Values.senderConfig.restApiPort }}
+              protocol: TCP
+          env:
+            - name: MISOGI_LOG_LEVEL
+              value: "info"
+            - name: RUST_LOG
+              value: "info"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "misogi.fullname" . }}-secrets
+                  key: database-url
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "misogi.fullname" . }}-secrets
+                  key: redis-url
+            - name: JWT_ISSUER
+              value: {{ .Values.auth.jwtIssuer | quote }}
+            - name: JWT_AUDIENCE
+              value: {{ .Values.auth.jwtAudience | quote }}
+            {{- with .Values.senderConfig.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health/liveness
+              port: rest-api
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health/readiness
+              port: rest-api
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.senderConfig.resources | nindent 12 }}
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/misogi/config.toml
+              subPath: config.toml
+              readOnly: true
+            - name: keys-volume
+              mountPath: /etc/misogi/keys
+              readOnly: true
+            - name: data-volume
+              mountPath: /data
+            {{- with .Values.senderConfig.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop:
+                - ALL
+      volumes:
+        - name: config-volume
+          configMap:
+            name: {{ include "misogi.fullname" . }}-configmap
+        - name: keys-volume
+          secret:
+            secretName: {{ include "misogi.fullname" . }}-secrets
+            defaultMode: 0400
+        - name: data-volume
+          emptyDir: {}

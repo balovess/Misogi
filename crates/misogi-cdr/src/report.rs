@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use super::policy::SanitizationPolicy;
+use serde::{Deserialize, Serialize};
 
 /// Detailed record of every action taken during a single file's sanitization process.
 /// This report serves as both an operational log and legal evidence chain for compliance audits.
@@ -74,4 +74,26 @@ pub enum SanitizationAction {
 
     /// Document converted to flat format
     FileConvertedToFlat,
+
+    // ---- PPAP (Password Protected Attachment Protocol) Actions ----
+    /// PPAP-style encrypted ZIP detected during scanning
+    PpapDetected {
+        confidence: f64,
+        encryption_method: Option<String>,
+    },
+
+    /// PPAP file blocked per organizational policy
+    PpapBlocked { policy: String, reason: String },
+
+    /// PPAP encryption stripped (weak password, sanitized contents re-packaged)
+    PpapStripped {
+        original_method: String,
+        entries_processed: usize,
+    },
+
+    /// PPAP converted to secure Misogi transfer
+    PpapConvertedToSecure {
+        original_filename: String,
+        sanitized_output: String,
+    },
 }

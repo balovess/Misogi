@@ -1,13 +1,13 @@
+use async_trait::async_trait;
 use std::io::{Read, Seek, Write};
 use std::path::Path;
-use async_trait::async_trait;
-use zip::{ZipArchive, ZipWriter};
 use zip::write::FileOptions;
+use zip::{ZipArchive, ZipWriter};
 
-use super::{FileSanitizer, SanitizationPolicy, SanitizationReport};
 use super::report::SanitizationAction;
-use misogi_core::{hash, Result};
+use super::{FileSanitizer, SanitizationPolicy, SanitizationReport};
 use misogi_core::MisogiError;
+use misogi_core::{Result, hash};
 
 const DANGEROUS_ENTRIES: &[&str] = &[
     "vbaProject.bin",
@@ -28,11 +28,15 @@ pub struct OfficeSanitizer {
 
 impl OfficeSanitizer {
     pub fn new(max_file_size_bytes: u64) -> Self {
-        Self { max_file_size_bytes }
+        Self {
+            max_file_size_bytes,
+        }
     }
 
     pub fn default_config() -> Self {
-        Self { max_file_size_bytes: DEFAULT_MAX_FILE_SIZE_BYTES }
+        Self {
+            max_file_size_bytes: DEFAULT_MAX_FILE_SIZE_BYTES,
+        }
     }
 
     fn is_dangerous_entry(name: &str) -> bool {
@@ -43,9 +47,7 @@ impl OfficeSanitizer {
         })
     }
 
-    fn calculate_uncompressed_size(
-        archive: &mut ZipArchive<impl Read + Seek>,
-    ) -> Result<u64> {
+    fn calculate_uncompressed_size(archive: &mut ZipArchive<impl Read + Seek>) -> Result<u64> {
         let mut total: u64 = 0;
         for i in 0..archive.len() {
             let entry = archive.by_index(i).map_err(|e| MisogiError::Io(e.into()))?;
@@ -75,8 +77,7 @@ impl FileSanitizer for OfficeSanitizer {
 
         let file_id = filename.clone();
 
-        let mut report =
-            SanitizationReport::new(file_id, filename).with_policy(policy.clone());
+        let mut report = SanitizationReport::new(file_id, filename).with_policy(policy.clone());
 
         let file = std::fs::File::open(input_path)?;
 
@@ -108,14 +109,15 @@ impl FileSanitizer for OfficeSanitizer {
         let output_file = std::fs::File::create(output_path)?;
         let mut writer = ZipWriter::new(std::io::BufWriter::new(output_file));
 
-        let entry_names: Vec<String> =
-            reader.file_names().map(|s| s.to_string()).collect();
+        let entry_names: Vec<String> = reader.file_names().map(|s| s.to_string()).collect();
 
         for entry_name in &entry_names {
             if Self::is_dangerous_entry(entry_name) {
-                report.actions_taken.push(SanitizationAction::VbaMacroRemoved {
-                    filename: entry_name.clone(),
-                });
+                report
+                    .actions_taken
+                    .push(SanitizationAction::VbaMacroRemoved {
+                        filename: entry_name.clone(),
+                    });
                 tracing::warn!(entry = %entry_name, "VBA macro entry removed from OOXML package");
                 continue;
             }
@@ -131,14 +133,16 @@ impl FileSanitizer for OfficeSanitizer {
                 options = options.last_modified_time(modified);
             }
 
-            writer.start_file(entry_name, options)
+            writer
+                .start_file(entry_name, options)
                 .map_err(|e| MisogiError::Io(e.into()))?;
 
             let mut buffer = [0u8; STREAM_BUFFER_SIZE];
             loop {
                 match entry_reader.read(&mut buffer) {
                     Ok(0) => break,
-                    Ok(n) => writer.write_all(&buffer[..n])
+                    Ok(n) => writer
+                        .write_all(&buffer[..n])
                         .map_err(|e| MisogiError::Io(e))?,
                     Err(ref e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
                     Err(e) => return Err(MisogiError::Io(e)),

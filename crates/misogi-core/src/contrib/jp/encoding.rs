@@ -126,6 +126,7 @@ impl Default for PdfFontAction {
 /// This struct is fully thread-safe (`Send + Sync`) and contains no mutable state,
 /// making it suitable for sharing across async tasks without synchronization.
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct JapaneseEncodingHandler {
     /// Default encoding to use when auto-detection fails or returns low confidence.
     ///

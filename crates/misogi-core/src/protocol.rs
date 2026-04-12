@@ -11,6 +11,20 @@ pub enum FrameType {
     FileComplete = 0x04,
     Heartbeat = 0x05,
     HandshakeAck = 0x06,
+
+    // ---- UDP Blast (unidirectional, no-ACK) frames ----
+    /// Blast data shard (FEC-encoded file fragment).
+    /// No ACK expected or possible.
+    BlastDataShard = 0x10,
+
+    /// Blast parity shard (FEC redundancy data).
+    BlastParityShard = 0x11,
+
+    /// Blast manifest (file metadata, sent after all data/parity).
+    BlastManifest = 0x12,
+
+    /// Blast EOF marker (signals end of transmission).
+    BlastEof = 0x13,
 }
 
 impl TryFrom<u8> for FrameType {
@@ -24,6 +38,10 @@ impl TryFrom<u8> for FrameType {
             0x04 => Ok(FrameType::FileComplete),
             0x05 => Ok(FrameType::Heartbeat),
             0x06 => Ok(FrameType::HandshakeAck),
+            0x10 => Ok(FrameType::BlastDataShard),
+            0x11 => Ok(FrameType::BlastParityShard),
+            0x12 => Ok(FrameType::BlastManifest),
+            0x13 => Ok(FrameType::BlastEof),
             _ => Err(MisogiError::InvalidFrameType(value)),
         }
     }
@@ -125,6 +143,10 @@ mod tests {
             FrameType::FileComplete,
             FrameType::Heartbeat,
             FrameType::HandshakeAck,
+            FrameType::BlastDataShard,
+            FrameType::BlastParityShard,
+            FrameType::BlastManifest,
+            FrameType::BlastEof,
         ];
 
         for frame_type in frame_types {

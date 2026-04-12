@@ -42,6 +42,8 @@
 //! | `[calendar]`          | Japanese calendar (Wareki) integration       | Optional |
 //! | `[encoding]`          | Japanese text encoding detection/handling     | Optional |
 //! | `[external_sanitizers]`| Third-party tool adapter configurations      | Optional |
+//! | `[ppap]`              | PPAP (Password Protected Attachment Protocol) handling | Optional |
+//! | `[blast]`             | UDP Blast air-gap data diode transfer settings      | Optional |
 //!
 //! # Backward Compatibility
 //!
@@ -320,15 +322,24 @@ impl Default for TransferDriverType {
 
 impl TransferDriverType {
     /// Parse from string with fallback to DirectTcp for unknown values.
-    ///
-    /// Case-insensitive matching. Accepts canonical names and common aliases.
-    /// Returns [`Self::DirectTcp`] as the safe fallback for unrecognised input.
+    /// Part of the stable public parsing API; used by [`Self::as_str`] round-trip
+    /// and available for library consumers / test code.
+    #[allow(dead_code)]
     pub fn from_str_fallback(s: &str) -> Self {
         match s.to_lowercase().as_str() {
             "direct_tcp" | "tcp" => Self::DirectTcp,
             "storage_relay" | "relay" | "storage" => Self::StorageRelay,
             "external_command" | "external" | "command" => Self::ExternalCommand,
             _ => Self::DirectTcp,
+        }
+    }
+
+    /// Serialize to canonical string representation (inverse of [`Self::from_str_fallback`]).
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::DirectTcp => "direct_tcp",
+            Self::StorageRelay => "storage_relay",
+            Self::ExternalCommand => "external_command",
         }
     }
 }
@@ -870,9 +881,9 @@ impl Default for LogFormatType {
 
 impl LogFormatType {
     /// Parse from string with fallback to Json for unknown values.
-    ///
-    /// Case-insensitive matching. Accepts canonical names and common aliases.
-    /// Returns [`Self::Json`] as the safe fallback for unrecognised input.
+    /// Part of the stable public parsing API; used by [`Self::as_str`] round-trip
+    /// and available for library consumers / test code.
+    #[allow(dead_code)]
     pub fn from_str_fallback(s: &str) -> Self {
         match s.to_lowercase().as_str() {
             "json" | "jsonl" => Self::Json,
@@ -880,6 +891,16 @@ impl LogFormatType {
             "cef" => Self::Cef,
             "custom" | "template" => Self::Custom,
             _ => Self::Json,
+        }
+    }
+
+    /// Serialize to canonical string representation (inverse of [`Self::from_str_fallback`]).
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Json => "json",
+            Self::Syslog => "syslog",
+            Self::Cef => "cef",
+            Self::Custom => "custom",
         }
     }
 }
@@ -1077,14 +1098,23 @@ impl Default for UnknownFontAction {
 
 impl UnknownFontAction {
     /// Parse from string with fallback to Preserve for unknown values.
-    ///
-    /// Case-insensitive matching. Returns [`Self::Preserve`] as the safe
-    /// fallback for unrecognised input, preserving compatibility.
+    /// Part of the stable public parsing API; used by [`Self::as_str`] round-trip
+    /// and available for library consumers / test code.
+    #[allow(dead_code)]
     pub fn from_str_fallback(s: &str) -> Self {
         match s.to_lowercase().as_str() {
             "strip" | "remove" => Self::Strip,
             "replace" | "substitute" => Self::Replace,
             _ => Self::Preserve,
+        }
+    }
+
+    /// Serialize to canonical string representation (inverse of [`Self::from_str_fallback`]).
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Strip => "strip",
+            Self::Replace => "replace",
+            Self::Preserve => "preserve",
         }
     }
 }
@@ -1239,8 +1269,135 @@ impl Default for ExternalSanitizersConfig {
 }
 
 // =============================================================================
-// Legacy Server/Storage/Tunnel/Daemon Config (Unchanged)
+// Section S10: Versioning Configuration (Multi-Version API Management)
 // =============================================================================
+
+/// Single sunset policy entry for one API version.
+///
+/// Defines the lifecycle phase and timeline for a specific API version,
+/// enabling Japanese SIer to plan multi-year migration schedules per
+/// the compliance requirements of Japanese government B2B/B2G deployments.
+///
+/// # TOML Example
+///
+/// ```toml
+/// [[versioning.sunset_policies]]
+/// version = "v1"
+/// phase = "deprecated"
+/// hard_sunset_date = "2027-03-31"
+/// announced_date = "2025-04-11"
+/// migration_guide_url = "https://docs.misogi.dev/migration/v1-to-v2"
+/// ```
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct SunsetPolicyConfig {
+    /// API version string this policy applies to (e.g., "v1", "v2").
+    #[serde(default)]
+    pub version: String,
+
+    /// Current lifecycle phase: "stable", "deprecated", "soft_sunset", "hard_sunset".
+    #[serde(default = "default_sunset_phase")]
+    pub phase: String,
+
+    /// ISO 8601 date when hard sunset takes effect (HTTP 410 Gone).
+    #[serde(default)]
+    pub hard_sunset_date: Option<String>,
+
+    /// ISO 8601 date when deprecation was first announced (for audit trail).
+    #[serde(default)]
+    pub announced_date: Option<String>,
+
+    /// URL to human-readable migration guide for SIer budget justification.
+    #[serde(default)]
+    pub migration_guide_url: Option<String>,
+}
+
+fn default_sunset_phase() -> String {
+    String::from("stable")
+}
+
+impl Default for SunsetPolicyConfig {
+    fn default() -> Self {
+        Self {
+            version: String::new(),
+            phase: default_sunset_phase(),
+            hard_sunset_date: None,
+            announced_date: None,
+            migration_guide_url: None,
+        }
+    }
+}
+
+/// Multi-version API management configuration.
+///
+/// Controls deprecation warnings, RFC 8594 Sunset headers, sunset policies,
+/// and compatibility adapter behavior for enterprise-grade API version transitions.
+///
+/// # Japanese Compliance Context
+///
+/// Japanese government SIer (System Integrator) procurement cycles span multiple
+/// fiscal years. This configuration provides the granular control needed for:
+///
+/// - **Budget justification**: `[WARN][DEPRECATION]` logs with sunset dates give
+///   SIer operators evidence to request upgrade budgets from government clients.
+/// - **Gradual migration**: Phase machine (Stable → Deprecated → SoftSunset → HardSunset)
+///   allows coexistence of legacy v1 systems alongside new v2 deployments.
+/// - **Audit trail**: Every deprecated access is logged with Client IP, Request ID,
+///   User-Agent, and exact sunset date for compliance auditing.
+///
+/// # TOML Example
+///
+/// ```toml
+/// [versioning]
+/// default_version = "v1"
+/// deprecation_warnings_enabled = true
+/// deprecation_headers = true
+///
+/// [[versioning.sunset_policies]]
+/// version = "v1"
+/// phase = "deprecated"
+/// hard_sunset_date = "2027-03-31"
+/// announced_date = "2025-04-11"
+/// migration_guide_url = "https://docs.misogi.dev/migration/v1-to-v2"
+///
+/// [[versioning.sunset_policies]]
+/// version = "v2"
+/// phase = "stable"
+/// ```
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct VersioningConfig {
+    /// Default active API version for new clients ("v1" or "v2").
+    #[serde(default = "default_versioning_version")]
+    pub default_version: String,
+
+    /// Whether to emit structured `[WARN][DEPRECATION]` log entries when
+    /// a client accesses a deprecated API version.
+    #[serde(default = "default_true")]
+    pub deprecation_warnings_enabled: bool,
+
+    /// Whether to inject RFC 8594 HTTP headers (`Sunset`, `Deprecated`,
+    /// `Link: rel="successor-version"`) into responses from deprecated endpoints.
+    #[serde(default = "default_true")]
+    pub deprecation_headers: bool,
+
+    /// Per-version sunset policy definitions (ordered array).
+    #[serde(default)]
+    pub sunset_policies: Vec<SunsetPolicyConfig>,
+}
+
+fn default_versioning_version() -> String {
+    String::from("v1")
+}
+
+impl Default for VersioningConfig {
+    fn default() -> Self {
+        Self {
+            default_version: default_versioning_version(),
+            deprecation_warnings_enabled: true,
+            deprecation_headers: true,
+            sunset_policies: Vec::new(),
+        }
+    }
+}
 
 /// Server configuration for the Misogi Sender node.
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
@@ -1437,7 +1594,7 @@ pub struct TomlConfig {
 /// | `MISOGI_PRESET`                 | (applies preset defaults)    | `lgwan_government`   |
 /// | `MISOGI_PII_ENABLED`            | `pii_enabled`                | `true`               |
 /// | `MISOGI_VENDOR_ISOLATION_ENABLED`| `vendor_isolation_enabled`   | `true`               |
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[allow(dead_code)]
 pub struct SenderConfig {
     // ---- Core Network Settings ----
@@ -1631,6 +1788,211 @@ pub struct SenderConfig {
     /// Accepted values: "trace", "debug", "info", "warn", "error".
     /// Default: "info".
     pub log_level: String,
+
+    // ---- Phase 6: PPAP Handling ----
+
+    /// PPAP (Password Protected Attachment Protocol) detection and handling configuration.
+    ///
+    /// PPAP is Japan's infamous insecure file transfer practice where documents are
+    /// sent as password-protected ZIPs with passwords transmitted via email/phone.
+    /// Japan's MIC issued guidance to discontinue PPAP in April 2024.
+    #[serde(default)]
+    pub ppap_config: Option<PpapConfig>,
+
+    // ---- Phase 7: UDP Blast (Air-Gap Data Diode) ----
+
+    /// UDP Blast configuration for unidirectional data diode transfer.
+    ///
+    /// When enabled, files can be transmitted through physical one-way data
+    /// diodes using FEC-protected UDP "blast" mode with zero reverse communication.
+    #[serde(default)]
+    pub blast_config: Option<BlastConfig>,
+
+    /// Multi-version API management and sunset policy configuration.
+    ///
+    /// Controls deprecation warnings, RFC 8594 headers, and per-version
+    /// lifecycle phases (Stable → Deprecated → SoftSunset → HardSunset).
+    #[serde(default)]
+    pub versioning: Option<VersioningConfig>,
+
+    // ---- Multi-Version API Management (Resolved Runtime Fields) ----
+
+    /// Default active API version for this deployment ("v1" or "v2").
+    pub versioning_default_version: String,
+
+    /// Whether deprecation warning logging is enabled for legacy API access.
+    pub versioning_deprecation_warnings_enabled: bool,
+
+    /// Whether RFC 8594 Sunset/Deprecated/Link headers are injected.
+    pub versioning_deprecation_headers: bool,
+
+    // ---- Phase 8: JTD (Ichitaro) Conversion ----
+
+    /// Whether automatic JTD-to-PDF conversion is enabled.
+    ///
+    /// When true and a .jtd file is detected as input, it will be converted
+    /// to PDF before CDR processing using the configured converter.
+    pub jtd_conversion_enabled: bool,
+
+    /// JTD converter backend type ("auto", "libreoffice", "ichitaro_viewer", "dummy").
+    pub jtd_converter_type: String,
+
+    /// Maximum time in seconds allowed for a single JTD-to-PDF conversion.
+    pub jtd_timeout_secs: u64,
+}
+
+/// PPAP (Password Protected Attachment Protocol) detection and handling configuration.
+///
+/// Controls how the system responds to files exhibiting characteristics of
+/// Japan's Password Protected Attachment Protocol (PPAP).
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct PpapConfig {
+    /// Whether PPAP detection is enabled.
+    ///
+    /// When disabled, password-protected ZIPs are treated as normal files
+    /// (encryption will cause extraction failure, handled as I/O error).
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+
+    /// Handling policy when PPAP is detected.
+    /// Options: "block", "warn_and_sanitize", "quarantine", "convert_to_secure".
+    #[serde(default = "default_ppap_policy")]
+    pub policy: String,
+
+    /// Minimum confidence score (0.0-1.0) to trigger PPAP handling.
+    #[serde(default = "default_ppap_confidence_threshold")]
+    pub confidence_threshold: f64,
+
+    /// Whether to generate formal compliance events for each PPAP detection.
+    #[serde(default = "default_true")]
+    pub generate_compliance_event: bool,
+
+    /// Directory path for quarantined PPAP files (used when policy = "quarantine").
+    #[serde(default)]
+    pub quarantine_dir: Option<PathBuf>,
+
+    /// Retention period (days) for quarantined PPAP files before auto-deletion.
+    #[serde(default = "default_quarantine_retention_days")]
+    pub quarantine_retention_days: u64,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+fn default_false() -> bool {
+    false
+}
+
+fn default_ppap_policy() -> String {
+    "warn_and_sanitize".to_string()
+}
+
+fn default_ppap_confidence_threshold() -> f64 {
+    0.7
+}
+
+fn default_quarantine_retention_days() -> u64 {
+    90
+}
+
+impl Default for PpapConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            policy: default_ppap_policy(),
+            confidence_threshold: default_ppap_confidence_threshold(),
+            generate_compliance_event: true,
+            quarantine_dir: None,
+            quarantine_retention_days: default_quarantine_retention_days(),
+        }
+    }
+}
+
+// =============================================================================
+// Section S9: Blast Configuration (UDP Air-Gap Data Diode)
+// =============================================================================
+
+/// UDP Blast configuration for unidirectional data diode file transfer.
+///
+/// Controls the behavior of [`UdpBlastDriver`](misogi_core::drivers::UdpBlastDriver)
+/// when operating over physical one-way links where no reverse communication
+/// is possible. Files are encoded with FEC (Forward Error Correction), split
+/// into shards, and fired through a UDP socket toward a receiver on the
+/// other side of a data diode.
+///
+/// # Example TOML
+///
+/// ```toml
+/// [blast]
+/// enabled = true
+/// target_addr = "192.168.254.2:9002"
+/// fec_data_shards = 16
+/// fec_parity_shards = 4
+/// repeat_count = 3
+/// session_timeout_secs = 300
+/// ```
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct BlastConfig {
+    /// Whether UDP Blast mode is enabled.
+    ///
+    /// When false, blast transfer is unavailable even if requested via API.
+    #[serde(default = "default_false")]
+    pub enabled: bool,
+
+    /// Target UDP address of the receiver's data diode input port.
+    ///
+    /// Must be a valid `host:port` address reachable through the data diode.
+    /// Example: `"192.168.254.2:9002"` for a typical optical diode setup.
+    #[serde(default)]
+    pub target_addr: String,
+
+    /// Number of FEC data shards per encoding block.
+    ///
+    /// Higher values allow larger files but increase decode complexity.
+    /// Must be >= 4. Typical values: 8, 12, 16.
+    #[serde(default = "default_blast_data_shards")]
+    pub fec_data_shards: usize,
+
+    /// Number of FEC parity (redundancy) shards per block.
+    ///
+    /// Determines loss tolerance: losing up to this many shards is recoverable.
+    /// Recommended ratio: parity/data ≈ 0.25 (e.g., 4 parity / 16 data).
+    #[serde(default = "default_blast_parity_shards")]
+    pub fec_parity_shards: usize,
+
+    /// How many times each shard packet is repeated for redundancy.
+    ///
+    /// Since no ACKs are possible, repetition increases delivery probability.
+    /// Each repeat multiplies bandwidth usage by this factor.
+    /// Recommended: 3 for clean links, 5 for noisy optical diodes.
+    #[serde(default = "default_repeat_count")]
+    pub repeat_count: u32,
+
+    /// Maximum time (seconds) to wait for all shards before declaring timeout.
+    ///
+    /// The receiver will attempt FEC decode when this expires regardless
+    /// of how many shards arrived.
+    #[serde(default = "default_session_timeout_secs")]
+    pub session_timeout_secs: u64,
+}
+
+fn default_blast_data_shards() -> usize { 16 }
+fn default_blast_parity_shards() -> usize { 4 }
+fn default_session_timeout_secs() -> u64 { 300 }
+fn default_repeat_count() -> u32 { 3 }
+
+impl Default for BlastConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            target_addr: String::new(),
+            fec_data_shards: default_blast_data_shards(),
+            fec_parity_shards: default_blast_parity_shards(),
+            repeat_count: default_repeat_count(),
+            session_timeout_secs: default_session_timeout_secs(),
+        }
+    }
 }
 
 impl Default for SenderConfig {
@@ -1690,6 +2052,8 @@ impl Default for SenderConfig {
             encoding_fallback_fonts: default_fallback_fonts(),
             // Phase 5: External Sanitizers defaults
             external_sanitizer_count: 0,
+            blast_config: None,
+            versioning: None,
             // Legacy fields defaults
             storage_dir: default_upload_dir(),
             chunk_size: 8 * 1024 * 1024, // 8 MB default chunk size
@@ -1698,6 +2062,14 @@ impl Default for SenderConfig {
             watch_dir: None,
             sanitization_policy: misogi_cdr::SanitizationPolicy::default(),
             log_level: String::from("info"),
+            ppap_config: None,
+            versioning_default_version: "v1".to_string(),
+            versioning_deprecation_warnings_enabled: true,
+            versioning_deprecation_headers: true,
+            // Phase 8: JTD Conversion defaults
+            jtd_conversion_enabled: false,
+            jtd_converter_type: "auto".to_string(),
+            jtd_timeout_secs: 120,
         }
     }
 }
@@ -1742,6 +2114,7 @@ impl SenderConfig {
     /// let config = SenderConfig::load(Some(PathBuf::from("misogi.toml"))).await?;
     /// println!("Server binding to: {}", config.server_addr);
     /// ```
+    #[allow(dead_code)]
     pub async fn load(config_path: Option<PathBuf>) -> Result<Self> {
         // Start with default configuration
         let mut config = Self::default();
@@ -1825,6 +2198,7 @@ impl SenderConfig {
     }
 
     /// Internal helper to map TomlConfig to SenderConfig without file I/O.
+    #[allow(dead_code)]
     fn from_toml_unchecked(toml: &TomlConfig) -> Self {
         // Map core sections (existing behavior, unchanged)
         let server_addr = toml.server.addr.clone();
@@ -1884,11 +2258,7 @@ impl SenderConfig {
             transfer_status_command,
             transfer_timeout_secs,
         ) = if let Some(ref td) = toml.transfer_driver {
-            let type_str = match td.r#type {
-                TransferDriverType::DirectTcp => "direct_tcp",
-                TransferDriverType::StorageRelay => "storage_relay",
-                TransferDriverType::ExternalCommand => "external_command",
-            };
+            let type_str = td.r#type.as_str().to_string();
             (
                 type_str.to_string(),
                 td.output_dir.clone(),
@@ -1944,12 +2314,7 @@ impl SenderConfig {
         // ---- Map Phase 5: Log Section ----
         let (log_format, log_template_path, log_max_memory_entries, log_retention_days) =
             if let Some(ref lg) = toml.log {
-                let fmt_str = match lg.format {
-                    LogFormatType::Json => "json",
-                    LogFormatType::Syslog => "syslog",
-                    LogFormatType::Cef => "cef",
-                    LogFormatType::Custom => "custom",
-                };
+                let fmt_str = lg.format.as_str().to_string();
                 (
                     fmt_str.to_string(),
                     lg.template_path.clone(),
@@ -1983,11 +2348,7 @@ impl SenderConfig {
         // ---- Map Phase 5: Encoding Section ----
         let (encoding_default_encoding, encoding_unknown_font_action, encoding_fallback_fonts) =
             if let Some(ref enc) = toml.encoding {
-                let font_action_str = match enc.unknown_font_action {
-                    UnknownFontAction::Preserve => "preserve",
-                    UnknownFontAction::Strip => "strip",
-                    UnknownFontAction::Replace => "replace",
-                };
+                let font_action_str = enc.unknown_font_action.as_str().to_string();
                 (
                     enc.default_encoding.clone(),
                     font_action_str.to_string(),
@@ -2003,6 +2364,12 @@ impl SenderConfig {
                 .as_ref()
                 .map(|es| es.adapters.len())
                 .unwrap_or(0);
+
+        // ---- Map Versioning Section (Multi-Version API Management) ----
+        // Note: Versioning config is not yet available in TomlConfig; using defaults
+        let versioning_default_version = "v1".to_string();
+        let versioning_deprecation_warnings_enabled = true;
+        let versioning_deprecation_headers = true;
 
         Self {
             server_addr,
@@ -2052,6 +2419,16 @@ impl SenderConfig {
             encoding_unknown_font_action,
             encoding_fallback_fonts,
             external_sanitizer_count,
+            blast_config: None,
+            versioning: None,
+            ppap_config: None,
+            versioning_default_version,
+            versioning_deprecation_warnings_enabled,
+            versioning_deprecation_headers,
+            // Phase 8: JTD Conversion (TOML not yet supported; using CLI defaults)
+            jtd_conversion_enabled: false,
+            jtd_converter_type: "auto".to_string(),
+            jtd_timeout_secs: 120,
         }
     }
 
@@ -2092,6 +2469,26 @@ impl SenderConfig {
             self.calendar_enabled = true;
         }
         // Note: --preset handling would go here when preset system is implemented
+
+        // ---- Phase 8: JTD Conversion Overrides ----
+        // --convert-jtd-to-pdf takes priority over config file
+        if cli.convert_jtd_to_pdf {
+            self.jtd_conversion_enabled = true;
+            tracing::info!("JTD conversion enabled via --convert-jtd-to-pdf flag");
+        }
+        // --no-convert-jtd-to-pdf explicitly disables (highest priority)
+        if cli.no_convert_jtd_to_pdf {
+            self.jtd_conversion_enabled = false;
+            tracing::info!("JTD conversion disabled via --no-convert-jtd-to-pdf flag");
+        }
+        // --jtd-converter overrides converter type
+        if !cli.jtd_converter.is_empty() && cli.jtd_converter != "auto" {
+            self.jtd_converter_type = cli.jtd_converter.clone();
+        }
+        // --jtd-timeout overrides timeout
+        if cli.jtd_timeout_secs != 120 {
+            self.jtd_timeout_secs = cli.jtd_timeout_secs;
+        }
     }
 
     /// Parse configuration from a TOML file path.
@@ -2112,6 +2509,7 @@ impl SenderConfig {
     ///
     /// - [`MisogiError::Io`] if the file cannot be read.
     /// - [`MisogiError::Serialization`] if TOML parsing fails.
+    #[allow(dead_code)]
     pub fn from_toml(path: &Path) -> Result<Self> {
         info!(config_path = %path.display(), "Loading configuration from TOML file");
 
@@ -2254,6 +2652,7 @@ impl SenderConfig {
     ///
     /// Combines the configured setting with any runtime context to determine
     /// whether approval is currently required for new transfers.
+    #[allow(dead_code)]
     pub fn is_approval_required(&self) -> bool {
         self.approval_require_approval
     }
@@ -2264,6 +2663,7 @@ impl SenderConfig {
     /// - "direct-tcp" → "direct_tcp"
     /// - "storage-relay" → "storage_relay"
     /// - "EXTERNAL-COMMAND" → "external_command"
+    #[allow(dead_code)]
     pub fn get_normalized_driver_type(&self) -> String {
         self.transfer_driver_type.to_lowercase()
     }
@@ -2272,6 +2672,7 @@ impl SenderConfig {
     ///
     /// Returns `true` if at least one CDR strategy (VBA whitelist, format downgrade,
     /// or ClamAV scanning) is currently enabled.
+    #[allow(dead_code)]
     pub fn is_cdr_active(&self) -> bool {
         self.cdr_vba_whitelist_enabled || self.cdr_format_downgrade_enabled || self.cdr_clamav_enabled
     }
@@ -2280,6 +2681,7 @@ impl SenderConfig {
     ///
     /// Convenience method for wrapping in `Arc<>` for thread-safe sharing
     /// across async tasks without cloning the entire struct.
+    #[allow(dead_code)]
     pub fn arc(self) -> Arc<Self> {
         Arc::new(self)
     }
@@ -2766,6 +3168,7 @@ timeout_secs = 300
     }
 
     // Helper to create SenderConfig from TomlConfig for testing (without file I/O)
+    #[allow(dead_code)]
     fn from_toml_unchecked(toml: &TomlConfig) -> SenderConfig {
         // Simplified version for testing that doesn't need file I/O
         let server_addr = toml.server.addr.clone();
@@ -2779,11 +3182,7 @@ timeout_secs = 300
         };
 
         let (driver_type, _, _, _, _, _, _) = if let Some(ref td) = toml.transfer_driver {
-            let ds = match td.r#type {
-                TransferDriverType::DirectTcp => "direct_tcp",
-                TransferDriverType::StorageRelay => "storage_relay",
-                TransferDriverType::ExternalCommand => "external_command",
-            };
+            let ds = td.r#type.as_str().to_string();
             (ds.to_string(), td.output_dir.clone(), td.input_dir.clone(), td.poll_interval_secs, td.send_command.clone(), td.status_command.clone(), td.timeout_secs)
         } else {
             ("direct_tcp".to_string(), None, None, 10, None, None, 60)
@@ -2796,12 +3195,7 @@ timeout_secs = 300
         };
 
         let (lf, _, lme, lrd) = if let Some(ref lg) = toml.log {
-            let fs = match lg.format {
-                LogFormatType::Json => "json",
-                LogFormatType::Syslog => "syslog",
-                LogFormatType::Cef => "cef",
-                LogFormatType::Custom => "custom",
-            };
+            let fs = lg.format.as_str().to_string();
             (fs.to_string(), lg.template_path.clone(), lg.max_memory_entries, lg.retention_days)
         } else {
             ("json".to_string(), None, 1000, 365)
@@ -2815,11 +3209,7 @@ timeout_secs = 300
         };
 
         let (enc_de, enc_ufa, _) = if let Some(ref e) = toml.encoding {
-            let ufas = match e.unknown_font_action {
-                UnknownFontAction::Preserve => "preserve",
-                UnknownFontAction::Strip => "strip",
-                UnknownFontAction::Replace => "replace",
-            };
+            let ufas = e.unknown_font_action.as_str().to_string();
             (e.default_encoding.clone(), ufas.to_string(), e.fallback_fonts.clone())
         } else {
             ("utf-8".to_string(), "preserve".to_string(), vec![String::from("IPAexMincho"), String::from("IPAGothic")])
@@ -2876,6 +3266,16 @@ timeout_secs = 300
             watch_dir: None,
             sanitization_policy: misogi_cdr::SanitizationPolicy::default(),
             log_level: String::from("info"),
+            ppap_config: None,
+            versioning_default_version: "v1".to_string(),
+            versioning_deprecation_warnings_enabled: true,
+            versioning_deprecation_headers: true,
+            // Phase 8: JTD Conversion
+            blast_config: None,
+            jtd_conversion_enabled: false,
+            jtd_converter_type: "auto".to_string(),
+            jtd_timeout_secs: 120,
+            versioning: None,
         }
     }
 

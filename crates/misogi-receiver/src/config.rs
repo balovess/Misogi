@@ -89,14 +89,22 @@ impl Default for ReceiverTransferDriverType {
 
 impl ReceiverTransferDriverType {
     /// Parse from string with fallback to DirectTcp for unknown values.
-    ///
-    /// Case-insensitive matching. Returns [`Self::DirectTcp`] as the safe
-    /// fallback for unrecognised input.
+    /// Part of the stable public parsing API; used by [`Self::as_str`] round-trip
+    /// and available for library consumers / test code.
+    #[allow(dead_code)]
     pub fn from_str_fallback(s: &str) -> Self {
         match s.to_lowercase().as_str() {
             "direct_tcp" | "tcp" => Self::DirectTcp,
             "storage_relay" | "relay" | "storage" => Self::StorageRelay,
             _ => Self::DirectTcp,
+        }
+    }
+
+    /// Serialize to canonical string representation (inverse of [`Self::from_str_fallback`]).
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::DirectTcp => "direct_tcp",
+            Self::StorageRelay => "storage_relay",
         }
     }
 }
@@ -464,6 +472,147 @@ fn default_daemon_enabled() -> bool {
     false
 }
 
+fn default_false() -> bool {
+    false
+}
+
+fn default_true() -> bool {
+    true
+}
+
+fn default_blast_listen_port() -> u16 {
+    9002
+}
+
+fn default_blast_session_timeout_secs() -> u64 {
+    300
+}
+
+// =============================================================================
+// Section R4: UDP Blast Configuration (Receiver Side)
+// =============================================================================
+
+/// UDP Blast receiver configuration for unidirectional data diode transfer.
+///
+/// When enabled, the receiver node listens on a dedicated UDP port for
+/// FEC-protected file shards sent through physical one-way data diodes.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct BlastConfig {
+    /// Whether blast reception is enabled.
+    #[serde(default)]
+    pub enabled: bool,
+
+    /// UDP port to listen for incoming blast datagrams.
+    #[serde(default = "default_blast_listen_port")]
+    pub listen_port: u16,
+
+    /// Directory to store reassembled blast files.
+    #[serde(default)]
+    pub output_dir: Option<PathBuf>,
+
+    /// Maximum time (seconds) to wait for all shards before decode attempt.
+    #[serde(default = "default_blast_session_timeout_secs")]
+    pub session_timeout_secs: u64,
+}
+
+impl Default for BlastConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            listen_port: default_blast_listen_port(),
+            output_dir: None,
+            session_timeout_secs: default_blast_session_timeout_secs(),
+        }
+    }
+}
+
+// =============================================================================
+// Section R5: Versioning Configuration (Multi-Version API Management)
+// =============================================================================
+
+/// Single sunset policy entry for one API version.
+///
+/// Defines the lifecycle phase and timeline for a specific API version,
+/// enabling Japanese SIer to plan multi-year migration schedules per
+/// the compliance requirements of Japanese government B2B/B2G deployments.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct SunsetPolicyConfig {
+    /// API version string this policy applies to (e.g., "v1", "v2").
+    #[serde(default)]
+    pub version: String,
+
+    /// Current lifecycle phase: "stable", "deprecated", "soft_sunset", "hard_sunset".
+    #[serde(default = "default_receiver_sunset_phase")]
+    pub phase: String,
+
+    /// ISO 8601 date when hard sunset takes effect (HTTP 410 Gone).
+    #[serde(default)]
+    pub hard_sunset_date: Option<String>,
+
+    /// ISO 8601 date when deprecation was first announced (for audit trail).
+    #[serde(default)]
+    pub announced_date: Option<String>,
+
+    /// URL to human-readable migration guide for SIer budget justification.
+    #[serde(default)]
+    pub migration_guide_url: Option<String>,
+}
+
+fn default_receiver_sunset_phase() -> String {
+    String::from("stable")
+}
+
+impl Default for SunsetPolicyConfig {
+    fn default() -> Self {
+        Self {
+            version: String::new(),
+            phase: default_receiver_sunset_phase(),
+            hard_sunset_date: None,
+            announced_date: None,
+            migration_guide_url: None,
+        }
+    }
+}
+
+/// Multi-version API management configuration for the receiver node.
+///
+/// Controls deprecation warnings, RFC 8594 Sunset headers, and per-version
+/// lifecycle phases for enterprise-grade API version transitions on the
+/// file reception endpoint.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct VersioningConfig {
+    /// Default active API version for new clients ("v1" or "v2").
+    #[serde(default = "default_receiver_versioning_version")]
+    pub default_version: String,
+
+    /// Whether to emit structured `[WARN][DEPRECATION]` log entries.
+    #[serde(default = "default_true")]
+    pub deprecation_warnings_enabled: bool,
+
+    /// Whether to inject RFC 8594 HTTP headers into deprecated responses.
+    #[serde(default = "default_true")]
+    pub deprecation_headers: bool,
+
+    /// Per-version sunset policy definitions (ordered array).
+    #[serde(default)]
+    pub sunset_policies: Vec<SunsetPolicyConfig>,
+}
+
+fn default_receiver_versioning_version() -> String {
+    String::from("v1")
+}
+
+impl Default for VersioningConfig {
+    fn default() -> Self {
+        Self {
+            default_version: default_receiver_versioning_version(),
+            deprecation_warnings_enabled: true,
+            deprecation_headers: true,
+            sunset_policies: Vec::new(),
+        }
+    }
+}
+
 // =============================================================================
 // Root TomlConfig Structure (Deserialization Target)
 // =============================================================================
@@ -522,6 +671,17 @@ pub struct TomlConfig {
     /// File type validation rules for incoming files.
     #[serde(default)]
     pub file_types: Option<FileTypesConfig>,
+
+    /// UDP Blast receiver configuration for unidirectional data diode transfer.
+    #[serde(default)]
+    pub blast_config: Option<BlastConfig>,
+
+    /// Multi-version API management and sunset policy configuration.
+    ///
+    /// Controls deprecation warnings, RFC 8594 headers, and per-version
+    /// lifecycle phases (Stable → Deprecated → SoftSunset → HardSunset).
+    #[serde(default)]
+    pub versioning: Option<VersioningConfig>,
 }
 
 // =============================================================================
@@ -552,7 +712,7 @@ pub struct TomlConfig {
 /// | `MISOGI_DOWNLOAD_DIR`           | `download_dir`               | `/var/misogi/downloads`|
 /// | `MISOGI_TRANSFER_DRIVER_TYPE`   | `transfer_driver_type`       | `storage_relay`      |
 /// | `MISOGI_LOG_FORMAT`             | `log_format`                 | `cef`                |
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[allow(dead_code)]
 pub struct ReceiverConfig {
     // ---- Core Network Settings ----
@@ -650,6 +810,42 @@ pub struct ReceiverConfig {
 
     /// Logging verbosity level for tracing subscriber.
     pub log_level: String,
+
+    /// Whether to log PPAP conversion events from the sender side.
+    ///
+    /// When a file arrives that was converted from PPAP on the sender side,
+    /// receiver logs this for end-to-end audit trail completeness.
+    #[serde(default = "default_false")]
+    pub ppap_log_converted: bool,
+
+    // ---- Phase 7: UDP Blast (Air-Gap Data Diode) ----
+
+    /// UDP port for incoming Blast traffic from data diode.
+    #[serde(default = "default_blast_listen_port")]
+    pub blast_listen_port: u16,
+
+    /// Whether UDP Blast receiving mode is enabled.
+    #[serde(default = "default_false")]
+    pub blast_enabled: bool,
+
+    /// Directory for writing files reconstructed from Blast transfers.
+    #[serde(default)]
+    pub blast_output_dir: Option<PathBuf>,
+
+    /// Maximum time (seconds) to wait for shards before attempting decode.
+    #[serde(default = "default_blast_session_timeout_secs")]
+    pub blast_session_timeout_secs: u64,
+
+    // ---- Multi-Version API Management (Resolved Runtime Fields) ----
+
+    /// Default active API version for this deployment ("v1" or "v2").
+    pub versioning_default_version: String,
+
+    /// Whether deprecation warning logging is enabled for legacy API access.
+    pub versioning_deprecation_warnings_enabled: bool,
+
+    /// Whether RFC 8594 Sunset/Deprecated/Link headers are injected.
+    pub versioning_deprecation_headers: bool,
 }
 
 impl Default for ReceiverConfig {
@@ -686,6 +882,15 @@ impl Default for ReceiverConfig {
             tunnel_port: default_tunnel_port(),
             output_dir: None,
             log_level: String::from("info"),
+            ppap_log_converted: false,
+            // Blast (UDP data diode) defaults
+            blast_enabled: false,
+            blast_listen_port: default_blast_listen_port(),
+            blast_output_dir: None,
+            blast_session_timeout_secs: default_blast_session_timeout_secs(),
+            versioning_default_version: "v1".to_string(),
+            versioning_deprecation_warnings_enabled: true,
+            versioning_deprecation_headers: true,
         }
     }
 }
@@ -713,6 +918,7 @@ impl ReceiverConfig {
     /// - [`MisogiError::Io`] if the configuration file cannot be read.
     /// - [`MisogiError::Serialization`] if the TOML content is malformed.
     /// - [`MisogiError::Configuration`] if critical settings are invalid.
+    #[allow(dead_code)]
     pub async fn load(config_path: Option<PathBuf>) -> Result<Self> {
         let mut config = Self::default();
 
@@ -812,10 +1018,7 @@ impl ReceiverConfig {
         // Phase 5 sections
         let (transfer_driver_type, transfer_input_dir, transfer_output_dir, transfer_poll_interval_secs) =
             if let Some(ref td) = toml.transfer_driver {
-                let type_str = match td.r#type {
-                    ReceiverTransferDriverType::DirectTcp => "direct_tcp",
-                    ReceiverTransferDriverType::StorageRelay => "storage_relay",
-                };
+                let type_str = td.r#type.as_str().to_string();
                 (
                     type_str.to_string(),
                     td.input_dir.clone(),
@@ -854,6 +1057,18 @@ impl ReceiverConfig {
         let file_types_default_action =
             toml.file_types.as_ref().map(|f| f.default_action.clone()).unwrap_or_else(default_file_action);
 
+        // ---- Map Versioning Section (Multi-Version API Management) ----
+        let (versioning_default_version, versioning_deprecation_warnings_enabled, versioning_deprecation_headers) =
+            if let Some(ref v) = toml.versioning {
+                (
+                    v.default_version.clone(),
+                    v.deprecation_warnings_enabled,
+                    v.deprecation_headers,
+                )
+            } else {
+                ("v1".to_string(), true, true)
+            };
+
         Self {
             server_addr,
             chunk_dir: chunk_dir.clone(),
@@ -880,6 +1095,15 @@ impl ReceiverConfig {
             encoding_unknown_font_action,
             encoding_fallback_fonts,
             file_types_default_action,
+            ppap_log_converted: false,
+            // Blast (UDP data diode) fields
+            blast_enabled: toml.blast_config.as_ref().map(|b| b.enabled).unwrap_or(false),
+            blast_listen_port: toml.blast_config.as_ref().map(|b| b.listen_port).unwrap_or_else(default_blast_listen_port),
+            blast_output_dir: toml.blast_config.as_ref().and_then(|b| b.output_dir.clone()),
+            blast_session_timeout_secs: toml.blast_config.as_ref().map(|b| b.session_timeout_secs).unwrap_or_else(default_blast_session_timeout_secs),
+            versioning_default_version,
+            versioning_deprecation_warnings_enabled,
+            versioning_deprecation_headers,
         }
     }
 
@@ -922,6 +1146,7 @@ impl ReceiverConfig {
     ///
     /// - [`MisogiError::Io`] if the file cannot be read.
     /// - [`MisogiError::Serialization`] if TOML parsing fails.
+    #[allow(dead_code)]
     pub fn from_toml(path: &Path) -> Result<Self> {
         info!(config_path = %path.display(), "Loading receiver configuration from TOML file");
 
@@ -974,10 +1199,7 @@ impl ReceiverConfig {
             transfer_output_dir,
             transfer_poll_interval_secs,
         ) = if let Some(ref td) = toml_config.transfer_driver {
-            let type_str = match td.r#type {
-                ReceiverTransferDriverType::DirectTcp => "direct_tcp",
-                ReceiverTransferDriverType::StorageRelay => "storage_relay",
-            };
+            let type_str = td.r#type.as_str().to_string();
             (
                 type_str.to_string(),
                 td.input_dir.clone(),
@@ -1063,6 +1285,15 @@ impl ReceiverConfig {
             encoding_unknown_font_action,
             encoding_fallback_fonts,
             file_types_default_action,
+            ppap_log_converted: false,
+            // Blast (UDP data diode) fields
+            blast_enabled: toml_config.blast_config.as_ref().map(|b| b.enabled).unwrap_or(false),
+            blast_listen_port: toml_config.blast_config.as_ref().map(|b| b.listen_port).unwrap_or_else(default_blast_listen_port),
+            blast_output_dir: toml_config.blast_config.as_ref().and_then(|b| b.output_dir.clone()),
+            blast_session_timeout_secs: toml_config.blast_config.as_ref().map(|b| b.session_timeout_secs).unwrap_or_else(default_blast_session_timeout_secs),
+            versioning_default_version: "v1".to_string(),
+            versioning_deprecation_warnings_enabled: true,
+            versioning_deprecation_headers: true,
         })
     }
 
@@ -1151,6 +1382,7 @@ impl ReceiverConfig {
     }
 
     /// Create an Arc-wrapped clone of this configuration for sharing.
+    #[allow(dead_code)]
     pub fn arc(self) -> Arc<Self> {
         Arc::new(self)
     }
@@ -1372,16 +1604,14 @@ default_action = "allow"
         assert_eq!(rc.file_types_default_action, "allow");
     }
 
+    #[allow(dead_code)]
     fn from_toml_unchecked(toml: &TomlConfig) -> ReceiverConfig {
         let server_addr = toml.server.addr.clone();
         let chunk_dir = PathBuf::from(&toml.storage.chunk_dir);
         let download_dir = PathBuf::from(&toml.storage.download_dir);
 
         let (driver_type, _, _, poll) = if let Some(ref td) = toml.transfer_driver {
-            let ds = match td.r#type {
-                ReceiverTransferDriverType::DirectTcp => "direct_tcp",
-                ReceiverTransferDriverType::StorageRelay => "storage_relay",
-            };
+            let ds = td.r#type.as_str().to_string();
             (ds.to_string(), td.input_dir.clone(), td.output_dir.clone(), td.poll_interval_secs)
         } else {
             ("direct_tcp".to_string(), None, None, 10)
@@ -1438,6 +1668,15 @@ default_action = "allow"
             tunnel_port: 9000,
             output_dir: None,
             log_level: String::from("info"),
+            ppap_log_converted: false,
+            // Phase 7: UDP Blast (Air-Gap Data Diode) — disabled by default
+            blast_enabled: false,
+            blast_listen_port: default_blast_listen_port(),
+            blast_output_dir: None,
+            blast_session_timeout_secs: default_blast_session_timeout_secs(),
+            versioning_default_version: "v1".to_string(),
+            versioning_deprecation_warnings_enabled: true,
+            versioning_deprecation_headers: true,
         }
     }
 

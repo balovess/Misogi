@@ -37,6 +37,15 @@ pub enum MisogiError {
 
     #[error("Configuration error: {0}")]
     Configuration(String),
+
+    #[error("PPAP detected and blocked: {0}")]
+    PpapBlocked(String),
+
+    #[error("PPAP quarantine failed: {0}")]
+    PpapQuarantineFailed(String),
+
+    #[error("PPAP conversion failed: {0}")]
+    PpapConversionFailed(String),
 }
 
 pub type Result<T> = std::result::Result<T, MisogiError>;

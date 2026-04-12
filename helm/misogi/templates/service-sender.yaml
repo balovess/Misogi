@@ -1,0 +1,36 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "misogi.sender.fullname" . }}
+  labels:
+    {{- include "misogi.sender.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: grpc
+      port: {{ .Values.senderConfig.grpcPort }}
+      targetPort: grpc
+      protocol: TCP
+    - name: rest-api
+      port: {{ .Values.senderConfig.restApiPort }}
+      targetPort: rest-api
+      protocol: TCP
+  selector:
+    {{- include "misogi.sender.selectorLabels" . | nindent 4 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "misogi.sender.fullname" . }}-nodeport
+  labels:
+    {{- include "misogi.sender.labels" . | nindent 4 }}
+spec:
+  type: NodePort
+  ports:
+    - name: rest-api
+      port: {{ .Values.senderConfig.restApiPort }}
+      targetPort: rest-api
+      protocol: TCP
+      nodePort: null
+  selector:
+    {{- include "misogi.sender.selectorLabels" . | nindent 4 }}

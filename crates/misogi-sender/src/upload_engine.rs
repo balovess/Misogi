@@ -1,5 +1,4 @@
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use tokio::io::AsyncWriteExt;
 use crate::state::SharedState;
 use misogi_core::{ChunkMeta, FileManifest, FileInfo, FileStatus, MisogiError, Result};
@@ -7,6 +6,7 @@ use misogi_cdr::{pdf_sanitizer::PdfSanitizer, office_sanitizer::OfficeSanitizer,
 
 pub struct FileUploader {
     storage_dir: PathBuf,
+    #[allow(dead_code)]
     chunk_size: usize,
 }
 
@@ -91,6 +91,7 @@ impl FileUploader {
         Ok(chunk_meta)
     }
 
+    #[allow(dead_code)]
     pub fn storage_dir(&self) -> &std::path::Path {
         &self.storage_dir
     }
@@ -135,6 +136,7 @@ impl FileUploader {
         Ok(manifest)
     }
 
+    #[allow(dead_code)]
     pub async fn check_resume(&self, file_id: &str) -> Result<Vec<u32>> {
         let manifest = self.load_manifest(file_id).await?;
 
@@ -159,7 +161,7 @@ impl FileUploader {
     pub async fn get_file_info(&self, file_id: &str) -> Result<FileInfo> {
         let manifest = self.load_manifest(file_id).await?;
 
-        let completed_chunks = if manifest.status == FileStatus::Uploading {
+        let _completed_chunks = if manifest.status == FileStatus::Uploading {
             let mut count = 0u32;
             for i in 0..manifest.chunk_count {
                 let chunk_path = self.storage_dir
@@ -312,7 +314,7 @@ impl FileUploader {
 
         if !input_path.exists() {
             let file_dir = self.storage_dir.join(file_id);
-            let temp_file_path = file_dir.join("_complete_temp.bin");
+            let _temp_file_path = file_dir.join("_complete_temp.bin");
             let mut output = tokio::fs::File::create(&input_path).await?;
 
             for i in 0..manifest.chunk_count {
@@ -360,6 +362,7 @@ impl FileUploader {
     /// # Returns
     /// Currently delegates to legacy [`sanitize_file()`](Self::sanitize_file).
     /// Will return strategy-chain results once CDRStrategy integration is complete.
+    #[allow(dead_code)]
     pub async fn sanitize_file_with_state(
         &self,
         file_id: &str,

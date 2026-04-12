@@ -1,8 +1,8 @@
-use async_trait::async_trait;
-use std::path::Path;
 use crate::policy::SanitizationPolicy;
 use crate::report::SanitizationReport;
+use async_trait::async_trait;
 use misogi_core::Result;
+use std::path::Path;
 
 /// Unified interface for file content disarmament and reconstruction.
 /// Each sanitizer implementation handles a specific file format,

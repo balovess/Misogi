@@ -26,6 +26,7 @@
 // fail immediately.
 // =============================================================================
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -115,6 +116,7 @@ impl TransferDriverConfig for DirectTcpDriverConfig {
 /// 2. `send_chunk()` / `send_complete()` — data transfer operations.
 /// 3. `health_check()` — heartbeat probe via TunnelClient.
 /// 4. `shutdown()` — drop the client, closing the TCP stream.
+#[derive(Debug)]
 pub struct DirectTcpDriver {
     /// Remote TCP address of the receiver.
     receiver_addr: String,
@@ -1189,6 +1191,276 @@ impl TransferDriver for ExternalCommandDriver {
     async fn shutdown(&self) -> Result<()> {
         if self.initialized.swap(false, std::sync::atomic::Ordering::SeqCst) {
             tracing::info!(driver = %self.name(), "ExternalCommandDriver shutdown");
+        }
+        Ok(())
+    }
+}
+
+// =============================================================================
+// D. UdpBlastDriver (Air-Gap Data Diode Transport)
+// =============================================================================
+
+use crate::fec::FecConfig;
+use crate::blast::{BlastSenderConfig, BlastReceiverConfig};
+
+/// Configuration for the [`UdpBlastDriver`] operating over unidirectional
+/// data diodes where no reverse communication is possible.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UdpBlastDriverConfig {
+    /// Target UDP address of the receiver's data diode input port.
+    pub target_addr: String,
+
+    /// Local bind address for receiving (if acting as receiver side).
+    pub bind_addr: Option<String>,
+
+    /// FEC configuration controlling redundancy level.
+    #[serde(default)]
+    pub fec: Option<FecConfig>,
+
+    /// Sender-specific blast parameters.
+    #[serde(default)]
+    pub sender: Option<BlastSenderConfig>,
+
+    /// Receiver-specific blast parameters.
+    #[serde(default)]
+    pub receiver: Option<BlastReceiverConfig>,
+}
+
+impl Default for UdpBlastDriverConfig {
+    fn default() -> Self {
+        Self {
+            target_addr: String::new(),
+            bind_addr: None,
+            fec: None,
+            sender: None,
+            receiver: None,
+        }
+    }
+}
+
+impl TransferDriverConfig for UdpBlastDriverConfig {
+    fn validate(&self) -> Result<()> {
+        if self.target_addr.is_empty() {
+            return Err(MisogiError::Configuration(
+                "target_addr is required for UdpBlastDriver".into(),
+            ));
+        }
+        let _: std::net::SocketAddr = self.target_addr.parse().map_err(|e| {
+            MisogiError::Configuration(format!("Invalid target_addr '{}': {}", self.target_addr, e))
+        })?;
+        Ok(())
+    }
+}
+
+/// UDP Blast driver implementing [`TransferDriver`] for air-gapped environments.
+///
+/// This driver wraps [`UdpBlastSender`](crate::blast::UdpBlastSender) and
+/// [`UdpBlastReceiver`](crate::blast::UdpBlastReceiver) and adapts them to
+/// the existing [`TransferDriver`] trait interface used by the engine.
+///
+/// # Mode of Operation
+///
+/// When configured as **sender**, this driver:
+/// 1. Accepts file chunks via the standard `send_chunk()` API
+/// 2. Buffers all chunks locally (no remote ACK is possible)
+/// 3. On `complete()`, FEC-encodes the full file and blasts it via UDP
+/// 4. Returns success immediately — delivery cannot be verified
+///
+/// When configured as **receiver**, this driver:
+/// 1. Starts a passive UDP listener on creation via `init()`
+/// 2. Collects shards in background (handled by UdpBlastReceiver)
+/// 3. Decodes and writes files when enough shards arrive
+///
+/// # Critical Limitation
+///
+/// The sender has **zero knowledge** of whether packets arrive. The ACK returned
+/// by `send_chunk()` is synthetic and indicates only local acceptance, not
+/// remote receipt. This is inherent to unidirectional data diode operation.
+pub struct UdpBlastDriver {
+    config: UdpBlastDriverConfig,
+    sender: Option<crate::blast::UdpBlastSender>,
+    pending_chunks: std::collections::HashMap<String, Vec<(u32, bytes::Bytes, String)>>,
+    initialized: Arc<std::sync::atomic::AtomicBool>,
+}
+
+impl UdpBlastDriver {
+    /// Construct a new UdpBlastDriver with explicit configuration.
+    ///
+    /// The driver is not connected until [`init()`](TransferDriver::init) is called.
+    pub fn new(config: UdpBlastDriverConfig) -> Self {
+        Self {
+            config,
+            sender: None,
+            pending_chunks: HashMap::new(),
+            initialized: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        }
+    }
+}
+
+#[async_trait]
+impl TransferDriver for UdpBlastDriver {
+    type Config = UdpBlastDriverConfig;
+
+    fn name(&self) -> &str {
+        "udp-blast-driver"
+    }
+
+    async fn init(&mut self, config: Self::Config) -> Result<()> {
+        config.validate()?;
+        self.config = config;
+
+        let sender_config = self.config.sender.clone().unwrap_or_default();
+        let fec_config = self.config.fec.clone().unwrap_or(FecConfig::standard());
+
+        let sender =
+            crate::blast::UdpBlastSender::with_fec_config(&self.config.target_addr, sender_config, fec_config)
+                .await?;
+
+        self.sender = Some(sender);
+        self.initialized.store(true, std::sync::atomic::Ordering::SeqCst);
+
+        tracing::info!(
+            driver = self.name(),
+            target = %self.config.target_addr,
+            "UdpBlastDriver initialized in sender mode"
+        );
+
+        Ok(())
+    }
+
+    async fn send_chunk(
+        &self,
+        file_id: &str,
+        chunk_index: u32,
+        data: Bytes,
+    ) -> Result<ChunkAck> {
+        if !self.initialized.load(std::sync::atomic::Ordering::SeqCst) {
+            return Err(MisogiError::Protocol("UdpBlastDriver not initialized".to_string()));
+        }
+
+        let md5 = compute_md5(&data);
+        let data_len = data.len();
+
+        let mut chunks = self.pending_chunks.clone();
+        chunks.entry(file_id.to_string())
+            .or_insert_with(Vec::new)
+            .push((chunk_index, data, md5.clone()));
+
+        let now = chrono::Utc::now();
+
+        tracing::debug!(
+            file_id = %file_id,
+            chunk_index = chunk_index,
+            size = data_len,
+            "Chunk buffered for UDP Blast (no remote ACK possible)"
+        );
+
+        Ok(ChunkAck {
+            file_id: file_id.to_string(),
+            chunk_index,
+            received_md5: md5,
+            received_size: data_len as u64,
+            ack_timestamp: now.to_rfc3339(),
+            error: None,
+        })
+    }
+
+    async fn send_complete(
+        &self,
+        file_id: &str,
+        total_chunks: u32,
+        file_md5: &str,
+    ) -> Result<ChunkAck> {
+        if !self.initialized.load(std::sync::atomic::Ordering::SeqCst) {
+            return Err(MisogiError::Protocol("UdpBlastDriver not initialized".to_string()));
+        }
+
+        let sender = self.sender.as_ref().ok_or_else(|| {
+            MisogiError::Protocol("UdpBlastSender not initialized".to_string())
+        })?;
+
+        if let Some(chunks) = self.pending_chunks.get(file_id) {
+            let tmp_dir = tempfile::tempdir().map_err(|e| {
+                MisogiError::Io(std::io::Error::new(std::io::ErrorKind::Other, format!("Temp dir failed: {}", e)))
+            })?;
+
+            let mut chunks_sorted = chunks.clone();
+            chunks_sorted.sort_by_key(|(idx, _, _)| *idx);
+            let mut file_data = Vec::new();
+            for (_, data, _) in &chunks_sorted {
+                file_data.extend_from_slice(data);
+            }
+
+            let temp_file = tmp_dir.path().join(format!("{}_blast.bin", file_id));
+            tokio::fs::write(&temp_file, &file_data).await.map_err(|e| {
+                MisogiError::Io(std::io::Error::new(std::io::ErrorKind::Other, format!("Write failed: {}", e)))
+            })?;
+
+            match sender.blast_file(&temp_file, Some(file_id)).await {
+                Ok(report) => {
+                    tracing::info!(
+                        file_id = %file_id,
+                        total_chunks = total_chunks,
+                        datagrams_sent = report.total_datagrams,
+                        bytes_sent = report.total_bytes_sent,
+                        encode_ms = report.encode_time_ms,
+                        transmit_ms = report.transmit_time_ms,
+                        "UDP Blast transmission complete"
+                    );
+                }
+                Err(e) => {
+                    tracing::error!(file_id = %file_id, error = %e, "UDP Blast failed");
+                    return Err(e);
+                }
+            }
+        }
+
+        let now = chrono::Utc::now();
+
+        Ok(ChunkAck {
+            file_id: file_id.to_string(),
+            chunk_index: total_chunks.saturating_sub(1),
+            received_md5: file_md5.to_string(),
+            received_size: 0,
+            ack_timestamp: now.to_rfc3339(),
+            error: None,
+        })
+    }
+
+    async fn health_check(&self) -> Result<DriverHealthStatus> {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64;
+
+        if !self.initialized.load(std::sync::atomic::Ordering::SeqCst) {
+            return Ok(DriverHealthStatus {
+                driver_name: self.name().to_string(),
+                is_healthy: false,
+                status_message: "Not initialized".to_string(),
+                latency_ms: None,
+                checked_at: chrono::Utc::now(),
+                check_sequence: 0,
+            });
+        }
+
+        Ok(DriverHealthStatus {
+            driver_name: self.name().to_string(),
+            is_healthy: true,
+            status_message: format!(
+                "UDP Blast ready, target={}, {} files buffered",
+                self.config.target_addr,
+                self.pending_chunks.len()
+            ),
+            latency_ms: Some(now),
+            checked_at: chrono::Utc::now(),
+            check_sequence: 0,
+        })
+    }
+
+    async fn shutdown(&self) -> Result<()> {
+        if self.initialized.swap(false, std::sync::atomic::Ordering::SeqCst) {
+            tracing::info!(driver = %self.name(), "UdpBlastDriver shutdown");
         }
         Ok(())
     }

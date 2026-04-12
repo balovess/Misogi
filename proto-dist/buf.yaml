@@ -1,0 +1,6 @@
+version: v1
+name: buf.build/misogi/file-transfer
+breaking:
+  use: FILE
+lint:
+  use: DEFAULT

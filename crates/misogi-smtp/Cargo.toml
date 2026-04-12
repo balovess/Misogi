@@ -1,0 +1,28 @@
+[package]
+name = "misogi-smtp"
+version = "0.1.0"
+edition = "2024"
+description = "SMTP Email Sanitization Gateway — intercepts emails, extracts attachments, routes through CDR pipeline, reassembles clean emails"
+
+[dependencies]
+misogi-core = { path = "../misogi-core" }
+misogi-cdr = { path = "../misogi-cdr" }
+tokio = { version = "1", features = ["full"] }
+mailparse = "0.14"
+lettre = { version = "0.11", features = ["smtp-transport", "builder"] }
+tracing = "0.1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4"] }
+base64 = "0.22"
+futures = "0.3"
+pin-project-lite = "0.2"
+clap = { version = "4", features = ["derive"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+anyhow = "1"
+toml = "0.8"
+num_cpus = "1"
+quoted_printable = "0.1"
+md-5 = "0.7"

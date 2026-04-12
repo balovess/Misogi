@@ -8,8 +8,8 @@ mod grpc_service;
 mod router;
 mod tunnel_task;
 mod daemon;
+mod jtd_handler;
 
-use std::sync::Arc;
 use tracing_subscriber::{fmt, EnvFilter};
 use clap::Parser;
 use crate::cli::CommandLine;
@@ -67,7 +67,32 @@ async fn run_server(config: SenderConfig) {
         .await
         .expect("Failed to bind to address");
 
-    tracing::info!(addr = %state.config.server_addr, "Listening on");
+    tracing::info!(addr = %state.config.server_addr, "HTTP listening on");
+
+    let grpc_port = state.config.tunnel_local_port + 1000;
+    let grpc_addr = format!("0.0.0.0:{}", grpc_port);
+    let grpc_addr_log = grpc_addr.clone();
+    let grpc_state = state.clone();
+    tokio::spawn(async move {
+        let v1_svc = crate::grpc_service::SenderGrpcService::new(grpc_state).into_server();
+
+        // Multi-version gRPC: mount V1 service on the same TCP port.
+        // When V2 is ready, uncomment the line below to enable V2 multiplexing:
+        //
+        //   let v2_svc = crate::grpc_service_v2::SenderGrpcServiceV2::new(grpc_state);
+        //
+        // Tonic's multiplexing allows v1 and v2 clients (using different
+        // proto packages: misogi.file_transfer.v1 vs .v2) to coexist
+        // on a single port without conflict.
+        let builder = tonic::transport::Server::builder()
+            .add_service(v1_svc);
+            // .add_service(v2_svc.into_server());  // Enable when V2 is implemented
+
+        if let Err(e) = builder.serve(grpc_addr.parse().unwrap()).await {
+            tracing::error!(error = %e, "Multi-version gRPC server crashed");
+        }
+    });
+    tracing::info!(grpc_addr = %grpc_addr_log, "gRPC listening (v1+v2 multiplexed)");
 
     axum::serve(listener, app)
         .await

@@ -1,7 +1,7 @@
-use std::path::Path;
-use async_trait::async_trait;
 use super::{FileSanitizer, SanitizationPolicy, SanitizationReport};
+use async_trait::async_trait;
 use misogi_core::{MisogiError, Result};
+use std::path::Path;
 
 /// Basic structural validator for JustSystem Ichitaro document format (.jtd).
 /// Performs boundary checks without deep parsing to prevent OOB read/write vulnerabilities.
@@ -12,18 +12,24 @@ pub struct JtdSanitizer {
 
 impl JtdSanitizer {
     pub fn new(max_file_size_bytes: u64) -> Self {
-        Self { max_file_size_bytes }
+        Self {
+            max_file_size_bytes,
+        }
     }
 
     pub fn default_config() -> Self {
-        Self { max_file_size_bytes: 500 * 1024 * 1024 }
+        Self {
+            max_file_size_bytes: 500 * 1024 * 1024,
+        }
     }
 
     /// Validate JTD magic bytes at file header.
     /// JustSystem documents use specific binary markers depending on version.
     fn validate_magic_bytes(data: &[u8]) -> Result<()> {
         if data.len() < 4 {
-            return Err(MisogiError::Protocol("File too small for JTD validation".to_string()));
+            return Err(MisogiError::Protocol(
+                "File too small for JTD validation".to_string(),
+            ));
         }
 
         // Accept any valid-looking header; focus on structure validation
@@ -39,7 +45,8 @@ impl JtdSanitizer {
 
         let mut search_pos = 0;
         while search_pos + ole_marker.len() <= data.len() {
-            if let Some(pos) = data[search_pos..].windows(ole_marker.len())
+            if let Some(pos) = data[search_pos..]
+                .windows(ole_marker.len())
                 .position(|w| w == ole_marker)
             {
                 offsets.push(search_pos + pos);
@@ -66,7 +73,8 @@ impl FileSanitizer for JtdSanitizer {
     ) -> Result<SanitizationReport> {
         use tokio::fs;
 
-        let filename = input_path.file_name()
+        let filename = input_path
+            .file_name()
             .unwrap_or_default()
             .to_string_lossy()
             .to_string();
@@ -78,7 +86,8 @@ impl FileSanitizer for JtdSanitizer {
         if metadata.len() > self.max_file_size_bytes {
             return Err(MisogiError::SecurityViolation(format!(
                 "JTD file size {} exceeds maximum {}",
-                metadata.len(), self.max_file_size_bytes
+                metadata.len(),
+                self.max_file_size_bytes
             )));
         }
 

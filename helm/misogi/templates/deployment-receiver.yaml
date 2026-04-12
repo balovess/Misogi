@@ -1,0 +1,111 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "misogi.receiver.fullname" . }}
+  labels:
+    {{- include "misogi.receiver.labels" . | nindent 4 }}
+spec:
+  {{- if not (and .Values.receiverConfig.autoscaling.enabled .Values.hpa.enabled) }}
+  replicas: {{ .Values.receiverConfig.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "misogi.receiver.selectorLabels" . | nindent 6 }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "{{ .Values.receiverConfig.grpcPort }}"
+        prometheus.io/path: "/metrics"
+      labels:
+        {{- include "misogi.receiver.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "misogi.serviceAccountName" . }}
+      {{- with .Values.receiverConfig.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.receiverConfig.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.receiverConfig.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: receiver
+          image: "{{ .Values.global.imageRepository }}:{{ .Values.global.imageTag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          command: ["misogi-receiver"]
+          args: ["--config", "/etc/misogi/config.toml"]
+          ports:
+            - name: grpc
+              containerPort: {{ .Values.receiverConfig.grpcPort }}
+              protocol: TCP
+          env:
+            - name: MISOGI_LOG_LEVEL
+              value: "info"
+            - name: RUST_LOG
+              value: "info"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "misogi.fullname" . }}-secrets
+                  key: database-url
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "misogi.fullname" . }}-secrets
+                  key: redis-url
+            {{- with .Values.receiverConfig.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: grpc
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket:
+              port: grpc
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.receiverConfig.resources | nindent 12 }}
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/misogi/config.toml
+              subPath: config.toml
+              readOnly: true
+            - name: data-volume
+              mountPath: /data
+            {{- with .Values.receiverConfig.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop:
+                - ALL
+      volumes:
+        - name: config-volume
+          configMap:
+            name: {{ include "misogi.fullname" . }}-configmap
+        - name: data-volume
+          emptyDir: {}

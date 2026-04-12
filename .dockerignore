@@ -1,0 +1,34 @@
+# Build artifacts
+target/
+
+# Version control
+.git/
+.gitignore
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Documentation
+*.md
+LICENSE
+CHANGELOG*
+CODE_OF_CONDUCT*
+SECURITY
+.trae/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# CI/CD
+.github/
+
+# Misc
+node_modules/
+.env
+.env.local
+*.log

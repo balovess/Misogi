@@ -61,7 +61,7 @@ use misogi_cdr::{
 };
 
 // Re-export trait types for ergonomic access within this module
-use misogi_core::traits::{CDRStrategy, EncodingHandler, FileTypeDetector, PIIDetector, TransferDriver};
+use misogi_core::traits::{CDRStrategy, FileTypeDetector, PIIDetector};
 #[cfg(feature = "jp_contrib")]
 use misogi_core::contrib::jp::encoding::JapaneseEncodingHandler;
 #[cfg(feature = "jp_contrib")]
@@ -71,8 +71,8 @@ use misogi_core::cdr_strategies::VbaWhitelistStrategy;
 use misogi_core::cdr_strategies::FormatDowngradeStrategy;
 use misogi_core::file_types::CompositeDetector;
 use misogi_core::pii::RegexPIIDetector;
-use misogi_core::drivers::{DirectTcpDriver, StorageRelayDriver, ExternalCommandDriver};
-use misogi_core::log_engine::{JsonLogFormatter, SyslogCefFormatter, TemplateLogFormatter};
+use misogi_core::drivers::DirectTcpDriver;
+use misogi_core::log_engine::{JsonLogFormatter, SyslogCefFormatter};
 use misogi_core::traits::LogFormatter;
 
 // =============================================================================
@@ -166,6 +166,7 @@ pub struct AppState {
     /// Rust's object safety requirements for traits with associated types.
     /// Future enhancement: Change to `Arc<dyn TransferDriver<Config = ConcreteDriverConfig>>`
     /// once TransferDriver trait API is stabilized and Config type is unified.
+    #[allow(dead_code)]
     pub transfer_driver: Arc<misogi_core::drivers::DirectTcpDriver>,
 
     /// Ordered chain of CDR (Content Disarmament and Reconstruction) strategies.
@@ -174,12 +175,14 @@ pub struct AppState {
     /// [`StrategyDecision::Sanitize`](mogi_core::traits::StrategyDecision::Sanitize)
     /// is applied. Built-in chain always includes `BuiltinPdfStrategy`.
     /// Additional strategies are appended when their config flags are enabled.
+    #[allow(dead_code)]
     pub cdr_strategies: Vec<Arc<dyn CDRStrategy>>,
 
     /// File type detector using magic number analysis + extension fallback.
     ///
     /// Detects actual file format independent of declared extension,
     /// providing defense against extension-spoofing attacks.
+    #[allow(dead_code)]
     pub file_type_detector: Arc<dyn FileTypeDetector>,
 
     /// PII (Personally Identifiable Information) detector for compliance scanning.
@@ -187,6 +190,7 @@ pub struct AppState {
     /// Scans file content for sensitive data patterns (My Number, credit cards,
     /// phone numbers, etc.) per Japanese government regulations (APPI, My Number Act).
     /// Configured as no-op when `config.pii_enabled == false`.
+    #[allow(dead_code)]
     pub pii_detector: Arc<dyn PIIDetector>,
 
     /// Japanese calendar provider for business-day calculations and era conversion.
@@ -194,6 +198,7 @@ pub struct AppState {
     /// `None` when calendar integration is not configured (default).
     /// When `Some(...)`, used by approval deadline calculator to exclude weekends
     /// and national holidays from response windows.
+    #[allow(dead_code)]
     pub calendar: Option<Arc<dyn misogi_core::traits::CalendarProvider>>,
 
     /// Text encoding handler for Japanese legacy encoding detection/conversion.
@@ -366,6 +371,7 @@ impl AppState {
     /// full trait object initialization, then returns the inner `Self` directly
     /// (not wrapped in Arc). This is less efficient than using `from_config()` directly
     /// but maintains backward compatibility with existing call sites.
+    #[allow(dead_code)]
     pub fn new(config: SenderConfig) -> Self {
         // For backward compatibility, construct a minimal state without full trait initialization.
         // Call sites should migrate to AppState::from_config() for complete pluggable trait support.

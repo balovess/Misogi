@@ -1,0 +1,69 @@
+[package]
+name = "misogi-nocode"
+version = "0.1.0"
+edition = "2024"
+description = "No-Code Integration Layer — YAML-based declarative configuration for non-developers"
+
+[dependencies]
+# Core serialization
+serde = { version = "1", features = ["derive"] }
+serde_yaml = "0.9"
+serde_json = "1"
+
+# Error handling
+thiserror = "2"
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+
+# Terminal detection for colored output
+atty = "0.2"
+
+# Temporary file creation for tests
+tempfile = { version = "3", optional = true }
+
+# Web framework (Admin API)
+axum = { version = "0.8", features = ["macros"] }
+axum-extra = { version = "0.10", features = ["typed-header"] }
+tower-http = { version = "0.6", features = ["cors", "trace"] }
+http = "1"
+
+# CLI argument parsing
+clap = { version = "4", features = ["derive", "env"] }
+
+# Colored terminal output
+colored = "2"
+
+# File watching for hot-reload
+notify = "7"
+
+# Regular expressions for validation
+regex = "1"
+
+# UUID generation
+uuid = { version = "1", features = ["v4"] }
+
+# Date/time handling
+chrono = { version = "0.4", features = ["serde"] }
+
+# HTTP client for API calls and provider testing
+reqwest = { version = "0.12", features = ["json"] }
+
+# Internal dependencies
+misogi-core = { path = "../misogi-core" }
+misogi-auth = { path = "../misogi-auth" }
+
+[features]
+default = []
+full = []
+
+[[bin]]
+name = "misogi-admin"
+path = "src/main.rs"
+
+[dev-dependencies]
+tempfile = "3"
