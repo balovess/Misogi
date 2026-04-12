@@ -1,0 +1,113 @@
+syntax = "proto3";
+
+package misogi.file_transfer.v1;
+
+import "google/protobuf/empty.proto";
+
+// SenderService is exposed by the sender node.
+//
+// This is the V1 stable API. All field numbers are frozen —
+// new fields must be added in V2 (misogi.file_transfer.v2).
+service SenderService {
+  // Upload sends a stream of chunks to the sender node
+  rpc Upload(stream Chunk) returns (UploadResponse);
+  
+  // GetFileStatus retrieves the status of a specific file
+  rpc GetFileStatus(FileIdRequest) returns (FileStatusResponse);
+  
+  // ListFiles lists all files on the sender node
+  rpc ListFiles(ListFilesRequest) returns (ListFilesResponse);
+  
+  // TriggerTransfer initiates transfer to receiver node
+  rpc TriggerTransfer(FileIdRequest) returns (TransferResponse);
+}
+
+// ReceiverService is exposed by the receiver node.
+//
+// V1 stable receiver API. See V2 for enhanced streaming capabilities.
+service ReceiverService {
+  // ReceiveChunk receives a stream of chunk data and acknowledges each one
+  rpc ReceiveChunk(stream ChunkData) returns (stream ChunkAck);
+  
+  // DownloadFile streams the complete file back to requester
+  rpc DownloadFile(FileIdRequest) returns (stream FileChunk);
+  
+  // ListFiles lists all files available on the receiver node
+  rpc ListFiles(google.protobuf.Empty) returns (ListFilesResponse);
+}
+
+// Chunk represents an uploaded data block from client to sender.
+//
+// Field numbers 1-4 are RESERVED for V1 core fields.
+// Extensions appear in V2.ChunkV2 (fields 5+).
+message Chunk {
+  bytes data = 1;
+  string file_id = 2;
+  uint32 chunk_index = 3;
+  string chunk_md5 = 4;
+}
+
+// ChunkData represents a data block transferred from sender to receiver.
+message ChunkData {
+  string file_id = 1;
+  uint32 chunk_index = 2;
+  bytes data = 3;
+  string chunk_md5 = 4;
+}
+
+// ChunkAck acknowledges receipt of a chunk from receiver.
+message ChunkAck {
+  string file_id = 1;
+  uint32 chunk_index = 2;
+  bool success = 3;
+  string error = 4;
+}
+
+// FileChunk represents a downloadable file segment.
+message FileChunk {
+  bytes data = 1;
+  uint32 offset = 2;
+  uint32 total_size = 3;
+}
+
+// UploadResponse confirms successful upload initiation.
+message UploadResponse {
+  string file_id = 1;
+  string status = 2;
+}
+
+// FileIdRequest identifies a file by its ID.
+message FileIdRequest {
+  string file_id = 1;
+}
+
+// FileStatusResponse contains detailed information about a file's state.
+message FileStatusResponse {
+  string file_id = 1;
+  string filename = 2;
+  uint64 total_size = 3;
+  uint32 chunk_count = 4;
+  uint32 completed_chunks = 5;
+  string status = 6;
+  string created_at = 7;
+}
+
+// ListFilesRequest supports pagination and filtering.
+message ListFilesRequest {
+  optional int32 page = 1;
+  optional int32 per_page = 2;
+  optional string status_filter = 3;
+}
+
+// ListFilesResponse contains paginated list of files.
+message ListFilesResponse {
+  repeated FileStatusResponse files = 1;
+  int32 total = 2;
+}
+
+// TransferResponse reports the result of triggering a transfer.
+message TransferResponse {
+  string file_id = 1;
+  string status = 2;
+  string message = 3;
+}

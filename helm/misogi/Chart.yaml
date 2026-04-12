@@ -1,0 +1,25 @@
+apiVersion: v2
+name: misogi
+description: "Misogi — Enterprise CDR Platform for Secure File Transfer & Sanitization"
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+
+keywords:
+  - cdr
+  - content-disarm-reconstruction
+  - sanitization
+  - file-transfer
+  - security
+  - lgwan
+  - government
+  - rust
+
+maintainers:
+  - name: "Misogi Team"
+    email: team@misogi.dev
+    url: https://github.com/misogi-dev/misogi
+
+home: https://github.com/misogi-dev/misogi
+sources:
+  - https://github.com/misogi-dev/misogi

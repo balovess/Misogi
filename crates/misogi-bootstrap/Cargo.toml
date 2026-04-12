@@ -1,0 +1,42 @@
+[package]
+name = "misogi-bootstrap"
+version = "0.1.0"
+edition = "2024"
+description = "Application bootstrap and component wiring for Misogi file transfer system"
+
+[dependencies]
+# Core authentication components
+misogi-auth = { path = "../misogi-auth", features = ["jwt", "enterprise"] }
+
+# CDR (Content Disarm & Reconstruction) components
+misogi-cdr = { path = "../misogi-cdr" }
+
+# Core traits and storage backend
+misogi-core = { path = "../misogi-core" }
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# Logging and tracing
+tracing = "0.1"
+
+# Error handling
+anyhow = "1"
+thiserror = "2"
+
+# Serialization (for config file parsing)
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+
+[dev-dependencies]
+tempfile = "3"
+tokio-test = "0.4"
+
+[features]
+default = ["jwt"]
+jwt = ["misogi-auth/jwt"]
+ldap = ["misogi-auth/ldap"]
+oidc = ["misogi-auth/oidc"]
+saml = ["misogi-auth/saml"]
+storage = ["misogi-core/storage-s3"]

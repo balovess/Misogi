@@ -1,0 +1,89 @@
+[package]
+name = "misogi-auth"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+misogi-core = { path = "../misogi-core" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+tracing = "0.1"
+uuid = { version = "1", features = ["v4"] }
+chrono = { version = "0.4", features = ["serde"] }
+thiserror = "2"
+async-trait = "0.1"
+
+# JWT (RS256) support — requires `jwt` or `enterprise` feature
+jsonwebtoken = { version = "9", optional = true }
+ring = { version = "0.17", optional = true }
+
+# Base64 encoding for PKCE and general use
+base64 = "0.22"
+
+# LDAP / Active Directory integration — requires `ldap` or `enterprise` feature
+ldap3 = { version = "0.11", optional = true }
+
+# Shift-JIS / encoding support for Japanese government LDAP compatibility
+encoding_rs = { version = "0.8", optional = true }
+
+# OIDC / OAuth2 HTTP client — requires `oidc` or `enterprise` feature
+reqwest = { version = "0.12", features = ["json"], optional = true }
+
+# URL parsing for OIDC authorization URL construction
+url = "2"
+
+# Cryptographically secure random number generation
+rand = "0.8"
+
+# SHA-256 digest for PKCE code_challenge computation
+sha2 = "0.10"
+
+# Hex encoding for token generation
+hex = "0.4"
+
+# URL encoding for SAML and OIDC parameter construction
+urlencoding = "2"
+
+# RSA key generation (ring 0.17 removed generate_pkcs1)
+rsa = "0.9"
+
+# Regular expressions for role mapping pattern matching
+regex = "1"
+
+# XML parsing for SAML protocol implementation
+quick-xml = { version = "0.37", features = ["serialize"], optional = true }
+
+# DEFLATE compression/decompression for SAML bindings
+flate2 = { version = "1", optional = true }
+
+# LRU cache for replay attack prevention in SAML
+lru = { version = "0.12", optional = true }
+
+# Cookie handling for OIDC session middleware
+cookie = { version = "0.18", features = ["secure"], optional = true }
+
+# Axum web framework (for extractor implementations)
+axum = { version = "0.8", optional = true }
+
+# Time crate for cookie duration handling
+time = { version = "0.3", features = ["macros"], optional = true }
+
+# Tonic gRPC framework (for interceptor implementation)
+tonic = { version = "0.12", optional = true }
+
+# Futures utilities for async operations
+futures = "0.3"
+
+[features]
+default = []
+jwt = ["dep:jsonwebtoken", "dep:ring"]
+ldap = ["dep:ldap3", "dep:encoding_rs"]
+oidc = ["dep:reqwest", "dep:cookie"]
+saml = ["dep:quick-xml", "dep:flate2", "dep:lru", "dep:ring"]
+grpc = ["jwt", "dep:tonic"]
+axum = ["jwt", "oidc", "dep:cookie", "dep:axum", "dep:time"]
+enterprise = ["jwt", "ldap", "oidc"]
+
+[dev-dependencies]
+tempfile = "3"

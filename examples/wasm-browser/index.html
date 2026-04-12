@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<!-- =============================================================================
+ * Misogi WASM Browser Demo — Single-Page Application
+ * =============================================================================
+ * Browser-based demonstration of the Misogi CDR (Content Disarm and
+ * Reconstruction) pipeline running entirely in WebAssembly. No server
+ * required — all file processing happens client-side in the browser.
+ *
+ * ## Features
+ *
+ * - Drag-and-drop file upload with visual feedback
+ * - Automatic file type detection via magic byte analysis
+ * - PDF / Office document sanitization (JavaScript removal, VBA macro stripping)
+ * - PII (Personally Identifiable Information) scanning with Japanese rule set
+ * - Sanitization policy selection (StripActiveContent, ConvertToFlat, TextOnly)
+ * - Real-time results display: threat count, audit report, size comparison
+ * - One-click download of sanitized output file
+ * - Full Japanese UI with professional dark theme
+ *
+ * ## Build Requirements
+ *
+ *   wasm-pack build --target web crates/misogi-wasm
+ *
+ * ## Serve
+ *
+ *   npx serve examples/wasm-browser
+ *   # or any static file server (must use HTTP, not file://)
+ *
+ * ============================================================================= -->
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Misogi CDR — ブラウザ内で動作するファイルサニタイズデモ (WebAssembly)">
+    <!-- Prevent indexing of demo page -->
+    <meta name="robots" content="noindex, nofollow">
+
+    <title>Misogi CDR — WASM ブラウザデモ</title>
+
+    <!-- Stylesheet: Professional dark theme -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <!-- =========================================================================
+         WASM Loading Overlay
+         ==========================================================================
+         Full-screen overlay shown while the WASM module is being fetched and
+         initialized. Hidden via CSS transition once init() completes successfully.
+         If initialization fails, an error message with build instructions is shown. -->
+    <div id="wasm-loading-overlay" class="wasm-loading-overlay" role="status" aria-live="polite">
+        <div id="wasm-loading-spinner" class="wasm-loading__spinner"></div>
+        <p id="wasm-loading-text" class="wasm-loading__text">WASM モジュールを読み込み中...</p>
+        <!-- Error message displayed here if WASM fails to load -->
+        <div id="wasm-loading-error" class="wasm-loading__error" style="display:none;"></div>
+    </div>
+
+    <!-- =========================================================================
+         Main Application Container
+         ========================================================================== -->
+    <div class="app-container">
+
+        <!-- =====================================================================
+             Header Section
+             ===================================================================== -->
+        <header class="app-header">
+            <div class="app-header__logo">
+                <!-- Shield icon representing security/sanitization -->
+                <svg class="app-header__shield-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                    <path d="M9 12l2 2 4-4"/>
+                </svg>
+                <h1 class="app-header__title">Misogi CDR</h1>
+            </div>
+            <p class="app-header__subtitle">WebAssembly によるブラウザ内ファイルサニタイズ</p>
+            <span class="app-header__badge">WASM Demo v0.1</span>
+        </header>
+
+        <!-- =====================================================================
+             Drop Zone — File Upload Area
+             =====================================================================
+             Large drag-and-drop area with dashed border. Accepts PDF and Office
+             documents. Visual feedback on hover/drag via CSS class toggling.
+             Also supports click-to-browse via hidden file input element. -->
+        <section aria-label="ファイルアップロードエリア">
+            <div
+                id="drop-zone"
+                class="drop-zone"
+                role="button"
+                tabindex="0"
+                aria-label="ファイルをドロップまたはクリックして選択"
+            >
+                <!-- Upload icon (cloud with arrow up) -->
+                <svg class="drop-zone__icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <polyline points="16 16 12 12 8 16"/>
+                    <line x1="12" y1="12" x2="12" y2="21"/>
+                    <path d="M20.39 18.39A5 5 0 0018 9h-1.26A8 8 0 103 16.3"/>
+                    <polyline points="16 16 12 12 8 16"/>
+                </svg>
+
+                <p class="drop-zone__text">
+                    ここにファイルを<span class="drop-zone__text-strong">ドロップ</span>してください
+                </p>
+                <p class="drop-zone__hint">
+                    対応形式: PDF, DOCX, XLSX, PPTX, DOC, XLS, PPT （最大 500 MB）
+                </p>
+
+                <!-- Hidden file input triggered by drop zone click -->
+                <input
+                    type="file"
+                    id="drop-zone-input"
+                    class="drop-zone__input"
+                    accept=".pdf,.docx,.xlsx,.pptx,.doc,.xls,.ppt,.docm,.xlsm,.pptm"
+                    aria-label="ファイルを選択"
+                >
+            </div>
+        </section>
+
+        <!-- =====================================================================
+             File Info Card — Displayed After File Selection
+             =====================================================================
+             Shows selected filename, size, detected type with confidence score,
+             blocked file warning, and large file warning when applicable.
+             Hidden by default; revealed by app.js after successful file read. -->
+        <section id="file-info-card" class="file-info-card" aria-label="ファイル情報">
+            <div class="file-info-card__header">
+                <div class="file-info-card__name-group">
+                    <!-- Dynamic file type icon (PDF/Word/Excel/etc.) -->
+                    <span id="file-info-file-icon" class="file-info-card__file-icon" aria-hidden="true"></span>
+                    <div>
+                        <span id="file-info-filename" class="file-info-card__filename">—</span>
+                        <span id="file-info-size" class="file-info-card__size">—</span>
+                    </div>
+                </div>
+                <div style="display:flex;align-items:center;gap:var(--space-3);flex-wrap:wrap;">
+                    <span id="file-info-type-badge" class="file-info-card__type-badge">—</span>
+                    <span id="file-info-confidence" class="file-info-card__confidence">—</span>
+                </div>
+            </div>
+            <!-- Blocked file warning (shown for EXE, etc.) -->
+            <div id="file-info-blocked-warning" class="file-info-card__blocked-warning" style="display:none;" role="alert"></div>
+            <!-- Large file warning (>50MB) -->
+            <div id="file-info-large-file-warning" class="file-info-card__large-file-warning" style="display:none;" role="alert"></div>
+        </section>
+
+        <!-- =====================================================================
+             Policy Selector — Sanitization Policy Radio Buttons
+             =====================================================================
+             Three sanitization policies exposed from WASM:
+             - StripActiveContent (default): Remove JS/VBA/macros, keep formatting
+             - ConvertToFlat: Maximum security — destroy all interactive elements
+             - TextOnly: Extract plain text only, discard everything else
+             Hidden until a file is loaded. -->
+        <section id="policy-section" class="policy-section" aria-label="サニタイズポリシー選択">
+            <label class="policy-section__label" id="policy-label">サニタイズポリシー</label>
+            <div class="policy-selector" role="radiogroup" aria-labelledby="policy-label">
+
+                <!-- StripActiveContent (Default) -->
+                <div class="policy-option">
+                    <input
+                        type="radio"
+                        name="policy"
+                        value="StripActiveContent"
+                        id="policy-strip"
+                        class="policy-option__input"
+                        checked
+                    >
+                    <label for="policy-strip" class="policy-option__label">
+                        <span class="policy-option__radio-indicator"></span>
+                        <div>
+                            <strong>アクティブコンテンツ除去</strong>
+                            <div style="font-size:var(--font-size-xs);color:var(--color-text-muted);margin-top:2px;">
+                                JavaScript、VBAマクロを除去。書式は維持（標準）
+                            </div>
+                        </div>
+                    </label>
+                </div>
+
+                <!-- ConvertToFlat -->
+                <div class="policy-option">
+                    <input
+                        type="radio"
+                        name="policy"
+                        value="ConvertToFlat"
+                        id="policy-flat"
+                        class="policy-option__input"
+                    >
+                    <label for="policy-flat" class="policy-option__label">
+                        <span class="policy-option__radio-indicator"></span>
+                        <div>
+                            <strong>フラット変換</strong>
+                            <div style="font-size:var(--font-size-xs);color:var(--color-text-muted);margin-top:2px;">
+                                全インタラクティブ要素を破棄（最大セキュリティ）
+                            </div>
+                        </div>
+                    </label>
+                </div>
+
+                <!-- TextOnly -->
+                <div class="policy-option">
+                    <input
+                        type="radio"
+                        name="policy"
+                        value="TextOnly"
+                        id="policy-text"
+                        class="policy-option__input"
+                    >
+                    <label for="policy-text" class="policy-option__label">
+                        <span class="policy-option__radio-indicator"></span>
+                        <div>
+                            <strong>テキストのみ抽出</strong>
+                            <div style="font-size:var(--font-size-xs);color:var(--color-text-muted);margin-top:2px;">
+                                書式・画像・レイアウトを破棄（最小出力）
+                            </div>
+                        </div>
+                    </label>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- =====================================================================
+             Action Bar — Sanitize & Reset Buttons
+             =====================================================================
+             Contains the primary "Sanitize" action button and optional "Reset"
+             button to clear state and start over. A processing spinner is shown
+             during WASM execution to provide user feedback. -->
+        <div id="action-bar" class="action-bar">
+
+            <!-- Primary: Execute Sanitization -->
+            <button
+                id="sanitize-btn"
+                class="btn btn--primary"
+                type="button"
+                aria-describedby="processing-status"
+            >
+                <!-- Shield-check icon -->
+                <svg class="btn__icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                    <path d="M9 12l2 2 4-4"/>
+                </svg>
+                サニタイズ実行
+            </button>
+
+            <!-- Processing status indicator (visible during WASM execution) -->
+            <div id="processing-status" class="processing-status" style="display:none;" role="status" aria-live="polite">
+                <span class="processing-status__spinner"></span>
+                処理中...
+            </div>
+
+            <!-- Secondary: Reset application state -->
+            <button id="reset-btn" class="btn btn--secondary" type="button">
+                <!-- Rotate-ccw icon -->
+                <svg class="btn__icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <polyline points="1 4 1 10 7 10"/>
+                    <path d="M3.51 15a9 9 0 102.13-9.36L1 10"/>
+                </svg>
+                リセット
+            </button>
+        </div>
+
+        <!-- =====================================================================
+             Error Banner — User-Friendly Error Messages
+             =====================================================================
+             Displays Japanese error messages when something goes wrong
+             (file read error, WASM error, unsupported format, etc.).
+             Dismissible via close button. Uses shake animation on appear. -->
+        <div
+            id="error-banner"
+            class="error-banner"
+            role="alert"
+            aria-live="assertive"
+            style="display:none;"
+        >
+            <svg class="error-banner__icon" viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="15" y1="9" x2="9" y2="15"/>
+                <line x1="9" y1="9" x2="15" y2="15"/>
+            </svg>
+            <p id="error-message" class="error-banner__message"></p>
+            <button
+                id="error-dismiss-btn"
+                class="error-banner__dismiss"
+                type="button"
+                aria-label="エラーを閉じる"
+            >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+            </button>
+        </div>
+
+        <!-- =====================================================================
+             Results Panel — Post-Sanitization Output
+             =====================================================================
+             Card-based layout showing:
+             1. Threat status (count + safe/warning indicator)
+             2. File size comparison (original vs sanitized)
+             3. Expandable JSON audit report
+             4. PII scan results table (if PII found)
+             5. Download button for sanitized output file
+
+             Entire panel is hidden by default; revealed by app.js after
+             successful sanitization completes. -->
+        <section id="results-panel" class="results-panel" aria-label="サニタイズ結果">
+
+            <h2 class="results-panel__title">
+                <svg class="results-panel__title-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                    <line x1="16" y1="13" x2="8" y2="13"/>
+                    <line x1="16" y1="17" x2="8" y2="17"/>
+                </svg>
+                サニタイズ結果
+            </h2>
+
+            <div class="results-grid">
+
+                <!-- -------------------------------------------------------------
+                     Card 1: Threat Status
+                     ------------------------------------------------------------- -->
+                <article class="result-card">
+                    <div class="result-card__header">
+                        <span class="result-card__label">脅威検出状況</span>
+                    </div>
+                    <div class="threat-status">
+                        <div
+                            id="threat-count-value"
+                            class="threat-status__count threat-status__count--safe"
+                            aria-live="polite"
+                        >0</div>
+                        <div id="threat-status-label" class="threat-status__label">件の脅威検出</div>
+                        <div id="threat-status-indicator" class="threat-status__indicator threat-status__indicator--safe">
+                            <span class="threat-status__dot"></span>
+                            クリーン — 脅威は検出されませんでした
+                        </div>
+                    </div>
+                </article>
+
+                <!-- -------------------------------------------------------------
+                     Card 2: File Size Comparison
+                     ------------------------------------------------------------- -->
+                <article class="result-card">
+                    <div class="result-card__header">
+                        <span class="result-card__label">ファイルサイズ比較</span>
+                    </div>
+                    <div class="size-comparison">
+                        <div class="size-comparison__row">
+                            <span class="size-comparison__label">元ファイル</span>
+                            <span id="original-size-value" class="size-comparison__value">—</span>
+                        </div>
+                        <div class="size-comparison__row">
+                            <span class="size-comparison__label">サニタイズ後</span>
+                            <span id="sanitized-size-value" class="size-comparison__value">—</span>
+                        </div>
+                        <div class="size-comparison__row">
+                            <span class="size-comparison__label">差分</span>
+                            <span id="size-delta" class="size-comparison__delta size-comparison__delta--same">—</span>
+                        </div>
+                    </div>
+                </article>
+
+                <!-- -------------------------------------------------------------
+                     Card 3: Audit Report (Expandable/Collapsible)
+                     -------------------------------------------------------------
+                     Full JSON-encoded SanitizationReport from the CDR engine.
+                     Contains file_id, hashes, policy applied, per-action details,
+                     warnings, and processing time. Collapsed by default. -->
+                <article class="result-card report-card">
+                    <div class="result-card__header">
+                        <span class="result-card__label">詳細レポート</span>
+                        <button
+                            id="report-toggle"
+                            class="report-card__toggle"
+                            type="button"
+                            aria-expanded="false"
+                            aria-controls="report-content"
+                        >
+                            展開する
+                            <svg class="report-card__toggle-icon" viewBox="0 0 24 24" aria-hidden="true">
+                                <polyline points="6 9 12 15 18 9"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div
+                        id="report-content"
+                        class="report-card__content"
+                        role="region"
+                        aria-labelledby="report-toggle"
+                    >
+                        <pre id="report-json" class="report-card__json"></pre>
+                    </div>
+                </article>
+
+                <!-- -------------------------------------------------------------
+                     Card 4: PII Scan Results Table
+                     -------------------------------------------------------------
+                     Shown only when PII patterns are found in the scanned content.
+                     Displays match type, byte offset, and context excerpt for each
+                     PII hit. Includes recommended action badge (block/mask/alert). -->
+                <article id="pii-results-section" class="result-card pii-results" style="display:none;">
+                    <div class="result-card__header">
+                        <span class="result-card__label">個人情報 (PII) スキャン結果</span>
+                        <span id="pii-recommended-action"></span>
+                    </div>
+                    <div class="pii-table-wrapper">
+                        <table class="pii-table" role="table">
+                            <thead>
+                                <tr>
+                                    <th scope="col">種別</th>
+                                    <th scope="col">オフセット</th>
+                                    <th scope="col">コンテキスト</th>
+                                </tr>
+                            </thead>
+                            <tbody id="pii-table-body">
+                                <!-- Rows populated dynamically by app.js -->
+                            </tbody>
+                        </table>
+                    </div>
+                </article>
+
+                <!-- -------------------------------------------------------------
+                     Card 5: Download Action
+                     -------------------------------------------------------------
+                     Provides one-click download of the sanitized output file.
+                     Uses Blob URL created from WASM output bytes. URL is revoked
+                     after download or reset to prevent memory leaks. -->
+                <article id="download-card" class="result-card download-card" style="display:none;">
+                    <div class="download-card__info">
+                        <span id="download-filename" class="download-card__filename">—</span>
+                        <span id="download-filesize" class="download-card__filesize">—</span>
+                    </div>
+                    <a
+                        id="download-btn"
+                        class="btn btn--success"
+                        href="#"
+                        download
+                        role="button"
+                    >
+                        <!-- Download icon -->
+                        <svg class="btn__icon" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                            <polyline points="7 10 12 15 17 10"/>
+                            <line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                        サニタイズ済みファイルをダウンロード
+                    </a>
+                </article>
+
+            </div><!-- /.results-grid -->
+        </section><!-- /#results-panel -->
+
+        <!-- =====================================================================
+             Footer
+             ===================================================================== -->
+        <footer class="app-footer">
+            <p>
+                Misogi CDR WASM Demo &mdash;
+                <a href="https://github.com/misogi-project/misogi" target="_blank" rel="noopener noreferrer">
+                    Misogi Project
+                </a>
+            </p>
+            <p style="margin-top:var(--space-2);">
+                本デモは教育・評価目的に提供されています。実運用環境では専用サーバーデプロイを推奨します。
+            </p>
+            <p style="margin-top:var(--space-1); color: var(--color-text-muted);">
+                All processing runs locally in your browser. No data is transmitted to any server.
+            </p>
+        </footer>
+
+    </div><!-- /.app-container -->
+
+    <!-- =========================================================================
+         Application Script (ES6 Module)
+         ==========================================================================
+         Loaded as ES6 module to enable dynamic import() of the WASM package.
+         The script handles all interactivity: drag-and-drop, WASM calls,
+         result rendering, error handling, and memory management. -->
+    <script type="module" src="app.js"></script>
+
+</body>
+</html>

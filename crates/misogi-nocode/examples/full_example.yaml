@@ -1,0 +1,105 @@
+version: "1.0"
+environment: production
+
+# =============================================================================
+# Authentication Configuration
+# =============================================================================
+authentication:
+  jwt:
+    # Token issuer URL — must be HTTPS in production
+    issuer: https://misogi.gov.jp
+    
+    # Token lifetime in hours (1-168)
+    ttl_hours: 8
+  
+  # Identity provider configurations
+  identity_providers:
+    # LDAP / Active Directory integration example
+    - name: "Government LDAP"
+      type: ldap
+      url: ldaps://ldap.example.gov.jp
+      base_dn: DC=gov,DC=jp
+      bind_cn: cn=misogi_svc,OU=ServiceAccounts
+      attribute_mappings:
+        uid: sAMAccountName
+        display_name: displayName
+        email: mail
+      enabled: true
+    
+    # OIDC / SSO integration example
+    - name: "Cloud SSO"
+      type: oidc
+      issuer: https://accounts.cloud.gov.jp
+      client_id: ${OIDC_CLIENT_ID}
+      client_secret: ${OIDC_CLIENT_SECRET}
+      scopes: [openid, profile, email]
+      pkce: true
+
+# =============================================================================
+# Sanitization Configuration
+# =============================================================================
+sanitization:
+  # Default policy for unmatched files
+  default_policy: strict
+  
+  # File-type-specific rules
+  rules:
+    # PDF files — maximum security
+    - match: "*.pdf"
+      policy: strict
+      strip_metadata: true
+      flatten_annotations: true
+    
+    # Office documents — remove macros and scripts
+    - match: "*.docx;*.xlsx;*.pptx"
+      policy: standard
+      remove_macros: true
+      remove_scripts: true
+    
+    # Catch-all rule — must be last
+    - match: "*"
+      policy: lenient
+
+# =============================================================================
+# Routing Configuration
+# =============================================================================
+routing:
+  incoming:
+    # Internal API endpoints — authentication required
+    - source_pattern: "*/internal/*"
+      require_auth: true
+      allowed_providers: [ldap]
+      rate_limit: 1000/min
+    
+    # Public endpoints — no auth required
+    - source_pattern: "*/public/*"
+      require_auth: false
+      rate_limit: 100/min
+
+# =============================================================================
+# Retention Configuration [Optional]
+# =============================================================================
+retention:
+  # Default retention period in days
+  default_days: 365
+  
+  # Classification-specific rules
+  rules:
+    # Classified records — 7-year retention
+    - match: "classified/*"
+      days: 2555
+      archive_to: cold_storage
+
+# =============================================================================
+# Notification Configuration [Optional]
+# =============================================================================
+notifications:
+  on_error:
+    # Email notification for operations team
+    - channel: email
+      recipients: [ops@gov.jp]
+      severity: [critical, high]
+    
+    # Webhook for monitoring integration
+    - channel: webhook
+      url: ${WEBHOOK_URL}

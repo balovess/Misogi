@@ -1,0 +1,60 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'misogi-production'
+    env: 'production'
+
+scrape_configs:
+  # ---- Misogi Sender (gRPC + REST API) --------------------------------------
+  - job_name: 'misogi-sender'
+    static_configs:
+      - targets: ['misogi-sender:8080']
+        labels:
+          service: 'sender'
+          component: 'rest-api'
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+
+  # ---- Misogi Receiver -----------------------------------------------------
+  - job_name: 'misogi-receiver'
+    static_configs:
+      - targets: ['misogi-receiver:50052']
+        labels:
+          service: 'receiver'
+          component: 'grpc'
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+
+  # ---- Misogi SMTP Gateway -------------------------------------------------
+  - job_name: 'misogi-smtp'
+    static_configs:
+      - targets: ['misogi-smtp:8080']
+        labels:
+          service: 'smtp'
+          component: 'email-gateway'
+    metrics_path: '/metrics'
+    scrape_interval: 15s
+
+  # ---- PostgreSQL (via postgres_exporter if available) ----------------------
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+        labels:
+          service: 'postgres'
+          component: 'database'
+    scrape_interval: 30s
+
+  # ---- Redis (via redis_exporter if available) ------------------------------
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+        labels:
+          service: 'redis'
+          component: 'cache'
+    scrape_interval: 15s
+
+  # ---- Prometheus self-monitoring ------------------------------------------
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']

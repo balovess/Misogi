@@ -1,0 +1,52 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "misogi.fullname" . }}-configmap
+  labels:
+    {{- include "misogi.labels" . | nindent 4 }}
+data:
+  config.toml: |
+    [server]
+    bind_addr = "0.0.0.0"
+    grpc_port = {{ .Values.senderConfig.grpcPort }}
+    rest_api_port = {{ .Values.senderConfig.restApiPort }}
+
+    [auth]
+    jwt_issuer = "{{ .Values.auth.jwtIssuer }}"
+    jwt_audience = "{{ .Values.auth.jwtAudience }}"
+    rsa_public_key_path = "{{ .Values.auth.rsaPublicKeyPath }}"
+
+    [scanner]
+    chain_mode = "first_responder"
+
+    [logging]
+    level = "info"
+    format = "json"
+
+  smtp.toml: |
+    [server]
+    listen_addr = "0.0.0.0:{{ .Values.smtpConfig.smtpPort }}"
+    hostname = "{{ .Values.smtpConfig.hostname }}"
+    mode = "transparent_proxy"
+
+    [relay]
+    host = "{{ .Values.smtpConfig.relayHost }}"
+    port = {{ .Values.smtpConfig.relayPort }}
+
+    [sanitization]
+    max_message_size = {{ .Values.smtpConfig.maxMessageSize }}
+    default_policy = "strip"
+    fail_open = false
+
+    [zone_policy]
+    force_pii_scan_on_external = {{ .Values.smtpConfig.zonePolicy.forcePiiScanOnExternal }}
+
+    internal_domains = [
+      {{- range $i, $domain := .Values.smtpConfig.zonePolicy.internalDomains }}
+      {{- if $i }},{{ end }}"{{ $domain }}"
+      {{- end }}
+    ]
+
+    [logging]
+    level = "info"
+    format = "json"

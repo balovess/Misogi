@@ -1,0 +1,63 @@
+# =============================================================================
+# Misogi (禊) — Production Multi-Stage Docker Build
+# =============================================================================
+# Optimized production image targeting < 150MB final size.
+#
+# Builds all three binaries (sender, receiver, smtp) from workspace,
+# then copies only the necessary runtime artifacts into a minimal image.
+#
+# Usage:
+#   docker build -f docker/Dockerfile.prod -t misogi:prod .
+#   docker run -p 50051:50051 -p 8080:8080 misogi:prod  # sender + REST API
+#
+# Stages:
+#   builder  — Rust toolchain + dependencies, cargo build --release
+#   runtime  — Minimal Debian with ca-certificates + libssl3 only
+# =============================================================================
+
+# ---- Stage 1: Builder -------------------------------------------------------
+FROM rust:1.82-bookworm AS builder
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    protobuf-compiler \
+    pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY Cargo.toml Cargo.lock ./
+COPY crates/ ./crates/
+
+ARG BUILD_PROFILE=release
+RUN cargo build --profile ${BUILD_PROFILE} --bins
+
+# ---- Stage 2: Runtime (Minimal) ---------------------------------------------
+FROM debian:bookworm-slim AS runtime
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    libssl3 \
+    curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd -r misogi && useradd -r -g misogi -d /app -s /sbin/nologin misogi \
+    && mkdir -p /app/config /app/data /var/log/misogi \
+    && chown -R misogi:misogi /app /var/log/misogi
+
+WORKDIR /app
+
+COPY --from=builder /app/target/release/misogi-sender /usr/local/bin/
+COPY --from=builder /app/target/release/misogi-receiver /usr/local/bin/
+COPY --from=builder /app/target/release/misogi-smtp /usr/local/bin/
+
+USER misogi
+
+EXPOSE 50051 50052 25 587 8080
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD curl -f http://localhost:8080/api/v1/health/liveness || exit 1
+
+ENV MISOGI_LOG_LEVEL="info" \
+    RUST_LOG="info"
+
+ENTRYPOINT ["misogi-sender"]
+CMD ["--config", "/app/config/config.toml"]

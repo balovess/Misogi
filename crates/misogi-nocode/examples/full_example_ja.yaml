@@ -1,0 +1,105 @@
+version: "1.0"
+environment: production
+
+# =============================================================================
+# Authentication Configuration (認証設定)
+# =============================================================================
+authentication:
+  jwt:
+    # Token issuer URL — must be HTTPS in production (本番環境ではHTTPS必須)
+    issuer: https://misogi.gov.jp
+    
+    # Token lifetime in hours (トークン有効期間: 時間単位)
+    ttl_hours: 8
+  
+  # Identity provider configurations (IDプロバイダー設定)
+  identity_providers:
+    # LDAP / Active Directory integration example (LDAP連携例)
+    - name: "内閣庁LDAP"
+      type: ldap
+      url: ldaps://ldap.cao.go.jp
+      base_dn: DC=gov,DC=jp
+      bind_cn: cn=misogi_svc,OU=ServiceAccounts
+      attribute_mappings:
+        uid: sAMAccountName
+        display_name: displayName
+        email: mail
+      enabled: true
+    
+    # OIDC / SSO integration example (SSO連携例)
+    - name: "G-Cloud SSO"
+      type: oidc
+      issuer: https://accounts.gcloud.go.jp
+      client_id: ${OIDC_CLIENT_ID}           # Environment variable reference (環境変数参照)
+      client_secret: ${OIDC_CLIENT_SECRET}
+      scopes: [openid, profile, email]
+      pkce: true
+
+# =============================================================================
+# Sanitization Configuration (サニタイズ設定)
+# =============================================================================
+sanitization:
+  # Default policy for unmatched files (デフォルトポリシー)
+  default_policy: strict
+  
+  # File-type-specific rules (ファイル種別ごとのルール)
+  rules:
+    # PDF files — maximum security (PDFファイル — 最高セキュリティ)
+    - match: "*.pdf"
+      policy: strict
+      strip_metadata: true
+      flatten_annotations: true
+    
+    # Office documents — remove macros and scripts (Office文書 — マクロ・スクリプト除去)
+    - match: "*.docx;*.xlsx;*.pptx"
+      policy: standard
+      remove_macros: true
+      remove_scripts: true
+    
+    # Catch-all rule — must be last (キャッチオールルール — 最後に配置)
+    - match: "*"
+      policy: lenient
+
+# =============================================================================
+# Routing Configuration (ルーティング設定)
+# =============================================================================
+routing:
+  incoming:
+    # Internal API endpoints — authentication required (内部API — 認証必須)
+    - source_pattern: "*/internal/*"
+      require_auth: true
+      allowed_providers: [ldap]
+      rate_limit: 1000/min
+    
+    # Public endpoints — no auth required (公開エンドポイント — 認証不要)
+    - source_pattern: "*/public/*"
+      require_auth: false
+      rate_limit: 100/min
+
+# =============================================================================
+# Retention Configuration (保持期間設定) [Optional]
+# =============================================================================
+retention:
+  # Default retention period in days (デフォルト保持期間: 日数)
+  default_days: 365
+  
+  # Classification-specific rules (分類別ルール)
+  rules:
+    # Classified government records — 7-year retention (機密文書 — 7年保管)
+    - match: "classified/*"
+      days: 2555
+      archive_to: cold_storage
+
+# =============================================================================
+# Notification Configuration (通知設定) [Optional]
+# =============================================================================
+notifications:
+  on_error:
+    # Email notification for security team (セキュリティチームへのメール通知)
+    - channel: email
+      recipients: [secops@gov.jp]
+      severity: [critical, high]
+    
+    # Webhook for SIEM integration (SIEM連携用Webhook)
+    - channel: webhook
+      url: ${WEBHOOK_URL}

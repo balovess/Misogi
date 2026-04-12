@@ -1,0 +1,17 @@
+version: v1
+plugins:
+  - name: java
+    out: gen/java
+    opt:
+      - use_deprecated_namespace=false
+  - name: python
+    out: gen/python
+  - name: go
+    out: gen/go
+    opt:
+      - paths=source_relative
+  - name: ts
+    out: gen/ts
+    opt:
+      - longs=String
+      - enums=string

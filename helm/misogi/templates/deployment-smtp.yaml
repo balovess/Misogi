@@ -1,0 +1,127 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "misogi.smtp.fullname" . }}
+  labels:
+    {{- include "misogi.smtp.labels" . | nindent 4 }}
+spec:
+  {{- if not (and .Values.smtpConfig.autoscaling.enabled .Values.hpa.enabled) }}
+  replicas: {{ .Values.smtpConfig.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "misogi.smtp.selectorLabels" . | nindent 6 }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
+  template:
+    metadata:
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+      labels:
+        {{- include "misogi.smtp.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "misogi.serviceAccountName" . }}
+      {{- with .Values.smtpConfig.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.smtpConfig.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.smtpConfig.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: smtp-gateway
+          image: "{{ .Values.global.imageRepository }}:{{ .Values.global.imageTag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          command: ["misogi-smtp"]
+          args: ["--config", "/etc/misogi/smtp.toml"]
+          ports:
+            - name: smtp
+              containerPort: {{ .Values.smtpConfig.smtpPort }}
+              protocol: TCP
+            - name: smtp-submission
+              containerPort: {{ .Values.smtpConfig.smtpSubmissionPort }}
+              protocol: TCP
+            - name: metrics
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: MISOGI_LOG_LEVEL
+              value: "info"
+            - name: RUST_LOG
+              value: "info"
+            - name: SMTP_LISTEN_ADDR
+              value: "0.0.0.0:{{ .Values.smtpConfig.smtpPort }}"
+            - name: SMTP_HOSTNAME
+              value: {{ .Values.smtpConfig.hostname | quote }}
+            - name: SMTP_RELAY_HOST
+              value: {{ .Values.smtpConfig.relayHost | quote }}
+            - name: SMTP_RELAY_PORT
+              value: {{ .Values.smtpConfig.relayPort | quote }}
+            - name: SMTP_MAX_MESSAGE_SIZE
+              value: {{ .Values.smtpConfig.maxMessageSize | quote }}
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "misogi.fullname" . }}-secrets
+                  key: database-url
+            {{- with .Values.smtpConfig.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          livenessProbe:
+            tcpSocket:
+              port: smtp
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - echo QUIT | nc localhost {{ .Values.smtpConfig.smtpPort }} | grep -q 220
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.smtpConfig.resources | nindent 12 }}
+          volumeMounts:
+            - name: smtp-config-volume
+              mountPath: /etc/misogi/smtp.toml
+              subPath: smtp.toml
+              readOnly: true
+            - name: maildrop-volume
+              mountPath: /app/maildrop
+            - name: queue-volume
+              mountPath: /app/queue
+            {{- with .Values.smtpConfig.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+      volumes:
+        - name: smtp-config-volume
+          configMap:
+            name: {{ include "misogi.fullname" . }}-configmap
+        - name: maildrop-volume
+          emptyDir: {}
+        - name: queue-volume
+          emptyDir: {}
