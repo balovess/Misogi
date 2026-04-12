@@ -12,7 +12,7 @@ path = "src/main.rs"
 tokio = { version = "1", features = ["full"] }
 axum = "0.7"
 tonic = { version = "0.12", features = ["tls"] }
-tower = "0.4"
+tower = "0.5"
 tower-http = { version = "0.6", features = ["cors"] }
 tokio-util = "0.7"
 tokio-stream = "0.1"
