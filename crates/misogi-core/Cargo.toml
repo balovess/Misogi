@@ -60,7 +60,7 @@ toml = "0.8"
 axum = "0.7"
 
 # Tower service abstraction (used by gRPC version interceptor)
-tower = "0.4"
+tower = "0.5"
 
 # HTTP body utilities (used by gRPC interceptor for empty body creation)
 http-body-util = "0.1"
