@@ -343,4 +343,31 @@ email ルール     → action: AlertOnly
 
 ---
 
+## 関連情報
+
+PII 検出機能の高度な利用については、以下の拡張ガイドを参照してください：
+
+### 📘 PII 検出深度拡張ガイド (4層エンジン)
+
+- **[Part 1: 概要・コンテキスト分析・構造化データ](pii-detection-enhanced.md)**
+  - 4 層アーキテクチャ全体像と競合製品との差異化
+  - Feature Flags と依存関係
+  - **L1: コンテキスト分析エンジン** — ContextProvider trait + KeywordRuleEngine
+  - **L2: 構造化データスキャナ** — CSV/JSON/XML フィールドレベル検出
+
+- **[Part 2: OCR・機密分類・設定リファレンス](pii-detection-enhanced-part2.md)**
+  - **L3: 画像 OCR PII 検出** — OcrProvider trait + パイプライン
+  - **L4: 機密レベル自動分類器** — ユーザー定義可能な任意の等级体系
+  - YAML 設定ファイル完全リファレンス
+
+- **[Part 3: API リファレンス・導入ガイド・トラブルシューティング](pii-detection-enhanced-part3.md)**
+  - 完全プログラミング API リファレンス
+  - シナリオ別設定例 (金融/自治体/医療)
+  - 移行ガイド (旧版→新版)
+  - FAQ とパフォーマンス最適化
+
+> *For English readers: See [PII Detection Enhancement Guide](../../en/security/pii-detection-enhanced.md)*
+
+---
+
 *関連ドキュメント: [監査ログフィールドガイド](audit-log-guide.md) | [基本設定ガイド](../configuration/basic-config.md)*

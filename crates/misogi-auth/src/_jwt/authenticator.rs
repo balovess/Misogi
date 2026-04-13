@@ -204,6 +204,7 @@ impl JwtAuthenticator {
             sub: validated.claims.applicant_id.clone(),
             name: validated.claims.display_name.unwrap_or_default(),
             roles: validated.claims.roles.clone(),
+            device_id: String::new(),
             iat: validated.claims.iat,
             exp: validated.claims.exp,
         })
@@ -241,6 +242,7 @@ impl JwtAuthenticator {
             sub: validated.claims.applicant_id.clone(),
             name: validated.claims.display_name.unwrap_or_default(),
             roles: validated.claims.roles.clone(),
+            device_id: String::new(),
             iat: validated.claims.iat,
             exp: validated.claims.exp,
         })

@@ -1,0 +1,117 @@
+# === Generic 4-Tier Secrecy Level Template (Universal Default) ===
+# This is a starting point for customization.
+# Users may modify: add/remove levels, rename, change rules, adjust controls.
+
+version: "1.0"
+scheme: "generic-4-tier"
+
+levels:
+  critical:
+    display_name: "Critical"
+    rank: 4
+    color: "#DC2626"
+    required_controls:
+      - { id: enc_at_rest, name: "Encryption at Rest", required: true, spec: "AES-256+" }
+      - { id: enc_transit, name: "Encryption in Transit", required: true, spec: "TLS 1.2+" }
+      - { id: mfa, name: "Multi-Factor Authentication", required: true, spec: "" }
+      - { id: audit_full, name: "Full Audit Logging", required: true, spec: "" }
+    retention_years: 7
+
+  high:
+    display_name: "High"
+    rank: 3
+    color: "#EA580C"
+    required_controls:
+      - { id: enc_at_rest, name: "Encryption at Rest", required: true, spec: "AES-256+" }
+      - { id: audit_access, name: "Access Audit Log", required: true, spec: "" }
+    retention_years: 5
+
+  medium:
+    display_name: "Medium"
+    rank: 2
+    color: "#D97706"
+    required_controls:
+      - { id: access_control, name: "Access Control", required: true, spec: "" }
+      - { id: handling_label, name: "Handling Label", required: false, spec: "" }
+    retention_years: 3
+
+  low:
+    display_name: "Low"
+    rank: 1
+    color: "#65A30D"
+    required_controls:
+      - { id: basic_auth, name: "Basic Authentication", required: true, spec: "" }
+    retention_years: 1
+
+  public:
+    display_name: "Public"
+    rank: 0
+    color: "#3B82F6"
+    required_controls: []
+    retention_years: 1
+
+classification_rules:
+
+  # === High-sensitivity identity → Critical ===
+  - id: "rule_national_id_critical"
+    condition:
+      pii_types_present: ["national_id"]
+      min_count: 1
+    result:
+      level: "critical"
+      reason: "Contains national identity identifier"
+
+  - id: "rule_credit_card_critical"
+    condition:
+      pii_types_present: ["credit_card"]
+      min_count: 1
+    result:
+      level: "critical"
+      reason: "Contains payment card information"
+
+  - id: "rule_full_identity_critical"
+    condition:
+      require_all_of: ["full_name", "address", "phone"]
+    result:
+      level: "critical"
+      reason: "Contains complete identity set"
+
+  # === Identifiable personal info → High ===
+  - id: "rule_identity_high"
+    condition:
+      require_any_of: ["full_name", "address", "phone"]
+      exclude_all_of: ["national_id", "credit_card"]
+    result:
+      level: "high"
+      reason: "Contains identifiable personal information"
+
+  # === Single contact info → Medium ===
+  - id: "rule_contact_medium"
+    condition:
+      require_any_of: ["email", "phone"]
+      exclude_all_of: ["full_name", "address", "national_id"]
+    result:
+      level: "medium"
+      reason: "Contains contact information only"
+
+  # === Internal identifiers → Low ===
+  - id: "rule_internal_low"
+    condition:
+      require_any_of: ["employee_id", "department"]
+      exclude_all_of: ["national_id", "full_name", "phone", "email"]
+    result:
+      level: "low"
+      reason: "Contains internal identifiers only"
+
+  # === No PII detected → Public ===
+  - id: "rule_public"
+    condition:
+      pii_types_present: []
+    result:
+      level: "public"
+      reason: "No personal information detected"
+
+fallback:
+  unknown_default: "medium"
+  conflict_resolution: "highest"
+  min_confidence: 0.3

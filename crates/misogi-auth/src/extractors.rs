@@ -432,6 +432,7 @@ pub enum ProviderSource {
 /// Does NOT validate the authentication token — that's the responsibility of
 /// the provider-specific plugin/handler.
 #[cfg(feature = "axum")]
+#[derive(Debug)]
 pub struct IdentityAuthExtractor(pub IdentityContext);
 
 #[cfg(feature = "axum")]
@@ -464,7 +465,7 @@ where
 {
     type Rejection = ExtractionError;
 
-    #[instrument(skip(parts, state), fields(extractor = "identity_auth"))]
+    #[instrument(skip_all, fields(extractor = "identity_auth"))]
     async fn from_request_parts(
         parts: &mut axum::http::request::Parts,
         _state: &S,
@@ -574,6 +575,13 @@ fn extract_provider_from_path(path: &str) -> Option<String> {
 
     None
 }
+
+// ---------------------------------------------------------------------------
+// Posture-Aware Extractor (ZT-7 Device Proofing)
+// ---------------------------------------------------------------------------
+
+#[cfg(all(feature = "axum", feature = "posture"))]
+pub mod posture_extractor;
 
 // ===========================================================================
 // Unit Tests

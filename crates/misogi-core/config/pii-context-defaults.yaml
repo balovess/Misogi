@@ -1,0 +1,97 @@
+# === Universal PII Context Keyword Configuration (International Default) ===
+# This file provides out-of-the-box universal rules.
+# For Japan government/finance/healthcare industry rules, use optional config packages.
+
+version: "1.0"
+profile: "universal"
+
+global_settings:
+  context_window_size: 100
+  positive_threshold: 0.7
+  negative_threshold: 0.3
+  case_sensitive: false
+
+# Global anti-keywords (false-positive signals across all PII types)
+global_anti_keywords:
+  - { keyword: "invoice", weight: 0.70, position: either }
+  - { keyword: "no.", weight: 0.65, position: before }
+  - { keyword: "case", weight: 0.60, position: either }
+  - { keyword: "serial", weight: 0.70, position: after }
+  - { keyword: "id:", weight: 0.50, position: before }
+  - { keyword: "code", weight: 0.55, position: after }
+  - { keyword: "ref", weight: 0.55, position: before }
+  - { keyword: "sample", weight: 0.50, position: before }
+  - { keyword: "example", weight: 0.60, position: either }
+  - { keyword: "test", weight: 0.45, position: either }
+
+# PII type rules (universal base set)
+pii_types:
+
+  # --- National Identity ---
+  national_id:
+    display_name: "National ID Number"
+    positive:
+      - { keyword: "national id", weight: 0.90, position: before }
+      - { keyword: "ssn", weight: 0.90, position: before }
+      - { keyword: "social security", weight: 0.88, position: before }
+      - { keyword: "passport", weight: 0.92, position: before }
+      - { keyword: "身份证", weight: 0.93, position: before }
+      - { keyword: "身份證", weight: 0.93, position: before }
+      - { keyword: "身份证号", weight: 0.95, position: before }
+    anti:
+      - { keyword: "reference", weight: 0.60, position: either }
+      - { keyword: "sample", weight: 0.55, position: before }
+
+  credit_card:
+    display_name: "Credit Card"
+    positive:
+      - { keyword: "credit card", weight: 0.95, position: before }
+      - { keyword: "card number", weight: 0.92, position: before_or_after }
+      - { keyword: "cvv", weight: 0.90, position: after }
+      - { keyword: "expiry", weight: 0.85, position: after }
+      - { keyword: "カード番号", weight: 0.95, position: before }
+      - { keyword: "卡号", weight: 0.95, position: before }
+    anti:
+      - { keyword: "member", weight: 0.55, position: either }
+      - { keyword: "token", weight: 0.60, position: after }
+
+  email:
+    display_name: "Email Address"
+    positive:
+      - { keyword: "email", weight: 0.98, position: before }
+      - { keyword: "e-mail", weight: 0.90, position: before }
+      - { keyword: "メール", weight: 0.80, position: before }
+      - { keyword: "邮箱", weight: 0.95, position: before }
+      - { keyword: "邮件", weight: 0.92, position: before }
+    anti: []
+
+  phone:
+    display_name: "Phone Number"
+    positive:
+      - { keyword: "phone", weight: 0.85, position: before }
+      - { keyword: "tel", weight: 0.90, position: before }
+      - { keyword: "fax", weight: 0.88, position: before }
+      - { keyword: "電話", weight: 0.87, position: before }
+      - { keyword: "携帯", weight: 0.85, position: before }
+      - { keyword: "手机", weight: 0.90, position: before }
+      - { keyword: "电话", weight: 0.90, position: before }
+    anti:
+      - { keyword: "postal", weight: 0.65, position: before }
+
+  full_name:
+    display_name: "Full Name"
+    positive:
+      - { keyword: "name", weight: 0.65, position: before }
+      - { keyword: "氏名", weight: 0.99, position: before }
+      - { keyword: "姓名", weight: 0.99, position: before }
+      - { keyword: "名前", weight: 0.97, position: before }
+    anti: []
+
+  address:
+    display_name: "Address"
+    positive:
+      - { keyword: "address", weight: 0.88, position: before }
+      - { keyword: "住所", weight: 0.92, position: before }
+      - { keyword: "addr", weight: 0.75, position: before }
+      - { keyword: "地址", weight: 0.92, position: before }
+    anti: []

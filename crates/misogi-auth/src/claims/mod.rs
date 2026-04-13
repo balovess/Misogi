@@ -42,6 +42,34 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
 // ---------------------------------------------------------------------------
+// Device Security Claim Keys
+// ---------------------------------------------------------------------------
+
+/// Key for device identifier in `extra` map (from fingerprint computation).
+pub const CLAIM_DEVICE_ID: &str = "device_id";
+
+/// Key for device fingerprint hash in `extra` map (for audit trail).
+pub const CLAIM_DEVICE_FINGERPRINT_HASH: &str = "device_fingerprint_hash";
+
+/// Key for device posture score in `extra` map (0–100).
+pub const CLAIM_DEVICE_POSTURE_SCORE: &str = "device_posture_score";
+
+/// Key for TCM attestation status in `extra` map.
+pub const CLAIM_TCM_ATTESTED: &str = "tcm_attested";
+
+/// Key for EDR risk level in `extra` map ("low", "medium", "high", "critical").
+pub const CLAIM_EDR_RISK_LEVEL: &str = "edr_risk_level";
+
+/// HTTP header name for client-submitted device fingerprint.
+pub const HEADER_DEVICE_FINGERPRINT: &str = "X-Device-Fingerprint";
+
+/// HTTP header name for client-submitted device posture report.
+pub const HEADER_DEVICE_POSTURE: &str = "X-Device-Posture";
+
+/// HTTP header name for TCM quote (attestation evidence).
+pub const HEADER_TCM_QUOTE: &str = "X-TCM-Quote";
+
+// ---------------------------------------------------------------------------
 // Claims Structure
 // ---------------------------------------------------------------------------
 

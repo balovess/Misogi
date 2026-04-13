@@ -50,7 +50,8 @@ mod tests;
 // Public re-exports (backward compatible API)
 // =============================================================================
 
-// Re-export for backward compatibility
+// Re-export OfficeSanitizer when runtime feature is available (async operations)
+#[cfg(feature = "runtime")]
 pub use super::office_sanitizer::OfficeSanitizer;
 
 pub use types::{ContentTypeFilterMode, FilteredXmlResult, OoxmlDocumentType, OoxmlTrueCdrResult};

@@ -35,6 +35,12 @@
     <!-- Prevent indexing of demo page -->
     <meta name="robots" content="noindex, nofollow">
 
+    <!-- COOP/COEP headers for SharedArrayBuffer and cross-origin isolation.
+         Required for advanced WASM features (multi-threading, memory sharing).
+         Must be set via both meta tags and server response headers for full effect. -->
+    <meta http-equiv="Cross-Origin-Opener-Policy" content="same-origin">
+    <meta http-equiv="Cross-Origin-Embedder-Policy" require-corp="true">
+
     <title>Misogi CDR — WASM ブラウザデモ</title>
 
     <!-- Stylesheet: Professional dark theme -->

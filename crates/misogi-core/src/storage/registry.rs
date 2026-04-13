@@ -46,6 +46,12 @@ use crate::storage::local::{LocalConfig, LocalStorage};
 #[cfg(feature = "storage-s3")]
 use crate::storage::s3::{S3Config, S3Storage};
 
+#[cfg(feature = "storage-azure")]
+use crate::storage::azure_blob::{AzureBlobConfig, AzureBlobStorage};
+
+#[cfg(feature = "storage-gcs")]
+use crate::storage::gcs::{GcsConfig, GcsStorage};
+
 use crate::storage::api_forward::{ApiForwardConfig, ApiForwardStorage, HttpMethod};
 
 // ---------------------------------------------------------------------------
@@ -82,6 +88,206 @@ impl StorageBackendInfo {
             backend_type: backend_type.into(),
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// TOML Configuration Parsers (for async backends without Deserialize)
+// ---------------------------------------------------------------------------
+
+/// Parse `[storage.azure_blob]` table into [`AzureBlobConfig`] manually.
+///
+/// Required fields: `account_name`, `credential`, `container`
+/// Optional fields: `endpoint` (String), `sas_url_ttl_secs` (integer, default 3600)
+#[cfg(feature = "storage-azure")]
+fn parse_azure_blob_config(
+    storage_table: &toml::Table,
+) -> Result<AzureBlobConfig, StorageError> {
+    let az_table = storage_table
+        .get("azure_blob")
+        .and_then(|v| v.as_table())
+        .ok_or_else(|| {
+            StorageError::ConfigurationError(
+                "missing or invalid [storage.azure_blob] table".into(),
+            )
+        })?;
+
+    let account_name = az_table
+        .get("account_name")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| {
+            StorageError::ConfigurationError(
+                "[storage.azure_blob] requires 'account_name'".into(),
+            )
+        })?
+        .to_string();
+
+    let credential = az_table
+        .get("credential")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| {
+            StorageError::ConfigurationError(
+                "[storage.azure_blob] requires 'credential'".into(),
+            )
+        })?
+        .to_string();
+
+    let container = az_table
+        .get("container")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| {
+            StorageError::ConfigurationError(
+                "[storage.azure_blob] requires 'container'".into(),
+            )
+        })?
+        .to_string();
+
+    let endpoint = az_table
+        .get("endpoint")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+
+    let sas_url_ttl_secs = az_table
+        .get("sas_url_ttl_secs")
+        .and_then(|v| v.as_integer())
+        .unwrap_or(3600) as u64;
+
+    let mut config = AzureBlobConfig::new(account_name, credential, container);
+    if let Some(ep) = endpoint {
+        config = config.with_endpoint(ep);
+    }
+    config = config.with_sas_url_ttl(sas_url_ttl_secs);
+
+    Ok(config)
+}
+
+/// Parse `[storage.gcs]` table into [`GcsConfig`] manually.
+///
+/// Required fields: `bucket`
+/// Optional fields: `service_account_json` (string), `service_account_key_path` (string), `base_url` (string)
+#[cfg(feature = "storage-gcs")]
+fn parse_gcs_config(
+    storage_table: &toml::Table,
+) -> Result<GcsConfig, StorageError> {
+    let gcs_table = storage_table
+        .get("gcs")
+        .and_then(|v| v.as_table())
+        .ok_or_else(|| {
+            StorageError::ConfigurationError(
+                "missing or invalid [storage.gcs] table".into(),
+            )
+        })?;
+
+    let bucket = gcs_table
+        .get("bucket")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| {
+            StorageError::ConfigurationError(
+                "[storage.gcs] requires 'bucket'".into(),
+            )
+        })?
+        .to_string();
+
+    let service_account_json = gcs_table
+        .get("service_account_json")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+
+    let service_account_key_path = gcs_table
+        .get("service_account_key_path")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+
+    let base_url = gcs_table
+        .get("base_url")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+
+    let mut config = GcsConfig::new(bucket);
+    if let Some(json) = service_account_json {
+        config = config.with_service_account_json(json);
+    }
+    if let Some(path) = service_account_key_path {
+        config = config.with_service_account_key_path(path);
+    }
+    if let Some(url) = base_url {
+        config = config.with_base_url(url);
+    }
+
+    Ok(config)
+}
+
+/// Parse `[storage.s3]` table into [`S3Config`] manually.
+///
+/// Required fields: `bucket`, `region`, `access_key`, `secret_key`
+/// Optional fields: `endpoint` (String), `presigned_url_ttl_secs` (integer), `path_style` (bool)
+#[cfg(feature = "storage-s3")]
+fn parse_s3_config(storage_table: &toml::Table) -> Result<S3Config, StorageError> {
+    let s3_table = storage_table
+        .get("s3")
+        .and_then(|v| v.as_table())
+        .ok_or_else(|| {
+            StorageError::ConfigurationError(
+                "missing or invalid [storage.s3] table".into(),
+            )
+        })?;
+
+    let bucket = s3_table
+        .get("bucket")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| {
+            StorageError::ConfigurationError("[storage.s3] requires 'bucket'".into())
+        })?
+        .to_string();
+
+    let region = s3_table
+        .get("region")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| {
+            StorageError::ConfigurationError("[storage.s3] requires 'region'".into())
+        })?
+        .to_string();
+
+    let access_key = s3_table
+        .get("access_key")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| {
+            StorageError::ConfigurationError("[storage.s3] requires 'access_key'".into())
+        })?
+        .to_string();
+
+    let secret_key = s3_table
+        .get("secret_key")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| {
+            StorageError::ConfigurationError("[storage.s3] requires 'secret_key'".into())
+        })?
+        .to_string();
+
+    let endpoint = s3_table
+        .get("endpoint")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+
+    let presigned_url_ttl_secs = s3_table
+        .get("presigned_url_ttl_secs")
+        .and_then(|v| v.as_integer())
+        .unwrap_or(3600) as u64;
+
+    let path_style = s3_table
+        .get("path_style")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
+    Ok(S3Config {
+        bucket,
+        region,
+        endpoint,
+        access_key,
+        secret_key,
+        presigned_url_ttl_secs,
+        path_style,
+        multipart: None,
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -462,27 +668,18 @@ impl StorageRegistry {
 
             #[cfg(feature = "storage-s3")]
             "s3" => {
-                let s3_config_value = config
-                    .get("storage")
-                    .and_then(|s| s.get("s3"))
+                let _s3_table = storage_table
+                    .get("s3")
+                    .and_then(|v| v.as_table())
                     .ok_or_else(|| {
                         StorageError::ConfigurationError(
-                            "missing [storage.s3] config for type='s3'".into(),
+                            "missing or invalid [storage.s3] table".into(),
                         )
                     })?;
-
-                let s3_config: S3Config = s3_config_value
-                    .clone()
-                    .try_into()
-                    .map_err(|e| {
-                        StorageError::ConfigurationError(format!(
-                            "failed to parse [storage.s3]: {e}"
-                        ))
-                    })?;
-
-                let backend = S3Storage::with_config(s3_config)?;
-                let reg_name = if is_default { "default" } else { "s3" };
-                registry.register(reg_name, Box::new(backend))?;
+                return Err(StorageError::ConfigurationError(
+                    "S3 backend requires async initialization; \
+                     use StorageRegistry::from_config_async() instead".into(),
+                ));
             }
 
             #[cfg(not(feature = "storage-s3"))]
@@ -575,10 +772,42 @@ impl StorageRegistry {
                 registry.register(reg_name, Box::new(backend))?;
             }
 
+            #[cfg(feature = "storage-azure")]
+            "azure_blob" => {
+                let _config = parse_azure_blob_config(storage_table)?;
+                return Err(StorageError::ConfigurationError(
+                    "Azure Blob backend requires async initialization; \
+                     use StorageRegistry::from_config_async() instead".into(),
+                ));
+            }
+
+            #[cfg(not(feature = "storage-azure"))]
+            "azure_blob" => {
+                return Err(StorageError::ConfigurationError(
+                    "Azure Blob backend requires 'storage-azure' feature flag".into(),
+                ));
+            }
+
+            #[cfg(feature = "storage-gcs")]
+            "gcs" => {
+                let _config = parse_gcs_config(storage_table)?;
+                return Err(StorageError::ConfigurationError(
+                    "GCS backend requires async initialization; \
+                     use StorageRegistry::from_config_async() instead".into(),
+                ));
+            }
+
+            #[cfg(not(feature = "storage-gcs"))]
+            "gcs" => {
+                return Err(StorageError::ConfigurationError(
+                    "GCS backend requires 'storage-gcs' feature flag".into(),
+                ));
+            }
+
             other => {
                 return Err(StorageError::ConfigurationError(format!(
                     "unknown storage backend type: '{other}' \
-                     (expected: 'local', 's3', 'api_forward')"
+                     (expected: 'local', 's3', 'azure_blob', 'gcs', 'api_forward')"
                 )));
             }
         }
@@ -590,6 +819,104 @@ impl StorageRegistry {
         );
 
         Ok(registry)
+    }
+
+    /// Asynchronously build a [`StorageRegistry`] from TOML configuration.
+    ///
+    /// Extends [`StorageRegistry::from_config()`] to support backends that
+    /// require async construction (Azure Blob Storage, Google Cloud Storage).
+    ///
+    /// # Supported Backend Types
+    ///
+    /// | Type           | Feature Flag   | Async? |
+    /// |----------------|----------------|--------|
+    /// | `"local"`      | (always)       | No     |
+    /// | `"s3"`         | `storage-s3`   | No     |
+    /// | `"api_forward"`| (always)       | No     |
+    /// | `"azure_blob"` | `storage-azure`| **Yes**|
+    /// | `"gcs"`        | `storage-gcs`  | **Yes**|
+    pub async fn from_config_async(config: &toml::Value) -> Result<Self, StorageError> {
+        let storage_table = config
+            .get("storage")
+            .ok_or_else(|| {
+                StorageError::ConfigurationError("missing [storage] table".into())
+            })?
+            .as_table()
+            .ok_or_else(|| {
+                StorageError::ConfigurationError("[storage] must be a table".into())
+            })?;
+
+        let backend_type = storage_table
+            .get("type")
+            .and_then(|v| v.as_str())
+            .unwrap_or("local");
+
+        let is_default = storage_table
+            .get("default")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+
+        match backend_type {
+            "local" | "api_forward" => {
+                Self::from_config(config)
+            }
+
+            #[cfg(feature = "storage-s3")]
+            "s3" => {
+                let s3_config = parse_s3_config(storage_table)?;
+                let backend = S3Storage::new(s3_config).await?;
+                let registry = Self::new();
+                let reg_name = if is_default { "default" } else { "s3" };
+                registry.register(reg_name, Box::new(backend))?;
+                Ok(registry)
+            }
+
+            #[cfg(not(feature = "storage-s3"))]
+            "s3" => {
+                Err(StorageError::ConfigurationError(
+                    "S3 backend requires 'storage-s3' feature flag".into(),
+                ))
+            }
+
+            #[cfg(feature = "storage-azure")]
+            "azure_blob" => {
+                let az_config = parse_azure_blob_config(storage_table)?;
+                let backend = AzureBlobStorage::new(az_config).await?;
+                let registry = Self::new();
+                let reg_name = if is_default { "default" } else { "azure_blob" };
+                registry.register(reg_name, Box::new(backend))?;
+                Ok(registry)
+            }
+
+            #[cfg(not(feature = "storage-azure"))]
+            "azure_blob" => {
+                Err(StorageError::ConfigurationError(
+                    "Azure Blob backend requires 'storage-azure' feature flag".into(),
+                ))
+            }
+
+            #[cfg(feature = "storage-gcs")]
+            "gcs" => {
+                let gcs_config = parse_gcs_config(storage_table)?;
+                let backend = GcsStorage::new(gcs_config).await?;
+                let registry = Self::new();
+                let reg_name = if is_default { "default" } else { "gcs" };
+                registry.register(reg_name, Box::new(backend))?;
+                Ok(registry)
+            }
+
+            #[cfg(not(feature = "storage-gcs"))]
+            "gcs" => {
+                Err(StorageError::ConfigurationError(
+                    "GCS backend requires 'storage-gcs' feature flag".into(),
+                ))
+            }
+
+            other => Err(StorageError::ConfigurationError(format!(
+                "unknown storage backend type: '{other}' \
+                 (expected: 'local', 's3', 'azure_blob', 'gcs', 'api_forward')"
+            ))),
+        }
     }
 
     /// Return the number of currently registered backends.

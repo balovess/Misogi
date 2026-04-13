@@ -29,6 +29,15 @@ pub mod registry;
 #[cfg(feature = "storage-s3")]
 pub mod s3;
 
+#[cfg(feature = "storage-s3")]
+pub mod s3_multipart;
+
+#[cfg(feature = "storage-azure")]
+pub mod azure_blob;
+
+#[cfg(feature = "storage-gcs")]
+pub mod gcs;
+
 // Re-exports for ergonomic imports from crate root level
 pub use api_forward::{ApiForwardConfig, ApiForwardStorage, HttpMethod};
 pub use local::{LocalConfig, LocalStorage};
@@ -36,3 +45,12 @@ pub use registry::{StorageBackendInfo, StorageRegistry};
 
 #[cfg(feature = "storage-s3")]
 pub use s3::{S3Config, S3Storage};
+
+#[cfg(feature = "storage-s3")]
+pub use s3_multipart::S3MultipartConfig;
+
+#[cfg(feature = "storage-azure")]
+pub use azure_blob::{AzureBlobConfig, AzureBlobStorage};
+
+#[cfg(feature = "storage-gcs")]
+pub use gcs::{GcsConfig, GcsStorage};

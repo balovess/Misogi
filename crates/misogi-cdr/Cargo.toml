@@ -5,16 +5,28 @@ edition = "2024"
 description = "Content Disarm and Reconstruction (CDR) engine for Misogi secure file transfer"
 
 [dependencies]
-misogi-core = { path = "../misogi-core" }
-tokio = { version = "1", features = ["full"] }
+# Core crate dependency — explicitly disable default features to prevent
+# implicit "runtime" feature activation which pulls in tokio/mio (incompatible
+# with wasm32-unknown-unknown). The "runtime" feature is re-enabled via our
+# own "runtime" feature flag below when compiling for native target.
+misogi-core = { path = "../misogi-core", default-features = false }
+
+# Async runtime dependency (gated behind "runtime" feature).
+# Pulls in `mio` which is INCOMPATIBLE with wasm32-unknown-unknown.
+# Disable this feature when compiling for browser/WASM target.
+tokio = { version = "1", features = ["full"], optional = true }
+
+# Core dependencies (always available, WASM-compatible)
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tracing = "0.1"
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1", features = ["v4"] }
-async-trait = "0.1"
+async-trait = { version = "0.1", optional = true }
 nom = "7"
-zip = "2"
+# ZIP archive support (disable xz/lzma by default; enable via "zip-xz" feature)
+# The xz feature pulls in lzma-sys which requires C stdlib (incompatible with WASM)
+zip = { version = "2", default-features = false, features = ["deflate-zlib"] }
 md-5 = "0.7"
 bytes = "1"
 thiserror = "2"
@@ -27,5 +39,12 @@ lopdf = { version = "0.34", optional = true }
 phf = { version = "0.11", features = ["macros"], optional = true }
 
 [features]
-default = []
+default = ["runtime"]
+
+# Async runtime support (tokio, async-trait).
+# WARNING: Enables `mio` transitive dependency which is INCOMPATIBLE with
+# wasm32-unknown-unknown. Must be disabled when compiling for browser/WASM target.
+# Also enables misogi-core/runtime to ensure async modules are available.
+runtime = ["dep:tokio", "dep:async-trait", "misogi-core/runtime"]
+
 pdf-cdr = ["dep:lopdf", "dep:phf"]

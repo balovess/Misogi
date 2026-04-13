@@ -1,0 +1,233 @@
+# ===========================================================================
+# WASM Production Pipeline — GitHub Actions CI Configuration
+# ===========================================================================
+#
+# Triggers:
+#   - Push to main branch (WASM-related paths)
+#   - Pull requests (WASM-related paths)
+#
+# Jobs:
+#   1. native-check     — Rust fmt/clippy/check validation
+#   2. wasm-build       — WASM pack build + wasm-opt optimization + size check
+#   3. benchmarks       — Criterion performance benchmarks
+#   4. browser-compat   — Playwright browser compatibility tests (Chromium only)
+
+name: WASM Production Pipeline
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'crates/misogi-wasm/**'
+      - 'crates/misogi-cdr/**'
+      - 'crates/misogi-core/**'
+      - 'examples/wasm-browser/**'
+      - 'scripts/optimize-wasm.sh'
+  pull_request:
+    paths:
+      - 'crates/misogi-wasm/**'
+      - 'crates/misogi-cdr/**'
+      - 'crates/misogi-core/**'
+      - 'examples/wasm-browser/**'
+      - 'scripts/optimize-wasm.sh'
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+# ===========================================================================
+# Concurrency Control — Cancel redundant workflow runs
+# ===========================================================================
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # =========================================================================
+  # Job 1: Native Compilation Check
+  # =========================================================================
+  # Validates code quality before expensive WASM compilation.
+
+  native-check:
+    name: Native Compilation Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Cargo artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Run Clippy lints
+        run: cargo clippy -p misogi-wasm -- -D warnings
+
+      - name: Compile check
+        run: cargo check -p misogi-wasm
+
+  # =========================================================================
+  # Job 2: WASM Build & Size Validation
+  # =========================================================================
+  # Builds WASM package with wasm-pack, optimizes with wasm-opt,
+  # and validates against size budgets (raw < 8MB, gzip < 3MB).
+
+  wasm-build:
+    name: WASM Build & Size Check
+    runs-on: ubuntu-latest
+    needs: native-check
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain (wasm32 target)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          target: wasm32-unknown-unknown
+
+      - name: Cache Cargo artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install wasm-pack
+        run: |
+          curl https://rustwasm.github.io/install/init.sh -sSf | sh
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Build WASM package
+        run: |
+          ~/.cargo/bin/wasm-pack build crates/misogi-wasm \
+            --target web \
+            --release \
+            --out-dir wasm-pkg \
+            -- \
+            --no-default-features \
+            --features browser
+
+      - name: Install Binaryen (wasm-opt)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y binaryen
+
+      - name: Optimize WASM binary
+        run: |
+          chmod +x scripts/optimize-wasm.sh
+          ./scripts/optimize-wasm.sh \
+            wasm-pkg/misogi_wasm_bg.wasm \
+            optimized.wasm
+
+      - name: Validate size budgets
+        run: |
+          RAW_SIZE=$(stat -c%s optimized.wasm)
+          GZIP_SIZE=$(gzip -c optimized.wasm | wc -c)
+
+          echo "Raw size : $RAW_SIZE bytes"
+          echo "Gzip size: $GZIP_SIZE bytes"
+
+          if (( RAW_SIZE > 8388608 )); then
+            echo "::error::Raw WASM size ($RAW_SIZE bytes) exceeds 8MB limit"
+            exit 1
+          fi
+
+          if (( GZIP_SIZE > 3145728 )); then
+            echo "::error::Gzip size ($GZIP_SIZE bytes) exceeds 3MB limit"
+            exit 1
+          fi
+
+          echo "Size validation passed"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasm-build-output
+          path: |
+            optimized.wasm
+            wasm-pkg/
+          retention-days: 30
+
+  # =========================================================================
+  # Job 3: Performance Benchmarks
+  # =========================================================================
+  # Runs Criterion benchmarks for WASM performance regression detection.
+
+  benchmarks:
+    name: Performance Benchmarks
+    runs-on: ubuntu-latest
+    needs: native-check
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run benchmarks
+        run: cargo bench -p misogi-wasm --bench wasm_perf -- --sample-size 20
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: target/criterion/
+          retention-days: 90
+
+  # =========================================================================
+  # Job 4: Browser Compatibility Tests
+  # =========================================================================
+  # Validates WASM module in real Chromium browser via Playwright.
+  # Safari/Firefox skipped in CI due to limited environment support.
+
+  browser-compat:
+    name: Browser Compatibility Tests
+    runs-on: ubuntu-latest
+    needs: wasm-build
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Download WASM build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: wasm-build-output
+          path: crates/misogi-wasm/pkg/
+
+      - name: Install test dependencies
+        working-directory: crates/misogi-wasm/tests/browser_compat
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: crates/misogi-wasm/tests/browser_compat
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Playwright tests
+        working-directory: crates/misogi-wasm/tests/browser_compat
+        run: npx playwright test --reporter=list
+
+      - name: Upload failure screenshots (if failed)
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-screenshots
+          path: crates/misogi-wasm/tests/browser_compat/screenshots/
+          retention-days: 30
+
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: crates/misogi-wasm/tests/browser_compat/playwright-report/
+          retention-days: 30

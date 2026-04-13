@@ -25,6 +25,7 @@ use bytes::Bytes;
 use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "runtime")]
 use crate::audit_log::AuditLogEntry;
 use crate::error::Result;
 
@@ -825,6 +826,9 @@ pub trait PIIDetector: Send + Sync {
 /// If internal state is required (e.g., template caching), it MUST be
 /// protected by synchronization primitives since formatters are shared
 /// across concurrent audit writing tasks.
+///
+/// Note: Only available when "runtime" feature is enabled (depends on AuditLogEntry).
+#[cfg(feature = "runtime")]
 #[async_trait]
 pub trait LogFormatter: Send + Sync {
     /// Format a single [`AuditLogEntry`] into the target output representation.
@@ -1333,9 +1337,16 @@ pub trait PluginMetadata: Send + Sync {
 
 pub mod storage;
 pub mod jtd_converter;
-pub mod jtd_pipeline;
 pub mod jtd_dummy;
+
+// JTD pipeline and converter backends depend on external process execution (tokio::process)
+#[cfg(feature = "runtime")]
+pub mod jtd_pipeline;
+
+#[cfg(feature = "runtime")]
 pub mod jtd_libreoffice;
+
+#[cfg(feature = "runtime")]
 pub mod jtd_ichitaro;
 
 pub use jtd_converter::{JtdConverter, JtdConversionResult, JtdConversionError};

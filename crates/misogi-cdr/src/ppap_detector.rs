@@ -87,6 +87,10 @@ impl PpapDetector {
     /// # Errors
     /// - [`MisogiError::Io`] if the file cannot be read.
     /// - [`MisogiError::Protocol`] if the file format is unrecognizable.
+    ///
+    /// Note: Requires tokio runtime for async filesystem I/O. Not available
+    /// in WASM browser environments.
+    #[cfg(feature = "runtime")]
     pub async fn detect(&self, file_path: &Path) -> Result<PpapDetectionResult> {
         let filename = file_path
             .file_name()
@@ -164,6 +168,10 @@ impl PpapDetector {
     ///
     /// Only checks for the strongest signal: encrypted ZIP entries.
     /// Does not perform filename heuristics or compute confidence score.
+    ///
+    /// Note: Requires tokio runtime for async filesystem I/O. Not available
+    /// in WASM browser environments.
+    #[cfg(feature = "runtime")]
     pub async fn is_likely_ppap(&self, file_path: &Path) -> Result<bool> {
         let data = tokio::fs::read(file_path)
             .await

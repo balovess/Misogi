@@ -36,6 +36,7 @@ use chrono::{Utc};
 use tracing::{debug, error, info, instrument, warn};
 
 use crate::traits::storage::{StorageBackend, StorageError, StorageInfo};
+use super::s3_multipart::{S3MultipartConfig, execute_multipart_upload};
 
 // =============================================================================
 // S3Config — Configuration for S3-compatible storage backend
@@ -130,9 +131,18 @@ pub struct S3Config {
     ///
     /// - `false` (default): Virtual-hosted style (`https://{bucket}.s3.{region}.amazonaws.com/{key}`)
     ///   Required for AWS S3 with DNS-compliant bucket names.
-    /// - `true`: Path-style (`https://s3.{region}.amazonaws.com}/{bucket}/{key}`)
+    /// - `true`: Path-style (`https://s3.{region}.amazonaws.com/{bucket}/{key}`)
     ///   Required for MinIO, R2, and some other S3-compatible services.
     pub path_style: bool,
+
+    /// Optional multipart upload configuration.
+    ///
+    /// When set, files exceeding `threshold_bytes` are uploaded via S3's
+    /// Multipart Upload API (concurrent parts, automatic cleanup on failure).
+    /// When `None`, all uploads use single `PutObject` regardless of size.
+    ///
+    /// Default: `None`. Recommended for workloads with files > 5 MB.
+    pub multipart: Option<S3MultipartConfig>,
 }
 
 impl S3Config {
@@ -168,7 +178,24 @@ impl S3Config {
             secret_key: secret_key.into(),
             presigned_url_ttl_secs: 3600,
             path_style: false,
+            multipart: None,
         }
+    }
+
+    /// Set multipart upload configuration.
+    ///
+    /// When configured, files larger than `config.threshold_bytes` are uploaded
+    /// using S3's Multipart Upload API with concurrent part uploads.
+    ///
+    /// # Arguments
+    /// * `multipart` - Multipart configuration, or `None` to disable.
+    ///
+    /// # Returns
+    /// `Self` for method chaining.
+    #[must_use]
+    pub fn with_multipart(mut self, multipart: Option<S3MultipartConfig>) -> Self {
+        self.multipart = multipart;
+        self
     }
 
     /// Set custom endpoint URL for S3-compatible services.
@@ -416,7 +443,7 @@ impl S3Storage {
         // - AWS_SECRET_ACCESS_KEY
         // We set them temporarily during client construction.
         use std::sync::Arc;
-        use aws_credential_types::{Credentials, provider::ProvideCredentials};
+        use aws_credential_types::Credentials;
 
         // Create a shared credentials provider from static credentials
         let credentials = Credentials::new(
@@ -434,7 +461,7 @@ impl S3Storage {
         let mut s3_config_builder = S3ClientConfig::builder()
             .region(Region::new(config.region.clone()))
             .force_path_style(config.path_style)
-            .credentials_provider(aws_credential_types::provider::SharedCredentialsProvider::new(Arc::new(credentials)));
+            .credentials_provider(aws_credential_types::provider::SharedCredentialsProvider::new(credentials));
 
         // Re-set endpoint for S3 client if custom endpoint provided
         if let Some(ref endpoint) = config.endpoint {
@@ -707,22 +734,40 @@ impl StorageBackend for S3Storage {
     /// - Server-side encryption depends on bucket policy (not controlled here).
     #[instrument(skip(self, data), fields(key, data_len = data.len()))]
     async fn put(&self, key: &str, data: Bytes) -> Result<StorageInfo, StorageError> {
-        // Validate input key
         self.validate_key(key)?;
 
         let data_len = data.len() as u64;
 
+        // Dispatch to multipart upload if configured and threshold exceeded
+        if let Some(ref mp_config) = self.config.multipart {
+            if data.len() > mp_config.threshold_bytes {
+                debug!(
+                    key = %key,
+                    size = data_len,
+                    threshold = mp_config.threshold_bytes,
+                    "Using multipart upload (size exceeds threshold)"
+                );
+                return execute_multipart_upload(
+                    &self.client,
+                    &self.config.bucket,
+                    key,
+                    data,
+                    mp_config,
+                )
+                .await;
+            }
+        }
+
+        // Fast path: single PutObject for small files or when multipart is disabled
         debug!(
             key = %key,
             bucket = %self.config.bucket,
             size = data_len,
-            "Uploading object to S3"
+            "Uploading object to S3 (single put)"
         );
 
-        // Convert Bytes to ByteStream for AWS SDK
         let body = ByteStream::from(data);
 
-        // Execute PutObject
         let result = self
             .client
             .put_object()

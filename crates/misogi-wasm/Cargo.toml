@@ -4,16 +4,85 @@ version = "0.1.0"
 edition = "2024"
 description = "Sandboxed WASM plugin runtime for Misogi CDR parser hot-loading"
 
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+# ===========================================================================
+# Target-Independent Dependencies
+# ===========================================================================
 [dependencies]
-wasmi = "1.0.9"
-async-trait = "0.1"
-tokio = { version = "1", features = ["sync"] }
+# Shared dependencies (both targets)
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
 tracing = "0.1"
 bytes = "1"
+sha2 = "0.10"
+
+# WASM-compatible ZIP archive support (disable xz/lzma C dependency which
+# requires native stdlib.h unavailable in wasm32-unknown-unknown target).
+# Only enable deflate-zlib for ZIP/ZIPX decompression (pure Rust).
+zip = { version = "2", default-features = false, features = ["deflate-zlib"] }
+
+# For WASM target: getrandom requires "js" feature for browser randomness
+getrandom = { version = "0.2", features = ["js"], optional = true }
+
+# For WASM target: uuid v4 generation requires "js" feature for WebCrypto RNG
+uuid = { version = "1", optional = true }
+
+# Native-only: wasmi plugin runtime
+wasmi = { version = "1.0.9", optional = true }
+tokio = { version = "1", features = ["sync"], optional = true }
+async-trait = { version = "0.1", optional = true }
+
+# WASM-only: browser FFI bindings
+wasm-bindgen = { version = "0.2", optional = true }
+js-sys = { version = "0.3", optional = true }
+web-sys = { version = "0.3", features = ["console"], optional = true }
+console_error_panic_hook = { version = "0.1", optional = true }
+
+# ===========================================================================
+# Target-Specific Dependencies for Core Crates
+# ===========================================================================
+#
+# CRITICAL: misogi-core and misogi-cdr are declared ONLY in target-specific
+# sections to prevent Cargo's feature union from merging incompatible features.
+#
+# - Native targets: full feature set with tokio/tonic/axum (runtime enabled)
+# - wasm32-unknown-unknown: minimal feature set without async/networking
+
+# Native target: enable all features including tokio, tonic, axum
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+misogi-core = { path = "../misogi-core" }
 misogi-cdr = { path = "../misogi-cdr" }
+
+# WASM target: disable default features to avoid mio/tokio pull-in
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+misogi-core = { path = "../misogi-core", default-features = false }
+misogi-cdr = { path = "../misogi-cdr", default-features = false }
+
+[features]
+default = ["native"]
+native = [
+    "wasmi",
+    "tokio",
+    "async-trait",
+]
+
+browser = [
+    "wasm-bindgen",
+    "js-sys",
+    "web-sys",
+    "console_error_panic_hook",
+    "dep:getrandom",
+    "dep:uuid",
+    "uuid/js",
+]
 
 [dev-dependencies]
 tempfile = "3"
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "wasm_perf"
+harness = false

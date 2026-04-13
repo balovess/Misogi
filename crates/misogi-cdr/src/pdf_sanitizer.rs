@@ -1,10 +1,17 @@
-use super::{FileSanitizer, SanitizationPolicy, SanitizationReport};
-#[cfg(feature = "pdf-cdr")]
-use crate::pdf_true_cdr::{PdfTrueCdrConfig, PdfTrueCdrEngine, PdfTrueCdrResult};
-use crate::report::SanitizationAction;
-use async_trait::async_trait;
+use crate::report::{SanitizationAction, SanitizationReport};
+use crate::policy::SanitizationPolicy;
+
+// Core error types (always available from misogi-core)
 use misogi_core::MisogiError;
 use misogi_core::Result;
+
+// Runtime-dependent imports (async trait, file sanitizer, tokio I/O)
+#[cfg(feature = "runtime")]
+use async_trait::async_trait;
+#[cfg(feature = "runtime")]
+use super::FileSanitizer;
+#[cfg(feature = "pdf-cdr")]
+use crate::pdf_true_cdr::{PdfTrueCdrConfig, PdfTrueCdrEngine, PdfTrueCdrResult};
 use nom::{
     IResult,
     branch::alt,
@@ -365,24 +372,16 @@ impl PdfSanitizer {
     }
 
     // =========================================================================
-    // Pass 1: Threat Analysis
+    // Pass 1: Threat Analysis (async file I/O — requires runtime feature)
     // =========================================================================
 
-    /// Scan entire PDF binary for threat markers using nom combinators.
+    /// Analyze PDF file for threat markers using async file I/O.
     ///
-    /// This method performs a byte-positional scan: at each byte offset, it attempts
-    /// all registered parsers. On match, records the threat and advances past it;
-    /// otherwise advances by one byte. This O(n*m) approach (n=file size, m=parser count)
-    /// is acceptable because nom parsers fail fast on first-byte mismatch.
-    ///
-    /// # Memory Contract
-    /// Reads the entire file into memory once. For files <= 500 MiB this is acceptable
-    /// as analysis requires random access for pattern matching. Remediation is streaming.
-    ///
-    /// # Errors
-    /// - [`MisogiError::SecurityViolation`] if file exceeds configured size limit
-    /// - [`MisogiError::Protocol`] if file does not start with `%PDF` header
-    async fn analyze(&self, input_path: &Path) -> Result<Vec<PdfThreat>> {
+    /// Requires tokio runtime for filesystem operations. Not available in
+    /// WASM browser environments. Use [`scan_for_threats()`] for synchronous
+    /// in-memory analysis instead.
+    #[cfg(feature = "runtime")]
+    pub async fn analyze(&self, input_path: &Path) -> Result<Vec<PdfThreat>> {
         let metadata = tokio::fs::metadata(input_path).await?;
         if metadata.len() > self.max_file_size_bytes {
             return Err(MisogiError::SecurityViolation(format!(
@@ -481,7 +480,8 @@ impl PdfSanitizer {
     /// | UriAction            | Empty URL string  | Remove        | Remove       |
     /// | EmbeddedFile         | Flag only         | Remove        | Remove       |
     /// | RichMedia            | Remove annot      | Remove        | Remove       |
-    async fn remediate(
+    #[cfg(feature = "runtime")]
+    pub async fn remediate(
         &self,
         input_path: &Path,
         output_path: &Path,
@@ -819,6 +819,11 @@ impl PdfSanitizer {
     }
 }
 
+// ===========================================================================
+// FileSanitizer Trait Implementation (async, requires runtime feature)
+// ===========================================================================
+
+#[cfg(feature = "runtime")]
 #[async_trait]
 impl FileSanitizer for PdfSanitizer {
     fn supported_extensions(&self) -> &[&str] {

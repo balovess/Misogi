@@ -5,12 +5,20 @@ edition = "2024"
 description = "Core library for Misogi file transfer system"
 
 [dependencies]
-tokio = { version = "1", features = ["full"] }
+# Runtime dependencies (async I/O, networking, gRPC) — gated behind "runtime" feature
+# These pull in `mio` which is incompatible with wasm32-unknown-unknown target.
+# When compiling for WASM/browser target, disable this feature to get a pure
+# synchronous core with only hash, error types, and CDR logic.
+tokio = { version = "1", features = ["full"], optional = true }
+tonic = { version = "0.12", features = ["tls"], optional = true }
+axum = { version = "0.7", optional = true }
+reqwest = { version = "0.12", features = ["json", "multipart"], optional = true }
+
+# Core dependencies (always available, WASM-compatible)
 md-5 = "0.10"
 serde = { version = "1", features = ["derive"] }
 bytes = "1"
 prost = "0.13"
-tonic = { version = "0.12", features = ["tls"] }
 uuid = { version = "1", features = ["v4"] }
 thiserror = "2"
 chrono = { version = "0.4", features = ["serde"] }
@@ -26,13 +34,19 @@ once_cell = "1"
 # For plugin registry (high-performance RwLock)
 parking_lot = "0.12"
 
-# For HTTP REST API scanner adapter
-reqwest = { version = "0.12", features = ["json", "multipart"] }
-
-# For ZIP archive processing
-zip = "2"
+# For ZIP archive processing (disable xz/lzma by default; enable via "zip-xz" feature)
+# The xz feature pulls in lzma-sys which requires C stdlib (incompatible with WASM)
+zip = { version = "2", default-features = false, features = ["deflate-zlib"] }
 # For SHA-256 hashing
 sha2 = "0.10"
+# For HMAC-SHA256 (Azure Blob Storage SharedKey auth, gated behind storage-azure)
+hmac = { version = "0.12", optional = true }
+# For RSA private key parsing (GCS JWT auth, gated behind storage-gcs)
+rsa = { version = "0.9", optional = true }
+# For URL-safe encoding (GCS blob names)
+urlencoding = "2"
+# For base64 encoding/decoding (Azure auth + general use)
+base64 = "0.22"
 # For hex encoding/decoding
 hex = "0.4"
 # For temporary file handling
@@ -56,9 +70,6 @@ regex = "1"
 # Configuration file parsing (used by core: ScannerRegistry, JP calendar)
 toml = "0.8"
 
-# Web framework (used by versioning deprecation middleware)
-axum = "0.7"
-
 # Tower service abstraction (used by gRPC version interceptor)
 tower = "0.4"
 
@@ -80,12 +91,31 @@ aws-smithy-types = { version = "1", optional = true }    # Smithy primitives (Da
 aws-types = { version = "1", optional = true }           # AWS shared types (Region)
 aws-credential-types = { version = "1", optional = true } # AWS credentials (for static credential provider)
 
+# PII enhancement dependencies (optional, gated behind pii-* features)
+serde_yaml = { version = "0.9", optional = true }         # YAML config loading (context + secrecy)
+csv = { version = "1.3", optional = true }               # CSV parsing (structured scanner)
+quick-xml = { version = "0.31", optional = true }        # XML parsing (structured scanner)
+
 [build-dependencies]
 prost-build = "0.13"
+# tonic-build is always available as build-dependency to avoid compilation errors
+# when "runtime" feature is disabled (WASM target). The build script checks
+# CARGO_FEATURE_RUNTIME env var before invoking protobuf code generation.
 tonic-build = { version = "0.12", features = ["transport"] }
 
 [features]
-default = []
+default = ["runtime"]
+
+# Async runtime + networking stack (tokio, tonic, axum, reqwest).
+# WARNING: Enables `mio` transitive dependency which is INCOMPATIBLE with
+# wasm32-unknown-unknown. Must be disabled when compiling for browser/WASM target.
+runtime = [
+    "dep:tokio",
+    "dep:tonic",
+    "dep:axum",
+    "dep:reqwest",
+]
+
 jp_contrib = [
     "dep:ipnetwork",
     "dep:encoding_rs",
@@ -105,3 +135,33 @@ storage-s3 = [
     "dep:aws-types",
     "dep:aws-credential-types",
 ]
+
+# Azure Blob Storage backend (Pillar 2: Storage)
+storage-azure = [
+    "dep:hmac",
+    "dep:reqwest",
+]
+
+# Google Cloud Storage backend (Pillar 2: Storage)
+storage-gcs = [
+    "dep:rsa",
+    "dep:reqwest",
+]
+
+# All cloud storage backends combined
+storage-cloud = ["storage-s3", "storage-azure", "storage-gcs"]
+
+# PII Context Analysis Provider + Configurable Rule Engine (trait + engine, no LLM)
+pii-context = ["dep:serde_yaml"]
+
+# Structured Data PII Scanner (CSV/JSON/XML field-level detection)
+pii-structured = ["dep:csv", "dep:quick-xml"]
+
+# OCR Provider Interface (trait only, no OCR engine bundled)
+pii-ocr = []
+
+# Secrecy Level Classifier (user-customizable level scheme)
+pii-secrecy = ["dep:serde_yaml"]
+
+# Complete PII Enhancement Stack (all 4 layers)
+pii-enhanced = ["pii-context", "pii-structured", "pii-ocr", "pii-secrecy"]

@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+#### misogi-wasm — Production-Grade WASM Module
+- **Dual-target architecture**: `misogi-wasm` now supports both native (wasmi plugin runtime)
+  and browser (wasm-bindgen FFI) compilation targets via feature flags (`native` / `browser`)
+- **FFI binding layer** ([`src/ffi.rs`](crates/misogi-wasm/src/ffi.rs)): Exposes `sanitize_pdf()`,
+  `sanitize_office()`, `scan_pii()`, `detect_file_type()` to JavaScript via wasm-bindgen with
+  `SanitizeResult`, `PiiScanResult`, `FileTypeResult` return types
+- **JS interop module** ([`src/js_glue.rs`](crates/misogi-wasm/src/js_glue.rs)): Japanese error localization
+  (`localize_error()`), WASM linear memory management (`allocate_buffer()` / `deallocate_buffer()`),
+  browser console bridge (`console_log()`), WebAssembly feature detection (`detect_wasm_features()`)
+- **Performance benchmark suite** ([`benches/`](crates/misogi-wasm/benches/)): 8 criterion groups with
+  26 benchmarks covering PDF analysis throughput (~200 MiB/s), Office ZIP rebuild, PII scanning,
+  and hash computation baselines — run via `cargo bench -p misogi-wasm --bench wasm_perf`
+- **Playwright browser compatibility tests** ([`tests/browser_compat/`](crates/misogi-wasm/tests/browser_compat/)):
+  16 automated test cases across Chromium/Firefox/Safari validating WASM loading, sanitization E2E
+  flows, PII display, download functionality, Japanese error messages, large file handling (~10MB),
+  and COOP/COEP fallback — run via `npm test` in the test directory
+- **WASM binary optimization pipeline** ([`scripts/optimize-wasm.sh`](scripts/optimize-wasm.sh)):
+  `wasm-opt -Oz` post-processing with debug info stripping and size budget enforcement
+  (raw < 8 MB, gzip < 3 MB)
+- **CI/CD pipeline** ([`.github/workflows/wasm-ci.yml`](.github/workflows/wasm-ci.yml)): 4-stage pipeline
+  (native-check → wasm-build → benchmarks → browser-compat) with artifact retention
+
+#### misogi-wasm — Browser Demo Enhancements
+- **COOP/COEP meta tags**: Cross-Origin isolation headers for SharedArrayBuffer support in demo page
+- **Feature detection system** ([`feature-detection.js`](examples/wasm-browser/feature-detection.js)):
+  `detectWasmSupport()`, `detectSharedArrayBuffer()`, `detectCoopCoep()` with graceful degradation
+- **Japanese error localization**: All error messages translated to user-friendly Japanese
+- **Progressive UI loading**: Page renders immediately; WASM loads in background with 30-second timeout
+  protection ([`wasm-loader.js`](examples/wasm-browser/wasm-loader.js))
+- **Modular architecture**: Monolithic app.js split into ES6 modules (app.js + feature-detection.js + wasm-loader.js)
+
+#### misogi-core / misogi-cdr — WASM Compatibility
+- **Runtime feature gate**: Async/networking dependencies (tokio, tonic, axum, reqwest)
+  moved behind optional `runtime` feature, enabling clean `wasm32-unknown-unknown` compilation
+- **ZIP configuration**: Disabled xz/lzma C dependency (requires C stdlib, incompatible with WASM)
+- **Conditional compilation**: Platform-specific code gated behind `#[cfg(feature = "runtime")]`
+
+### Changed
+
+#### Build & Deployment
+- **WASM binary size**: 271.2 KB raw (was unbounded before), well under 8 MB budget (3.4% utilization)
+- **Gzip compressed size**: ~75 KB, well under 3 MB budget (2.5% utilization)
+- **Build command**: Now requires `--no-default-features --features browser` for WASM target
+- **Cargo.toml structure**: `misogi-wasm`, `misogi-core`, `misogi-cdr` all refactored with
+  feature-gated dependencies for dual-target support (native + browser)
+
 ### Planned Features
 - Web-based monitoring dashboard
 - Enhanced logging and observability features

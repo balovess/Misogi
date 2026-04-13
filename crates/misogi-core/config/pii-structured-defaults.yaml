@@ -1,0 +1,36 @@
+# === Universal PII Structured Data Field Mappings (International Default) ===
+# Maps common field names to PII types for CSV/JSON/XML scanning.
+# For Japan government-specific mappings, use optional config packages.
+
+version: "1.0"
+
+# Field name → PII type mappings (universal default set)
+field_mappings:
+  # --- Identity Fields ---
+  - { field_pattern: "full_name", pii_type: full_name, confidence: 0.99, action: mask }
+  - { field_pattern: "first_name", pii_type: given_name, confidence: 0.97, action: mask }
+  - { field_pattern: "last_name", pii_type: family_name, confidence: 0.97, action: mask }
+  - { field_pattern: "(?i)^name$", pii_type: full_name, confidence: 0.60, action: alert_only }
+  - { field_pattern: "national_id", pii_type: national_id, confidence: 0.95, action: mask }
+  - { field_pattern: "ssn", pii_type: national_id, confidence: 0.95, action: mask }
+  - { field_pattern: "passport_no", pii_type: passport, confidence: 0.95, action: mask }
+
+  # --- Contact Information ---
+  - { field_pattern: "email", pii_type: email, confidence: 0.98, action: mask }
+  - { field_pattern: "phone", pii_type: phone, confidence: 0.92, action: mask }
+  - { field_pattern: "tel", pii_type: phone, confidence: 0.90, action: mask }
+  - { field_pattern: "fax", pii_type: fax, confidence: 0.88, action: alert_only }
+  - { field_pattern: "mobile", pii_type: phone_mobile, confidence: 0.92, action: mask }
+  - { field_pattern: "address", pii_type: address, confidence: 0.90, action: mask }
+  - { field_pattern: "postcode", pii_type: postal_code, confidence: 0.92, action: alert_only }
+  - { field_pattern: "zip", pii_type: postal_code, confidence: 0.88, action: alert_only }
+
+  # --- Payment Information ---
+  - { field_pattern: "card_number", pii_type: credit_card, confidence: 0.98, action: mask }
+  - { field_pattern: "ccv", pii_type: credit_card_cvv, confidence: 0.95, action: redact }
+  - { field_pattern: "expiry_date", pii_type: credit_card_expiry, confidence: 0.92, action: mask }
+
+  # --- Wildcard Patterns (lower confidence) ---
+  - { field_pattern: "*_id", pii_type: generic_id, confidence: 0.45, action: alert_only }
+  - { field_pattern: "*_no", pii_type: generic_number, confidence: 0.40, action: log_only }
+  - { field_pattern: "*_key", pii_type: generic_key, confidence: 0.35, action: log_only }

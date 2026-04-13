@@ -21,6 +21,15 @@
 // 4. **Masking Utilities** — Functions for redacting detected PII in text,
 //    preserving format while obscuring sensitive values.
 //
+// ## Enhanced Modules (feature-gated)
+//
+// | Feature | Module | Description |
+// |---------|--------|-------------|
+// | `pii-context` | [`context`] | ContextProvider trait + configurable keyword engine |
+// | `pii-structured` | [`structured`] | CSV/JSON/XML field-level PII scanner |
+// | `pii-ocr` | [`ocr`] | OcrProvider trait + OCR-PII pipeline |
+// | `pii-secrecy` | [`secrecy`] | User-customizable secrecy level classifier |
+//
 // ## Compliance Context
 // Japanese regulations requiring proactive PII scanning:
 // - **APJ My Number Act** (マイナンバー法): My Number protection mandatory.
@@ -44,6 +53,19 @@ use crate::traits::{
 
 // Re-export PIIAction and PIIDetector for WASM FFI layer and external consumers
 pub use crate::traits::{PIIAction, PIIDetector};
+
+// Enhanced modules (feature-gated)
+#[cfg(feature = "pii-context")]
+pub mod context;
+
+#[cfg(feature = "pii-structured")]
+pub mod structured;
+
+#[cfg(feature = "pii-ocr")]
+pub mod ocr;
+
+#[cfg(feature = "pii-secrecy")]
+pub mod secrecy;
 
 // =============================================================================
 // A. PIIRule

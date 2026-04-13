@@ -1,4 +1,5 @@
 use bytes::{Buf, BufMut, Bytes, BytesMut};
+#[cfg(feature = "runtime")]
 use tokio::io::AsyncReadExt;
 use crate::error::{MisogiError, Result};
 
@@ -91,6 +92,11 @@ impl ProtocolFrame {
         Ok(ProtocolFrame { frame_type, payload })
     }
 
+    /// Decode a ProtocolFrame from an async byte stream (requires tokio runtime).
+    ///
+    /// Reads 4-byte length prefix, then reads the complete frame payload
+    /// including type byte and data. Used by network I/O handlers.
+    #[cfg(feature = "runtime")]
     pub async fn decode_from_stream<R: AsyncReadExt + Unpin>(
         reader: &mut R,
         len_buf: &[u8; 4],

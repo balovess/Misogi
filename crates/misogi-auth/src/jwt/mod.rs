@@ -175,6 +175,13 @@ pub struct ValidatedClaims {
     /// Role strings extracted from the `roles` claim
     pub roles: Vec<String>,
 
+    /// Bound device identifier (HMAC-SHA256 of fingerprint signals).
+    ///
+    /// Present when authentication includes device fingerprint verification
+    /// (ZT-7 device proofing). Used to bind the session to a specific device.
+    #[serde(default)]
+    pub device_id: String,
+
     /// Issued-at timestamp (UNIX seconds since epoch)
     pub iat: u64,
 

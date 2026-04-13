@@ -75,6 +75,9 @@ tonic = { version = "0.12", optional = true }
 # Futures utilities for async operations
 futures = "0.3"
 
+# HMAC for device fingerprint hashing
+hmac = { version = "0.12", optional = true }
+
 [features]
 default = []
 jwt = ["dep:jsonwebtoken", "dep:ring"]
@@ -84,6 +87,27 @@ saml = ["dep:quick-xml", "dep:flate2", "dep:lru", "dep:ring"]
 grpc = ["jwt", "dep:tonic"]
 axum = ["jwt", "oidc", "dep:cookie", "dep:axum", "dep:time"]
 enterprise = ["jwt", "ldap", "oidc"]
+
+# Device fingerprinting (requires hmac)
+device = ["dep:hmac"]
+
+# Device posture checking (requires device)
+posture = ["device"]
+
+# TCG TCM / TPM 2.0 support
+tcm = []
+
+# Microsoft Defender ATP integration
+defender = ["posture", "dep:reqwest"]
+
+# CrowdStrike Falcon integration
+falcon = ["posture", "dep:reqwest"]
+
+# Full device security stack
+device_security = ["device", "posture", "tcm"]
+
+# Enterprise security (all device security + EDR integrations)
+enterprise_security = ["device_security", "defender", "falcon"]
 
 [dev-dependencies]
 misogi-auth = { path = ".", features = ["jwt"] }

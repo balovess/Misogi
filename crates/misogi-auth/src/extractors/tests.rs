@@ -266,6 +266,7 @@ mod jwt_extractor_tests {
 
 mod identity_extractor_tests {
     use super::*;
+    use axum::extract::FromRequestParts;
 
     #[tokio::test]
     async fn test_extract_from_header() {
@@ -276,10 +277,10 @@ mod identity_extractor_tests {
             .body(Body::empty())
             .unwrap();
 
-        let parts = build_request_parts(request).await;
+        let mut parts = build_request_parts(request).await;
 
         let result =
-            IdentityAuthExtractor::from_request_parts(parts, &()).await;
+            IdentityAuthExtractor::from_request_parts(&mut parts, &()).await;
 
         assert!(result.is_ok());
         let extractor = result.unwrap();
@@ -297,10 +298,10 @@ mod identity_extractor_tests {
             .body(Body::empty())
             .unwrap();
 
-        let parts = build_request_parts(request).await;
+        let mut parts = build_request_parts(request).await;
 
         let result =
-            IdentityAuthExtractor::from_request_parts(parts, &()).await;
+            IdentityAuthExtractor::from_request_parts(&mut parts, &()).await;
 
         assert!(result.is_ok());
         let extractor = result.unwrap();
@@ -319,10 +320,10 @@ mod identity_extractor_tests {
             .body(Body::empty())
             .unwrap();
 
-        let parts = build_request_parts(request).await;
+        let mut parts = build_request_parts(request).await;
 
         let result =
-            IdentityAuthExtractor::from_request_parts(parts, &await;
+            IdentityAuthExtractor::from_request_parts(&mut parts, &()).await;
 
         assert!(result.is_ok());
         let extractor = result.unwrap();
@@ -338,10 +339,10 @@ mod identity_extractor_tests {
             .body(Body::empty())
             .unwrap();
 
-        let parts = build_request_parts(request).await;
+        let mut parts = build_request_parts(request).await;
 
         let result =
-            IdentityAuthExtractor::from_request_parts(parts, &()).await;
+            IdentityAuthExtractor::from_request_parts(&mut parts, &()).await;
 
         assert!(result.is_err());
         match result.unwrap_err() {
@@ -358,10 +359,10 @@ mod identity_extractor_tests {
             .body(Body::empty())
             .unwrap();
 
-        let parts = build_request_parts(request).await;
+        let mut parts = build_request_parts(request).await;
 
         let result =
-            IdentityAuthExtractor::from_request_parts(parts, &()).await;
+            IdentityAuthExtractor::from_request_parts(&mut parts, &()).await;
 
         assert!(result.is_err());
         match result.unwrap_err() {
@@ -379,10 +380,10 @@ mod identity_extractor_tests {
             .body(Body::empty())
             .unwrap();
 
-        let parts = build_request_parts(request).await;
+        let mut parts = build_request_parts(request).await;
 
         let result =
-            IdentityAuthExtractor::from_request_parts(parts, &()).await;
+            IdentityAuthExtractor::from_request_parts(&mut parts, &()).await;
 
         assert!(result.is_ok());
         let extractor = result.unwrap();

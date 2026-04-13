@@ -9,6 +9,10 @@
 //! - **SAML 2.0**: Structural stub for IdP integration (full implementation pending)
 //! - **Fine-grained RBAC**: Role-based access control with 9 discrete permission actions
 //! - **Middleware**: gRPC interceptors and Axum HTTP extractors
+//! - **Device Fingerprinting**: Lightweight device identification (UA + Canvas + Screen)
+//! - **Device Posture Check**: OS version, AV status, patch compliance evaluation
+//! - **TCG TCM/TPM**: Hardware trust anchor interface (attestation, seal/unseal)
+//! - **EDR Integration**: Microsoft Defender ATP / CrowdStrike Falcon posture API
 //!
 //! # Feature Flags
 //!
@@ -19,6 +23,13 @@
 //! | `oidc`      | OIDC/OAuth2 Authorization Code flow       | reqwest              |
 //! | `saml`      | SAML 2.0 SP structural stub               | (none)               |
 //! | `enterprise`| Enable all auth backends (jwt+ldap+oidc)  | all of above         |
+//! | `device`    | Device fingerprinting (UA + Canvas + Screen)  | hmac                 |
+//! | `posture`   | Device posture checking (OS/AV/Patches)      | device               |
+//! | `tcm`       | TCG TCM / TPM 2.0 trait definitions          | (none)               |
+//! | `defender`  | Microsoft Defender ATP integration            | posture, reqwest     |
+//! | `falcon`    | CrowdStrike Falcon integration                | posture, reqwest     |
+//! | `device_security` | Full device security stack (FP+posture+TCM) | all above        |
+//! | `enterprise_security` | Complete security (device+EDR)           | all of above         |
 //!
 //! # Quick Start (JWT-only)
 //!
@@ -186,6 +197,51 @@ pub mod grpc_interceptors;
 #[cfg(any(feature = "ldap", feature = "oidc", feature = "saml"))]
 pub mod plugins;
 
+// --- Device Security modules ---
+
+/// Device Fingerprinting Module — lightweight device identification.
+///
+/// Collects and validates browser/environment signals (User-Agent,
+/// Canvas hash, Screen resolution) to produce a stable device identifier
+/// bound to JWT claims via HMAC-SHA256.
+///
+/// Requires `device` or `posture` feature flag.
+#[cfg(feature = "device")]
+pub mod device;
+
+/// Device Posture Assessment Module — OS/AV/Patch compliance checking.
+///
+/// Evaluates client device security posture against organizational policies:
+/// - OS version compliance
+/// - Antivirus/EDR status
+/// - Security patch currency
+///
+/// Requires `posture` feature flag.
+#[cfg(feature = "posture")]
+pub mod posture;
+
+/// TCG TCM / TPM 2.0 Extension Interface — hardware trust anchor.
+///
+/// Provides trait definitions for trusted computing operations:
+/// - Remote attestation via quote/nonce
+/// - Secure key storage via seal/unseal
+/// - Endorsement key certificate retrieval
+///
+/// Supports TPM 2.0 (Windows), Chinese TCM (GM/T), and mock implementations.
+/// Requires `tcm` feature flag.
+#[cfg(feature = "tcm")]
+pub mod tcm;
+
+/// EDR Integration Module — vendor-agnostic endpoint security API client.
+///
+/// Provides [`EdrProvider`] trait and concrete implementations for:
+/// - **Microsoft Defender for Endpoint** via Graph Security API
+/// - **CrowdStrike Falcon** via Zero Trust Assessment API
+///
+/// Requires `defender` or `falcon` feature flag.
+#[cfg(any(feature = "defender", feature = "falcon"))]
+pub mod edr;
+
 // --- Re-exports: Core types (always available) ---
 pub use claims::MisogiClaims;
 pub use models::{SessionToken, User};
@@ -223,7 +279,7 @@ pub use middleware::{AuthEngine, AuthError, ServiceAccount};
 pub use registry::{IdentityRegistry, ProviderInfo};
 
 // --- Re-exports: Plugin types ---
-#[cfg(any(feature = "ldap", feature = "oidc"))]
+#[cfg(feature = "ldap")]
 pub use plugins::ldap::{LdapAttributeMappings, LdapIdentityProvider, LdapPluginConfig};
 
 #[cfg(feature = "oidc")]
@@ -273,6 +329,54 @@ pub use extractors::{IdentityContext, ProviderSource};
 pub use grpc_interceptors::{
     create_jwt_grpc_interceptor, JwtGrpcInterceptor,
 };
+
+// --- Re-exports: Device Security types ---
+
+/// Device fingerprinting types (requires `device` feature).
+#[cfg(feature = "device")]
+pub use device::{
+    collector,
+    fingerprint::{DeviceFingerprint, FingerprintSignal, ScreenResolution},
+    validator::{FingerprintBindError, FingerprintValidator},
+};
+
+/// Device posture assessment types (requires `posture` feature).
+#[cfg(feature = "posture")]
+pub use posture::{
+    av_detector,
+    checker::PostureChecker,
+    os_detector,
+    types::{
+        CheckSeverity, DevicePosture, EncryptionStatus, FailureAction,
+        OsPlatform, OsPosture, PatchStatus, PostureCheckResult, PosturePolicy,
+        SecuritySoftwarePosture,
+    },
+};
+
+/// TCM/TPM trusted computing types (requires `tcm` feature).
+#[cfg(feature = "tcm")]
+pub use tcm::{
+    config::{TcmConfig, TcmProviderType},
+    mock::MockTcmProvider,
+    traits::{
+        PcrValue, QuoteAlgorithm, TcmError, TcmProvider, TcmQuote, TcmSealedData,
+    },
+};
+
+/// EDR provider types (requires `defender` or `falcon` feature).
+#[cfg(any(feature = "defender", feature = "falcon"))]
+pub use edr::{
+    models::{EdrDevicePosture, EdrError, EdrRiskScore},
+    traits::EdrProvider,
+};
+
+/// Microsoft Defender for Endpoint client (requires `defender` feature).
+#[cfg(feature = "defender")]
+pub use edr::defender::DefenderEdrProvider;
+
+/// CrowdStrike Falcon client (requires `falcon` feature).
+#[cfg(feature = "falcon")]
+pub use edr::falcon::{FalconCloudRegion, FalconEdrProvider};
 
 // ---------------------------------------------------------------------------
 // Prelude — convenient re-export for common patterns

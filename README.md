@@ -61,12 +61,16 @@ Misogi is a secure file transfer platform that combines **Content Disarm and Rec
   └──────────────────────────────────────────────────────────────┘
 
   WASM Edge (Browser Embed):
-  ┌──────────────────────────────────────────┐
-  │  Browser (Zero Server Dependency)        │
-  │  [File Input] → [WASM Module] → [Clean]  │
-  │  sanitize_pdf() · sanitize_office()       │
-  │  scan_pii() · detect_file_type()          │
-  └──────────────────────────────────────────┘
+ ┌──────────────────────────────────────────────────────────────┐
+ │  Browser (Zero Server Dependency)                            │
+ │  [File Input] → [WASM Module 271KB] → [Clean Output]        │
+ │  sanitize_pdf() · sanitize_office()                          │
+ │  scan_pii() · detect_file_type()                             │
+ │                                                              │
+ │  Performance: ~200 MiB/s PDF analyze | ~75 KB gzip           │
+ │  Tested: Chrome / Firefox / Safari / Edge (Playwright)      │
+ │  CI: .github/workflows/wasm-ci.yml                           │
+ └──────────────────────────────────────────────────────────────┘
 ```
 
 ## Quick Start
