@@ -168,8 +168,15 @@ fn test_build_driver_blind_send_with_default_config() {
 
 #[test]
 fn test_build_driver_push_missing_addr_fails() {
-    // Push mode without push_config should fail because addr is empty
-    let config = TransferFactoryConfig::new(TransferMode::Push);
+    // Push mode with explicitly empty receiver_addr must fail
+    let config = TransferFactoryConfig {
+        mode: TransferMode::Push,
+        push_config: Some(DirectTcpFactoryConfig {
+            receiver_addr: String::new(),
+            node_id: "test".into(),
+        }),
+        ..Default::default()
+    };
 
     let result = config.build_driver();
     assert!(result.is_err());

@@ -381,22 +381,20 @@ impl VersionExtractorMiddleware {
         if segments.len() >= 2 && segments[0] == "api" && segments[1].starts_with('v') {
             let version_str = &segments[1][1..]; // Strip leading 'v'
 
-            match ApiVersion::parse(version_str) {
-                Ok(version) => {
-                    // Reconstruct URI without /api/vN prefix
-                    let stripped = if segments.len() > 2 {
-                        format!("/{}", segments[2..].join("/"))
-                    } else {
-                        "/".to_string()
-                    };
-                    Some((version, stripped))
-                }
-                Err(_) if self.config.strict_mode => {
-                    // Will be handled by caller as error
-                    None
-                }
-                Err(_) => None, // Non-strict mode: fall through to next tier
-            }
+            let version = if let Ok(v) = ApiVersion::parse(version_str) {
+                v
+            } else if let Ok(major) = version_str.parse::<u32>() {
+                ApiVersion::new(major, 0, 0)
+            } else {
+                return None;
+            };
+
+            let stripped = if segments.len() > 2 {
+                format!("/{}", segments[2..].join("/"))
+            } else {
+                "/".to_string()
+            };
+            Some((version, stripped))
         } else {
             None
         }

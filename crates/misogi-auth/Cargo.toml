@@ -86,4 +86,5 @@ axum = ["jwt", "oidc", "dep:cookie", "dep:axum", "dep:time"]
 enterprise = ["jwt", "ldap", "oidc"]
 
 [dev-dependencies]
+misogi-auth = { path = ".", features = ["jwt"] }
 tempfile = "3"

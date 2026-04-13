@@ -1856,6 +1856,8 @@ id = "clamav-1"
 connection = { type = "tcp", host = "localhost", port = 3310 }
 scan_timeout_secs = 30
 connect_timeout_secs = 5
+stream_chunk_size = 65536
+timeout_secs = 30
 
 [[scanners]]
 type = "http-api"
@@ -1863,6 +1865,7 @@ id = "cloud-scan"
 endpoint = "https://scan.example.com/api"
 timeout_secs = 60
 scan_timeout_secs = 60
+stream_chunk_size = 65536
 
 [[scanners]]
 type = "command-line"
@@ -1870,6 +1873,9 @@ id = "defender"
 command_template = "MpCmdRun.exe -Scan -File {file}"
 infected_exit_codes = [2, 3]
 scan_timeout_secs = 120
+stream_chunk_size = 65536
+timeout_secs = 120
+error_exit_codes = [1]
 "#;
 
         let registry = ScannerRegistry::from_toml(toml).unwrap();
@@ -1888,6 +1894,8 @@ id = "s1"
 connection = { type = "tcp", host = "localhost", port = 3310 }
 scan_timeout_secs = 30
 connect_timeout_secs = 5
+stream_chunk_size = 65536
+timeout_secs = 30
 "#;
 
         let registry = ScannerRegistry::from_toml(toml).unwrap();
@@ -1938,6 +1946,8 @@ id = "s1"
 connection = { type = "tcp", host = "localhost", port = 3310 }
 scan_timeout_secs = 30
 connect_timeout_secs = 5
+stream_chunk_size = 65536
+timeout_secs = 30
 "#;
 
         let result = ScannerRegistry::from_toml(toml);
@@ -1976,8 +1986,6 @@ scan_timeout_secs = 45
 
     #[tokio::test]
     async fn test_full_workflow_with_mock_scanners() {
-        // Create a registry with mock-like configuration
-        // (In real usage, this would be actual adapter configs)
         let toml = r#"
 [scanner_chain]
 mode = "AnyInfectedBlocks"
@@ -1989,6 +1997,8 @@ id = "mock-clamav"
 connection = { type = "tcp", host = "localhost", port = 3310 }
 scan_timeout_secs = 30
 connect_timeout_secs = 5
+stream_chunk_size = 65536
+timeout_secs = 30
 "#;
 
         let registry = ScannerRegistry::from_toml(toml).unwrap();

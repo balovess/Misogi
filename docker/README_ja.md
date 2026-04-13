@@ -1171,6 +1171,75 @@ jobs:
         run: docker compose down -v
 ```
 
+### ゼロトラストアーキテクチャデプロイメント（G-Cloud ネイティブ）
+
+デジタル庁の **ゼロトラストアーキテクチャ（ZTA）** への 2030 年までの移行を進める組織向けに、
+Misogi は Government Cloud（G-Cloud）と整合したクラウドネイティブデプロイメントパターンを提供します。
+
+```yaml
+# docker-compose.zta.yml（G-Cloud デプロイメント）
+services:
+  sender:
+    environment:
+      - MISOGI_SENDER_DRIVER_TYPE=grpc_web
+      - MISOGI_PII_ENABLED=true
+      - MISOGI_VENDOR_ISOLATION_ENABLED=true
+      - MISOGI_PRESET=digital_agency_zt
+    volumes:
+      - sender_uploads:/data/uploads
+      - sender_staging:/data/staging
+  receiver:
+    environment:
+      - MISOGI_RECEIVER_DRIVER_TYPE=grpc_web
+      - MISOGI_TUNNEL_AUTH_TOKEN=${ZTA_TUNNEL_TOKEN}
+    volumes:
+      - receiver_chunks:/data/chunks
+      - receiver_downloads:/data/downloads
+networks:
+  zta-net:
+    driver: bridge
+    internal: false
+# 使用方法:
+# docker compose -f docker-compose.yml -f docker-compose.zta.yml up -d
+#
+# フロー:
+# 1. Sender: gRPC-Web（ブラウザ → K8s Receiver、サーバーサイドファイル転送なし）
+# 2. Receiver: gRPC-Web サーバー（ブラウザクライアント用 Envoy プロキシ）
+# 3. OIDC: G-Cloud IdP（Keycloak/Azure AD）との統一認証
+# 4. WASM: オプション: ブラウザサイド CDR（ゼロノレッジ処理）
+```
+
+**有効化される主な ZTA 機能:**
+- **gRPC-Web**: ブラウザ → K8s 直接通信（HTTP アップロード/ダウンロードをバイパス）
+- **OIDC 統合**: G-Cloud ID プロバイダーによるシングルサインオン
+- **ベンダー分離**: 外部請負業者向けマルチテナントアクセス制御
+- **ZTA プリセット**: `digital_agency_zt` プロファイル（[`misogi-core::presets`](../crates/misogi-core/src/presets.rs) 参照）
+  - 厳格なサニタイズ: `ConvertToFlat`（画像のみ PDF）
+  - ZIP 深度制限: 1（ZTA はエンドポイント処理を前提）
+  - 監査ログ保持期間延長: 7 年（ZTA 要件）
+  - 強制承認 + 理由入力（ファイル単位監査トレース）
+
+**移行パス:**
+```yaml
+# フェーズ 1: ハイブリッド（Sender オンプレミス、Receiver on G-Cloud）
+services:
+  sender:
+    # オンプレミス LGWAN ネットワーク
+    environment:
+      - MISOGI_SENDER_DRIVER_TYPE=storage_relay
+      - MISOGI_TRANSFER_OUTPUT_DIR=/shared/outbound
+    volumes:
+      - lgwan_storage:/shared
+  receiver:
+    # G-Cloud デプロイメント
+    deploy:
+      replicas: 2
+    environment:
+      - MISOGI_RECEIVER_DRIVER_TYPE=grpc_web
+# フェーズ 2: 完全 ZTA（両方 G-Cloud 上）
+# 上記 docker-compose.zta.yml を参照
+```
+
 ---
 
 ## ファイル索引

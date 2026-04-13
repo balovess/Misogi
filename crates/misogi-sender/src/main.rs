@@ -1,6 +1,7 @@
 mod cli;
 mod config;
 mod state;
+mod driver_instance;
 mod upload_engine;
 mod http_routes;
 mod approval_routes;

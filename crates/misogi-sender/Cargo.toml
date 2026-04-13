@@ -29,6 +29,7 @@ misogi-auth = { path = "../misogi-auth" }
 misogi-cdr = { path = "../misogi-cdr" }
 uuid = { version = "1", features = ["v4"] }
 chrono = "0.4"
+bytes = "1"
 
 [features]
 default = []

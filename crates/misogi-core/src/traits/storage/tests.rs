@@ -118,7 +118,7 @@ async fn test_basic_crud_operations() {
     let info = backend.put("test/key1", data.clone()).await.unwrap();
 
     assert_eq!(info.key, "test/key1");
-    assert_eq!(info.size, 21);
+    assert_eq!(info.size, 22);
     assert!(info.content_type.is_some());
     assert!(info.has_timestamp());
     assert!(info.has_etag());

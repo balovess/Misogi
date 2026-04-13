@@ -310,16 +310,14 @@ pub async fn trigger_transfer(
     tracing::info!(file_id = %file_id, "Transfer triggered");
 
     // Task 5.14: Use tunnel_remote_addr for TCP mode (backward compatible)
-    if let Some(ref receiver_addr) = state.config.tunnel_remote_addr {
+    if state.config.tunnel_remote_addr.is_some() {
         let task_state = state.clone();
         let task_file_id = file_id.clone();
-        let task_receiver_addr = receiver_addr.clone();
 
         tokio::spawn(async move {
             if let Err(e) = crate::tunnel_task::execute_transfer(
                 task_state,
                 task_file_id,
-                task_receiver_addr,
             )
             .await
             {

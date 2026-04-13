@@ -1,11 +1,11 @@
 [English](README.md) | [日本語](README_ja.md)
 
-# Misogi (禊) — Docker Deployment Guide
+# Misogi — Docker Deployment Guide
 
 Complete reference for building, deploying, configuring, operating, and
 troubleshooting Misogi via Docker and Docker Compose.
 
----
+***
 
 ## Table of Contents
 
@@ -23,23 +23,24 @@ troubleshooting Misogi via Docker and Docker Compose.
 12. [Troubleshooting](#12-troubleshooting)
 13. [Advanced Deployment Patterns](#13-advanced-deployment-patterns)
 
----
+***
 
 ## 1. Overview & Architecture
 
 ### What is Misogi?
 
-Misogi (禊) is a cross-network **secure file transfer system** with built-in
-**Content Disarm & Reconstruction (CDR)** sanitization. It is designed for
-Japanese government / enterprise environments requiring LGWAN compliance,
-PII detection, PPAP elimination, and audit-trail-grade logging.
+Misogi is a cross-network **secure file transfer system** with built-in
+**Content Disarm & Reconstruction (CDR)** sanitization. It provides
+PII detection, PPAP elimination, and audit-trail-grade logging for
+enterprise environments requiring secure, sanitized file exchange across
+network boundaries.
 
 The system consists of two nodes:
 
-| Node | Binary | Role | Default Port |
-|------|--------|------|-------------|
-| **Sender** | `misogi-sender` | File upload, CDR sanitization, transfer initiation | 3001 (HTTP), gRPC |
-| **Receiver** | `misogi-receiver` | File reception, chunk reassembly, storage | 3002 (HTTP), 9000 (tunnel) |
+| Node         | Binary            | Role                                               | Default Port               |
+| ------------ | ----------------- | -------------------------------------------------- | -------------------------- |
+| **Sender**   | `misogi-sender`   | File upload, CDR sanitization, transfer initiation | 3001 (HTTP), gRPC          |
+| **Receiver** | `misogi-receiver` | File reception, chunk reassembly, storage          | 3002 (HTTP), 9000 (tunnel) |
 
 ### Docker Deployment Topology
 
@@ -91,33 +92,33 @@ The system consists of two nodes:
 
 ### Why These Base Images?
 
-| Stage | Image | Rationale |
-|-------|-------|-----------|
-| Builder | `rust:1.85-slim` | Official Rust toolchain with `cargo`, `rustc`; slim variant excludes docs to save ~200 MB |
-| Runtime | `debian:bookworm-slim` | Minimal glibc-based distro (~30 MB base); compatible with Rust's default musl/glibc linking; wide package availability for production extensions |
+| Stage   | Image                  | Rationale                                                                                                                                         |
+| ------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Builder | `rust:1.85-slim`       | Official Rust toolchain with `cargo`, `rustc`; slim variant excludes docs to save \~200 MB                                                        |
+| Runtime | `debian:bookworm-slim` | Minimal glibc-based distro (\~30 MB base); compatible with Rust's default musl/glibc linking; wide package availability for production extensions |
 
----
+***
 
 ## 2. Prerequisites
 
-| Requirement | Minimum Version | Notes |
-|-------------|-----------------|-------|
-| Docker Engine | ≥ 24.0 | Multi-stage build support required |
-| Docker Compose | V2 (`docker compose` subcommand) | Not legacy `docker-compose` Python package |
-| Disk space (build) | ≥ 4 GB free | Rust toolchain + dependencies + compilation artifacts |
-| RAM (build) | ≥ 2 GB recommended | Cargo parallel compilation is memory-hungry |
-| CPU | 2+ cores recommended | Workspace has 5 crates; parallelism speeds build significantly |
+| Requirement        | Minimum Version                  | Notes                                                          |
+| ------------------ | -------------------------------- | -------------------------------------------------------------- |
+| Docker Engine      | ≥ 24.0                           | Multi-stage build support required                             |
+| Docker Compose     | V2 (`docker compose` subcommand) | Not legacy `docker-compose` Python package                     |
+| Disk space (build) | ≥ 4 GB free                      | Rust toolchain + dependencies + compilation artifacts          |
+| RAM (build)        | ≥ 2 GB recommended               | Cargo parallel compilation is memory-hungry                    |
+| CPU                | 2+ cores recommended             | Workspace has 5 crates; parallelism speeds build significantly |
 
 ### OS Compatibility
 
-| OS | Status | Notes |
-|----|--------|-------|
-| Linux (x86_64/aarch64) | ✅ Fully supported | Native Docker performance |
-| macOS (Apple Silicon / Intel) | ✅ Fully supported | Build may be slower due to filesystem layer |
-| Windows (WSL2) | ✅ Recommended | Use WSL2 backend for best performance |
-| Windows (Hyper-V) | ⚠️ Supported | Volume performance may degrade with many small files |
+| OS                            | Status            | Notes                                                |
+| ----------------------------- | ----------------- | ---------------------------------------------------- |
+| Linux (x86\_64/aarch64)       | ✅ Fully supported | Native Docker performance                            |
+| macOS (Apple Silicon / Intel) | ✅ Fully supported | Build may be slower due to filesystem layer          |
+| Windows (WSL2)                | ✅ Recommended     | Use WSL2 backend for best performance                |
+| Windows (Hyper-V)             | ⚠️ Supported      | Volume performance may degrade with many small files |
 
----
+***
 
 ## 3. Quick Start
 
@@ -168,7 +169,7 @@ docker compose up -d sender
 docker compose up -d receiver
 ```
 
----
+***
 
 ## 4. Build Reference
 
@@ -191,8 +192,8 @@ docker build --platform linux/arm64 -t misogi:arm64 .
 
 ### Build Arguments
 
-| Argument | Default | Description |
-|----------|---------|-------------|
+| Argument        | Default   | Description                                                                             |
+| --------------- | --------- | --------------------------------------------------------------------------------------- |
 | `BUILD_PROFILE` | `release` | Cargo profile (`release` or `debug`). Use `debug` for faster builds during development. |
 
 ### Build Caching Strategy
@@ -219,52 +220,52 @@ error: failed to run custom build command for `misogi-core` (v0.1.0)
 Caused by: could not find protocol compiler
 ```
 
----
+***
 
 ## 5. docker-compose.yml Complete Reference
 
 ### Service: sender
 
-| Field | Value | Explanation |
-|-------|-------|-------------|
-| `image` | `misogi:latest` | Built locally from project Dockerfile |
-| `container_name` | `misogi-sender` | Fixed name for predictable `docker exec` access |
-| `restart` | `unless-stopped` | Auto-restart on crash or host reboot; respects manual stop |
-| `entrypoint` | `misogi-sender` | Override Dockerfile default (same value, explicit for clarity) |
-| `command` | `--mode server` | Run as HTTP API server (not daemon mode) |
-| `ports` | `${SENDER_PORT:-3001}:3001` | Map host port 3001 (configurable via .env) to container port 3001 |
-| `volumes` | `sender_uploads:/data/uploads` | Persist uploaded files across container restarts |
-| `volumes` | `sender_staging:/data/staging` | Persist CDR staging area across restarts |
-| `healthcheck.test` | `curl -f http://localhost:3001/api/v1/health` | HTTP GET to health endpoint |
-| `healthcheck.interval` | 30s | Poll every 30 seconds |
-| `healthcheck.timeout` | 5s | Fail if response takes > 5s |
-| `healthcheck.retries` | 3 | Mark unhealthy after 3 consecutive failures |
-| `healthcheck.start_period` | 10s | Grace period before health check counts toward retries |
-| `networks` | `misogi-net` | Join shared bridge network for inter-container communication |
+| Field                      | Value                                         | Explanation                                                       |
+| -------------------------- | --------------------------------------------- | ----------------------------------------------------------------- |
+| `image`                    | `misogi:latest`                               | Built locally from project Dockerfile                             |
+| `container_name`           | `misogi-sender`                               | Fixed name for predictable `docker exec` access                   |
+| `restart`                  | `unless-stopped`                              | Auto-restart on crash or host reboot; respects manual stop        |
+| `entrypoint`               | `misogi-sender`                               | Override Dockerfile default (same value, explicit for clarity)    |
+| `command`                  | `--mode server`                               | Run as HTTP API server (not daemon mode)                          |
+| `ports`                    | `${SENDER_PORT:-3001}:3001`                   | Map host port 3001 (configurable via .env) to container port 3001 |
+| `volumes`                  | `sender_uploads:/data/uploads`                | Persist uploaded files across container restarts                  |
+| `volumes`                  | `sender_staging:/data/staging`                | Persist CDR staging area across restarts                          |
+| `healthcheck.test`         | `curl -f http://localhost:3001/api/v1/health` | HTTP GET to health endpoint                                       |
+| `healthcheck.interval`     | 30s                                           | Poll every 30 seconds                                             |
+| `healthcheck.timeout`      | 5s                                            | Fail if response takes > 5s                                       |
+| `healthcheck.retries`      | 3                                             | Mark unhealthy after 3 consecutive failures                       |
+| `healthcheck.start_period` | 10s                                           | Grace period before health check counts toward retries            |
+| `networks`                 | `misogi-net`                                  | Join shared bridge network for inter-container communication      |
 
 ### Service: receiver
 
-| Field | Value | Explanation |
-|-------|-------|-------------|
-| `ports` | `${RECEIVER_PORT:-3002}:3002` | Receiver HTTP API |
-| `ports` | `${TUNNEL_PORT:-9000}:9000` | Reverse tunnel listener for sender connections |
-| `volumes` | `receiver_chunks:/data/chunks` | Incoming transfer chunks storage |
-| `volumes` | `receiver_downloads:/data/downloads` | Completed download storage |
-| `healthcheck.test` | `curl -f http://localhost:3002/api/v1/health` | Same pattern as sender, different port |
+| Field              | Value                                         | Explanation                                    |
+| ------------------ | --------------------------------------------- | ---------------------------------------------- |
+| `ports`            | `${RECEIVER_PORT:-3002}:3002`                 | Receiver HTTP API                              |
+| `ports`            | `${TUNNEL_PORT:-9000}:9000`                   | Reverse tunnel listener for sender connections |
+| `volumes`          | `receiver_chunks:/data/chunks`                | Incoming transfer chunks storage               |
+| `volumes`          | `receiver_downloads:/data/downloads`          | Completed download storage                     |
+| `healthcheck.test` | `curl -f http://localhost:3002/api/v1/health` | Same pattern as sender, different port         |
 
 ### Volumes
 
-| Volume Name | Container Path | Contents | Persistence |
-|-------------|----------------|----------|-------------|
-| `sender_uploads` | `/data/uploads` | Uploaded files awaiting processing | Named volume (survives recreate) |
-| `sender_staging` | `/data/staging` | Files undergoing CDR sanitization | Named volume (survives recreate) |
-| `receiver_chunks` | `/data/chunks` | Received file chunks during transfer | Named volume (survives recreate) |
-| `receiver_downloads` | `/data/downloads` | Completed, reassembled files | Named volume (survives recreate) |
+| Volume Name          | Container Path    | Contents                             | Persistence                      |
+| -------------------- | ----------------- | ------------------------------------ | -------------------------------- |
+| `sender_uploads`     | `/data/uploads`   | Uploaded files awaiting processing   | Named volume (survives recreate) |
+| `sender_staging`     | `/data/staging`   | Files undergoing CDR sanitization    | Named volume (survives recreate) |
+| `receiver_chunks`    | `/data/chunks`    | Received file chunks during transfer | Named volume (survives recreate) |
+| `receiver_downloads` | `/data/downloads` | Completed, reassembled files         | Named volume (survives recreate) |
 
 ### Network
 
-| Network | Driver | Purpose |
-|---------|--------|---------|
+| Network      | Driver | Purpose                                                 |
+| ------------ | ------ | ------------------------------------------------------- |
 | `misogi-net` | bridge | Isolated L2 network for sender ↔ receiver communication |
 
 ### Scaling Considerations
@@ -273,7 +274,7 @@ Caused by: could not find protocol compiler
 - **Multiple receivers**: Partially supported. Each receiver has independent chunk/download storage. Use consistent volume mounts or shared storage for state coherence.
 - **Shared image**: Both services use the same `misogi:latest` image containing both binaries. No separate images needed.
 
----
+***
 
 ## 6. Environment Variable Reference
 
@@ -299,43 +300,43 @@ When using `docker compose`, `.env` file values override `docker-compose.yml` de
 
 ### General Variables
 
-| Variable | Default | Description | Example |
-|----------|---------|-------------|---------|
-| `MISOGI_LOG_LEVEL` | `info` | Tracing verbosity: `trace`, `debug`, `info`, `warn`, `error` | `debug` |
-| `RUST_LOG` | `info` | Rust tracing subscriber filter (overrides MISOGI_LOG_LEVEL if more granular) | `misogi_sender=trace,tower_http=debug` |
-| `MISOGI_LOG_FORMAT` | `json` | Audit log format: `json`, `syslog`, `cef`, `custom` | `cef` |
+| Variable            | Default | Description                                                                    | Example                                |
+| ------------------- | ------- | ------------------------------------------------------------------------------ | -------------------------------------- |
+| `MISOGI_LOG_LEVEL`  | `info`  | Tracing verbosity: `trace`, `debug`, `info`, `warn`, `error`                   | `debug`                                |
+| `RUST_LOG`          | `info`  | Rust tracing subscriber filter (overrides MISOGI\_LOG\_LEVEL if more granular) | `misogi_sender=trace,tower_http=debug` |
+| `MISOGI_LOG_FORMAT` | `json`  | Audit log format: `json`, `syslog`, `cef`, `custom`                            | `cef`                                  |
 
 ### Sender-Specific Variables
 
-| Variable | Default | Description | Example |
-|----------|---------|-------------|---------|
-| `MISOGI_SERVER_ADDR` | `0.0.0.0:3001` | HTTP bind address | `0.0.0.0:8080` |
-| `MISOGI_UPLOAD_DIR` | `/data/uploads` | Directory for uploaded files | `/mnt/nfs/uploads` |
-| `MISOGI_STAGING_DIR` | `/data/staging` | CDR processing staging area | `/mnt/nfs/staging` |
-| `MISOGI_TRANSFER_DRIVER_TYPE` | `direct_tcp` | Transfer backend: `direct_tcp`, `storage_relay`, `external_command` | `storage_relay` |
-| `MISOGI_TUNNEL_REMOTE_ADDR` | *(empty)* | Remote tunnel server address | `relay.example.com:9000` |
-| `MISOGI_TUNNEL_AUTH_TOKEN` | *(empty)* | Tunnel authentication token | `secret-token-abc123` |
-| `MISOGI_PII_ENABLED` | `false` | Enable PII scanning on uploads | `true` |
-| `MISOGI_VENDOR_ISOLATION_ENABLED` | `false` | Enable multi-tenant vendor isolation | `true` |
-| `MISOGI_SENDER_DRIVER_TYPE` | `direct_tcp` | Compose-specific alias for MISOGI_TRANSFER_DRIVER_TYPE (sender service) | `storage_relay` |
+| Variable                          | Default         | Description                                                                | Example                  |
+| --------------------------------- | --------------- | -------------------------------------------------------------------------- | ------------------------ |
+| `MISOGI_SERVER_ADDR`              | `0.0.0.0:3001`  | HTTP bind address                                                          | `0.0.0.0:8080`           |
+| `MISOGI_UPLOAD_DIR`               | `/data/uploads` | Directory for uploaded files                                               | `/mnt/nfs/uploads`       |
+| `MISOGI_STAGING_DIR`              | `/data/staging` | CDR processing staging area                                                | `/mnt/nfs/staging`       |
+| `MISOGI_TRANSFER_DRIVER_TYPE`     | `direct_tcp`    | Transfer backend: `direct_tcp`, `storage_relay`, `external_command`        | `storage_relay`          |
+| `MISOGI_TUNNEL_REMOTE_ADDR`       | *(empty)*       | Remote tunnel server address                                               | `relay.example.com:9000` |
+| `MISOGI_TUNNEL_AUTH_TOKEN`        | *(empty)*       | Tunnel authentication token                                                | `secret-token-abc123`    |
+| `MISOGI_PII_ENABLED`              | `false`         | Enable PII scanning on uploads                                             | `true`                   |
+| `MISOGI_VENDOR_ISOLATION_ENABLED` | `false`         | Enable multi-tenant vendor isolation                                       | `true`                   |
+| `MISOGI_SENDER_DRIVER_TYPE`       | `direct_tcp`    | Compose-specific alias for MISOGI\_TRANSFER\_DRIVER\_TYPE (sender service) | `storage_relay`          |
 
 ### Receiver-Specific Variables
 
-| Variable | Default | Description | Example |
-|----------|---------|-------------|---------|
-| `MISOGI_SERVER_ADDR` | `0.0.0.0:3002` | HTTP bind address (receiver context) | `0.0.0.0:8080` |
-| `MISOGI_CHUNK_DIR` | `/data/chunks` | Directory for incoming transfer chunks | `/mnt/nfs/chunks` |
-| `MISOGI_DOWNLOAD_DIR` | `/data/downloads` | Directory for completed downloads | `/mnt/nfs/downloads` |
-| `MISOGI_RECEIVER_DRIVER_TYPE` | `direct_tcp` | Transfer backend: `direct_tcp`, `storage_relay` | `storage_relay` |
-| `MISOGI_TUNNEL_AUTH_TOKEN` | *(empty)* | Tunnel auth token (must match sender) | `secret-token-abc123` |
+| Variable                      | Default           | Description                                     | Example               |
+| ----------------------------- | ----------------- | ----------------------------------------------- | --------------------- |
+| `MISOGI_SERVER_ADDR`          | `0.0.0.0:3002`    | HTTP bind address (receiver context)            | `0.0.0.0:8080`        |
+| `MISOGI_CHUNK_DIR`            | `/data/chunks`    | Directory for incoming transfer chunks          | `/mnt/nfs/chunks`     |
+| `MISOGI_DOWNLOAD_DIR`         | `/data/downloads` | Directory for completed downloads               | `/mnt/nfs/downloads`  |
+| `MISOGI_RECEIVER_DRIVER_TYPE` | `direct_tcp`      | Transfer backend: `direct_tcp`, `storage_relay` | `storage_relay`       |
+| `MISOGI_TUNNEL_AUTH_TOKEN`    | *(empty)*         | Tunnel auth token (must match sender)           | `secret-token-abc123` |
 
 ### Compose Port Override Variables
 
-| Variable | Default | Maps To |
-|----------|---------|---------|
-| `SENDER_PORT` | `3001` | Host port for sender HTTP API |
-| `RECEIVER_PORT` | `3002` | Host port for receiver HTTP API |
-| `TUNNEL_PORT` | `9000` | Host port for receiver tunnel listener |
+| Variable        | Default | Maps To                                |
+| --------------- | ------- | -------------------------------------- |
+| `SENDER_PORT`   | `3001`  | Host port for sender HTTP API          |
+| `RECEIVER_PORT` | `3002`  | Host port for receiver HTTP API        |
+| `TUNNEL_PORT`   | `9000`  | Host port for receiver tunnel listener |
 
 ### Quick Configuration Template
 
@@ -360,7 +361,7 @@ MISOGI_SENDER_DRIVER_TYPE=direct_tcp
 MISOGI_TUNNEL_REMOTE_ADDR=
 ```
 
----
+***
 
 ## 7. API Endpoints
 
@@ -369,26 +370,27 @@ Every response includes `X-Request-ID` header for request tracing.
 
 ### Sender API — Port 3001
 
-| Method | Path | Description | Request Body | Example |
-|--------|------|-------------|--------------|---------|
-| `POST` | `/api/v1/upload` | Upload file (multipart) | `multipart/form-data: file` | `curl -F "file=@doc.pdf" http://localhost:3001/api/v1/upload` |
-| `GET` | `/api/v1/files` | List uploaded files | Query: `?page=1&per_page=20&status=ready` | `curl 'http://localhost:3001/api/v1/files?page=1&per_page=10'` |
-| `GET` | `/api/v1/files/:file_id` | Get file metadata | — | `curl http://localhost:3001/api/v1/files/abc-123` |
-| `POST` | `/api/v1/files/:file_id` | Trigger transfer to receiver | — | `curl -X POST http://localhost:3001/api/v1/files/abc-123` |
-| `POST` | `/api/v1/sanitize/:file_id` | Manually trigger CDR sanitization | — | `curl -X POST http://localhost:3001/api/v1/sanitize/abc-123` |
-| `GET` | `/api/v1/sanitize/policies` | List available CDR policies | — | `curl http://localhost:3001/api/v1/sanitize/policies` |
-| `GET` | `/api/v1/health` | Health check probe | — | `curl http://localhost:3001/api/v1/health` |
-| `POST` | `/api/v1/transfers` | Create approval-required transfer | JSON body | `curl -X POST -H "Content-Type: application/json" -d '{"file_id":"..."}' http://localhost:3001/api/v1/transfers` |
-| `GET` | `/api/v1/transfers` | List all transfers | — | `curl http://localhost:3001/api/v1/transfers` |
-| `GET` | `/api/v1/transfers/pending` | List pending approvals | — | `curl http://localhost:3001/api/v1/transfers/pending` |
-| `GET` | `/api/v1/transfers/:request_id` | Get transfer details | — | `curl http://localhost:3001/api/v1/transfers/req-001` |
-| `POST` | `/api/v1/transfers/:request_id/approve` | Approve pending transfer | — | `curl -X POST http://localhost:3001/api/v1/transfers/req-001/approve` |
-| `POST` | `/api/v1/transfers/:request_id/reject` | Reject pending transfer | — | `curl -X POST http://localhost:3001/api/v1/transfers/req-001/reject` |
-| `POST` | `/api/v1/ppap/detect` | Scan file for PPAP indicators | `multipart/form-data: file` | `curl -F "file=@archive.zip" http://localhost:3001/api/v1/ppap/detect` |
+| Method | Path                                    | Description                       | Request Body                              | Example                                                                                                          |
+| ------ | --------------------------------------- | --------------------------------- | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `POST` | `/api/v1/upload`                        | Upload file (multipart)           | `multipart/form-data: file`               | `curl -F "file=@doc.pdf" http://localhost:3001/api/v1/upload`                                                    |
+| `GET`  | `/api/v1/files`                         | List uploaded files               | Query: `?page=1&per_page=20&status=ready` | `curl 'http://localhost:3001/api/v1/files?page=1&per_page=10'`                                                   |
+| `GET`  | `/api/v1/files/:file_id`                | Get file metadata                 | —                                         | `curl http://localhost:3001/api/v1/files/abc-123`                                                                |
+| `POST` | `/api/v1/files/:file_id`                | Trigger transfer to receiver      | —                                         | `curl -X POST http://localhost:3001/api/v1/files/abc-123`                                                        |
+| `POST` | `/api/v1/sanitize/:file_id`             | Manually trigger CDR sanitization | —                                         | `curl -X POST http://localhost:3001/api/v1/sanitize/abc-123`                                                     |
+| `GET`  | `/api/v1/sanitize/policies`             | List available CDR policies       | —                                         | `curl http://localhost:3001/api/v1/sanitize/policies`                                                            |
+| `GET`  | `/api/v1/health`                        | Health check probe                | —                                         | `curl http://localhost:3001/api/v1/health`                                                                       |
+| `POST` | `/api/v1/transfers`                     | Create approval-required transfer | JSON body                                 | `curl -X POST -H "Content-Type: application/json" -d '{"file_id":"..."}' http://localhost:3001/api/v1/transfers` |
+| `GET`  | `/api/v1/transfers`                     | List all transfers                | —                                         | `curl http://localhost:3001/api/v1/transfers`                                                                    |
+| `GET`  | `/api/v1/transfers/pending`             | List pending approvals            | —                                         | `curl http://localhost:3001/api/v1/transfers/pending`                                                            |
+| `GET`  | `/api/v1/transfers/:request_id`         | Get transfer details              | —                                         | `curl http://localhost:3001/api/v1/transfers/req-001`                                                            |
+| `POST` | `/api/v1/transfers/:request_id/approve` | Approve pending transfer          | —                                         | `curl -X POST http://localhost:3001/api/v1/transfers/req-001/approve`                                            |
+| `POST` | `/api/v1/transfers/:request_id/reject`  | Reject pending transfer           | —                                         | `curl -X POST http://localhost:3001/api/v1/transfers/req-001/reject`                                             |
+| `POST` | `/api/v1/ppap/detect`                   | Scan file for PPAP indicators     | `multipart/form-data: file`               | `curl -F "file=@archive.zip" http://localhost:3001/api/v1/ppap/detect`                                           |
 
 #### Key Response Examples
 
 **Upload response:**
+
 ```json
 {
   "file_id": "550e8400-e29b-41d4-a716-446655440000",
@@ -400,26 +402,28 @@ Every response includes `X-Request-ID` header for request tracing.
 ```
 
 **Health response:**
+
 ```json
 {"status": "ok", "role": "sender"}
 ```
 
 ### Receiver API — Port 3002
 
-| Method | Path | Description | Example |
-|--------|------|-------------|---------|
-| `GET` | `/api/v1/files` | List received files | `curl http://localhost:3002/api/v1/files` |
-| `GET` | `/api/v1/download/:file_id` | Download completed file (binary) | `curl -o output.pdf http://localhost:3002/download/abc-123` |
-| `GET` | `/api/v1/files/:file_id/status` | Get transfer status for a file | `curl http://localhost:3002/api/v1/files/abc-123/status` |
+| Method | Path                                | Description                                | Example                                                              |
+| ------ | ----------------------------------- | ------------------------------------------ | -------------------------------------------------------------------- |
+| `GET`  | `/api/v1/files`                     | List received files                        | `curl http://localhost:3002/api/v1/files`                            |
+| `GET`  | `/api/v1/download/:file_id`         | Download completed file (binary)           | `curl -o output.pdf http://localhost:3002/download/abc-123`          |
+| `GET`  | `/api/v1/files/:file_id/status`     | Get transfer status for a file             | `curl http://localhost:3002/api/v1/files/abc-123/status`             |
 | `POST` | `/api/v1/files/:file_id/reassemble` | Manually reassemble chunks into final file | `curl -X POST http://localhost:3002/api/v1/files/abc-123/reassemble` |
-| `GET` | `/api/v1/health` | Health check probe | `curl http://localhost:3002/api/v1/health` |
+| `GET`  | `/api/v1/health`                    | Health check probe                         | `curl http://localhost:3002/api/v1/health`                           |
 
 #### Health response:
+
 ```json
 {"status": "ok", "role": "receiver"}
 ```
 
----
+***
 
 ## 8. Volume & Data Management
 
@@ -496,16 +500,16 @@ For development or when you need direct host filesystem access, modify `docker-c
 
 ### Data Lifecycle
 
-| Command | Effect on Volumes |
-|---------|-------------------|
-| `docker compose down` | Stops containers; **volumes preserved** |
+| Command                  | Effect on Volumes                                 |
+| ------------------------ | ------------------------------------------------- |
+| `docker compose down`    | Stops containers; **volumes preserved**           |
 | `docker compose down -v` | Stops containers; **volumes deleted permanently** |
-| `docker compose up -d` | Recreates containers; **existing volumes reused** |
-| `docker volume prune` | Removes all unused volumes (dangerous) |
+| `docker compose up -d`   | Recreates containers; **existing volumes reused** |
+| `docker volume prune`    | Removes all unused volumes (dangerous)            |
 
 > **⚠ WARNING**: `docker compose down -v` destroys all persisted file data irrecoverably unless backed up.
 
----
+***
 
 ## 9. Networking Guide
 
@@ -582,7 +586,7 @@ networks:
     internal: true  # No external access (no internet routing)
 ```
 
----
+***
 
 ## 10. Security Hardening (Production Checklist)
 
@@ -634,7 +638,7 @@ services:
 
 #### Secrets Management
 
-**Never commit tokens to `.env`** for production. Options:
+**Never commit tokens to** **`.env`** for production. Options:
 
 1. **Docker Secrets** (Swarm mode):
    ```yaml
@@ -643,11 +647,9 @@ services:
    secrets:
      - tunnel_token
    ```
-
 2. **External secret store** (HashiCorp Vault, AWS Secrets Manager):
    Inject at runtime via `docker run -e` or orchestration platform.
-
-3. **`.env` file with restricted permissions** (development only):
+3. **`.env`** **file with restricted permissions** (development only):
    ```bash
    chmod 600 .env
    ```
@@ -723,7 +725,7 @@ services:
 
 For centralized logging, switch to `fluentd`, `syslog`, or `awslogs` driver.
 
----
+***
 
 ## 11. Operations & Monitoring
 
@@ -749,11 +751,11 @@ docker compose logs sender | grep '"level":"error"'
 
 ### Health Check Interpretation
 
-| State | Meaning | Action |
-|-------|---------|--------|
-| `healthy` | Service responding to `/api/v1/health` within timeout | Normal operation |
-| `unhealthy` | 3 consecutive failed health checks | Check logs: `docker compose logs sender` |
-| `starting` | Within `start-period` grace period (10s) | Wait; not yet evaluated |
+| State       | Meaning                                               | Action                                   |
+| ----------- | ----------------------------------------------------- | ---------------------------------------- |
+| `healthy`   | Service responding to `/api/v1/health` within timeout | Normal operation                         |
+| `unhealthy` | 3 consecutive failed health checks                    | Check logs: `docker compose logs sender` |
+| `starting`  | Within `start-period` grace period (10s)              | Wait; not yet evaluated                  |
 
 ```bash
 # Inspect current health status
@@ -764,12 +766,12 @@ docker inspect --format='{{.State.Health.Status}}' misogi-sender
 
 Policy: `unless-stopped`
 
-| Event | Behavior |
-|-------|----------|
-| Container crashes | Auto-restarted immediately |
-| Docker daemon restart | Auto-restarted when daemon comes back up |
+| Event                        | Behavior                                                     |
+| ---------------------------- | ------------------------------------------------------------ |
+| Container crashes            | Auto-restarted immediately                                   |
+| Docker daemon restart        | Auto-restarted when daemon comes back up                     |
 | Manual `docker compose stop` | Stays stopped (won't auto-restart until `docker compose up`) |
-| `docker compose down` | Removed (must `up` again to start) |
+| `docker compose down`        | Removed (must `up` again to start)                           |
 
 ### Graceful Shutdown
 
@@ -821,7 +823,7 @@ docker compose up -d --scale receiver=3
 > storage, use named volumes or an external NFS/S3 backend configured via
 > `MISOGI_DOWNLOAD_DIR`.
 
----
+***
 
 ## 12. Troubleshooting
 
@@ -957,7 +959,7 @@ docker compose exec sender sh
 # - Environment: env | grep MISOGI
 ```
 
----
+***
 
 ## 13. Advanced Deployment Patterns
 
@@ -1139,13 +1141,13 @@ jobs:
           for i in {1..30}; do
             if curl -sf http://localhost:3001/api/v1/health > /dev/null && \
                curl -sf http://localhost:3002/api/v1/health > /dev/null; then
-              echo "✅ Both services healthy"
+              echo "Both services healthy"
               exit 0
             fi
             echo "Waiting... ($i/30)"
             sleep 2
           done
-          echo "❌ Health check timed out"
+          echo "Health check timed out"
           docker compose logs
           exit 1
 
@@ -1171,14 +1173,14 @@ jobs:
         run: docker compose down -v
 ```
 
----
+***
 
 ## File Index
 
-| File | Purpose |
-|------|---------|
-| [`Dockerfile`](../Dockerfile) | Multi-stage build definition |
-| [`docker-compose.yml`](../docker-compose.yml) | Service orchestration (sender + receiver) |
-| [`.dockerignore`](../.dockerignore) | Build context exclusions |
-| [`docker/env.example`](./env.example) | Environment variable template (copy to `.env`) |
-| **This file** | Complete deployment documentation |
+| File                                          | Purpose                                        |
+| --------------------------------------------- | ---------------------------------------------- |
+| [`Dockerfile`](../Dockerfile)                 | Multi-stage build definition                   |
+| [`docker-compose.yml`](../docker-compose.yml) | Service orchestration (sender + receiver)      |
+| [`.dockerignore`](../.dockerignore)           | Build context exclusions                       |
+| [`docker/env.example`](./env.example)         | Environment variable template (copy to `.env`) |
+| **This file**                                 | Complete deployment documentation              |

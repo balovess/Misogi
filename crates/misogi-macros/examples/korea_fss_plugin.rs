@@ -13,7 +13,7 @@
 //! 3. **Auto-registration** — The `#[misogi_plugin]` macro generates all trait
 //!    implementations and registers into GLOBAL_REGISTRY at startup.
 
-use misogi_macros::prelude::*;
+use misogi_macros::{misogi_plugin, on_metadata, on_file_stream};
 
 /// Korea Financial Supervisory Service (FSS) compliance plugin.
 ///
@@ -73,7 +73,7 @@ fn classify_korean_format(filename: &str) -> &'static str {
 /// using the official Korean government algorithm.
 #[on_file_stream]
 async fn scan_korean_rrn(chunk: &mut [u8]) -> Result<(), std::io::Error> {
-    let data_str = match std::str::from_utf8(chunk) {
+    let data_str: &str = match std::str::from_utf8(chunk) {
         Ok(s) => s,
         Err(_) => return Ok(()),
     };
@@ -81,11 +81,11 @@ async fn scan_korean_rrn(chunk: &mut [u8]) -> Result<(), std::io::Error> {
     let rrn_pattern = regex::Regex::new(r"\d{6}[-]?\d{7}").unwrap();
 
     for mat in rrn_pattern.find_iter(data_str) {
-        let candidate = mat.as_str().replace('-', "");
+        let candidate: String = mat.as_str().replace('-', "");
         if validate_rrn_check_digit(&candidate) {
-            tracing::warn!(
-                rrn_candidate = %mat.as_str(),
-                "Korean RRN pattern detected in content stream"
+            eprintln!(
+                "[WARN] Korean RRN pattern detected in content stream: {}",
+                mat.as_str()
             );
         }
     }
@@ -124,4 +124,8 @@ fn validate_rrn_check_digit(rrn: &str) -> bool {
 
     let check = (11 - (sum % 11)) % 10;
     check == digits[12]
+}
+
+fn main() {
+    println!("Korea FSS Compliance Plugin [loaded]");
 }

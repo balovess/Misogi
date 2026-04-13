@@ -2,290 +2,567 @@
 
 # Misogi (禊ぎ)
 
-**Rust 2024 Edition で構築された、高性能・セキュアなファイル転送システム**
+**政企レベル CDR セキュアファイル転送システム — 日本市場特化ドキュメント**
 
-Misogi（禊ぎ）は、信頼性、セキュリティ、パフォーマンスを重視して設計されたモダンなファイル転送ソリューションです。チャンク転送、リアルタイムモニタリング、gRPC ベースの通信をサポートする送信者 - 受信者アーキテクチャを実装しています。
+📖 Misogi の基本機能、クイックスタート、アーキテクチャ概要については
+   [English README](README.md) を参照してください。
 
-## 主な特徴
+---
 
-- 🚀 **高性能**: Tokio を使用した非同期 Rust により最大スループットを実現
-- 🔒 **セキュリティ優先**: TLS サポートを備えた安全な通信チャネルを実装
-- 📦 **チャンク転送**: 設定可能なチャンクサイズによる効率的なファイル転送
-- 🔄 **リアルタイムモニタリング**: 詳細な進捗情報でファイル転送を追跡
-- 🛠️ **デュアルモード操作**: サーバーまたはデーモンとして実行可能
-- 📡 **gRPC 統合**: 信頼性の高い通信のためのモダンな RPC フレームワーク
-- 🔍 **包括的なロギング**: 設定可能なログレベルの JSON 形式ログ
-- 🎯 **型安全**: 最大の型安全性とパフォーマンスのために Rust 2024 edition を活用
+## 1. 日本市場向けポジショニング
 
-## アーキテクチャ
+Misogi は、日本国内の SIer（System Integrator）および政府機関・地方自治体の要件を念頭に設計された **政企レベル** セキュアファイル転送プラットフォームです。デジタル庁が策定する「デジタル社会推進標準ガイドライン群」（DS-100 / DS-200）、総務省「地方公共団体における情報セキュリティポリシーガイドライン」（令和7年3月改定）、および **デジタル庁ゼロトラスト（ZTA）移行方針（2024年5月）** に体系的に対応し、入札応募書類やコンプライアンス申告書としてそのまま活用可能な合規証明資料を完備しています。
 
-> **🧪 クリーンルーム設計**: すべての CDR アルゴリズムは公開仕様書のみに基づいて開発されています —
-> ISO 32000 (PDF)、APPNOTE (.ZIP)、ECMA-376 (OOXML)、W3C (SVG)、および Rust/nom ドキュメント。
-> サードパーティ製品の逆エンジニアリングは一切行っていません。
+日本市場における Misogi の核心的差別化要因は以下の三点です：
 
-Misogi は 3 つの主要コンポーネントで構成されています：
+1. **一太郎（.jtd）完全対応** — 日本の官公庁・地方自治体で標準的に使用される JustSystems 一太郎文書形式を PDF 変換 → CDR パイプラインで無害化。競合製品（VOTIRO / FileZen）は非対応であり、実運用上の必須要件を満たす唯一の選択肢です。
+2. **マイナンバー法準拠 PII 検出エンジン** — マイナンバー法第28条および APPI 第22条に準拠した個人情報自動検出。Block / Mask / AlertOnly の階層的アクション制御により、組織のリスク許容度に応じた柔軟なポリシー設定が可能です。
+3. **WASM Edge CDR — ZTA のキラーアプリケーション** — ブラウザ内でファイルを完全に浄化する WebAssembly ベースのクライアント側 CDR 処理。ZTA の核心原則「データを信頼境界に入れない」を実現し、競合製品は全て非対応です。2030年の完全ゼロトラスト移行に向けた先行的技術対応となります。
 
-### misogi-core
-コアライブラリ：
-- プロトコル定義（Protobuf）
-- ファイル整合性のためのハッシュユーティリティ
-- エラーハンドリング
-- 型定義
+---
 
-### misogi-sender
-送信ノード：
-- ファイルアップロードと転送開始
-- ファイル送信のための HTTP API
-- 受信者への gRPC ストリーミング
-- `notify` によるファイルシステムモニタリング
+## 2. SIer 統合ガイド
 
-### misogi-receiver
-受信ノード：
-- ファイル受信と保存
-- HTTP ダウンロードエンドポイント
-- ストリーム受信のための gRPC サービス
-- チャンクからのファイル再構築
+本ガイドは、SIer が Misogi を顧客環境（官公庁・金融機関・重要インフラ等）に導入する際の標準的なプロセスを Phase 0 から Phase 4 まで体系化したものです。各フェーズの成果物・担当者・確認事項を明記し、プロジェクト管理の枠組みとしてご利用ください。
 
-## 要件
+### Phase 0: 評価・PoC（Proof of Concept）
 
-- **Rust**: 1.75+（Edition 2024）
-- **Protocol Buffers**: gRPC サービス定義用
-- **Tokio**: 非同期ランタイム
+| 項目 | 内容 | 成果物 | 担当 |
+|------|------|--------|------|
+| 要件ヒアリング | 顧客の現行システム・ネットワーク構成・セキュリティポリシー・コンプライアンス要件の収集 | 要件定義書 | SIer SE |
+| 環境調査 | OS バージョン・AD/LDAP 構成・ファイアウォールポリシー・利用ファイル形式の実態把握 | 環境調査報告書 | SIer SE + 顧客SE |
+| PoC 実施 | 評価用環境への Misogi デプロイ・主要ファイル形式（PDF/DOCX/JTD）の CDR テスト・PII 検出テスト | PoC レポート（検収署名付き）| SIer SE |
+| 合規性マッピング | 顧客のコンプライアンス要件（ISMAP / LGWAN / 自治体ガイドライン）と Misogi 機能の対照表作成 | 合規性マッピング表 | SIer コンプライアンス担当 |
 
-## インストール
+> **PoC 期間の目安**: 2〜4 週間（環境依存）
+> **推奨テストケース**: [導入チェックリスト Part 3 B.5 検収テスト](docs/ja/compliance/デジタル庁標準ガイドライン準拠対照表.md) を参照
 
-### リポジトリのクローン
+### Phase 1: 概念設計
 
-```bash
-git clone https://github.com/balovess/Misogi.git
-cd Misogi
+| 項目 | 内容 | 成果物 | 担当 |
+|------|------|--------|------|
+| システム設計 | Sender/Receiver の配置・ネットワーク分離方式（Push/Pull/BlindSend）の決定 | 基本設計書 | SIer アーキテクト |
+| セキュリティ設計 | CDR ポリシー・PII アクション・認証方式（AD/LDAP/OIDC）・承認フロー階層の定義 | セキュリティ設計書 | SIer セキュリティSE |
+| 運用設計 | 監査ログ保存方針・バックアップ戦略・監視アラート・障害対応フローの策定 | 運用設計書 | SIer 運用SE |
+| 移行計画 | 現行システムからの切替スケジュール・ロールバック計画・教育研修計画 | 移行計画書 | SIer PM |
+
+**設計時の重要判断ポイント**:
+
+- **ネットワーク分離モデル**: 三層分離（αモデル）→ クラウド統合（βモデル）→ Zero Trust（最終目標）のどの段階から開始するか
+- **CDR ポリシー**: 全ファイル強制 CDR か、拡張子ベースの条件付きか
+- **PII アクション**: 導入初期は `alert_only` → 安定後に `mask` → 高セキュリティ環境で `block` へ段階的移行
+- **認証 IdP**: 既存 AD/LDAP を活用するか、新規 OIDC (Keycloak/Azure AD) を導入するか
+
+### Phase 2: 開発・検証
+
+| 項目 | 内容 | 成果物 | 担当 |
+|------|------|--------|------|
+| 環境構築 | 本番相当環境（Staging）へのデプロイ・TLS 証明書発行・AD/LDAP 接続確立 | 環境構築完了報告 | SIer インフラSE |
+| カスタマイズ | 組織固有 PII ルール追加・承認フロー調整・監査ログフォーマット調整 | カスタマイズ仕様書 | SIer 開発者 |
+| 結合テスト | エンドツーエンドのファイル転送→CDR→PII 検出→承認→受信までの一連フロー検証 | 結合テスト報告書 | SIer QA |
+| セキュリティ診断 | ペネトレーションテスト・脆弱性スキャン・コードレビュー | セキュリティ診断报告書 | 第三者診断機関 or SIer セキュリティチーム |
+| パフォーマンステスト | 大容量ファイル転送（100MB+）・並列転送（同時5ファイル）・長時間稼働安定性テスト | 性能測定報告書 | SIer パフォーマンスチーム |
+
+### Phase 3: 本番移行
+
+| 項目 | 内容 | 成果物 | 担当 |
+|------|------|--------|------|
+| 本番デプロイ | 本番環境へのインストール・設定適用・サービス登録 | 本番デプロイ完了報告 | SIer インフラSE |
+| データ移行 | （必要な場合）現行システムからの履歴データ・設定の移行 | データ移行完了報告 | SIer 運用SE |
+| ユーザー教育 | エンドユーザー向け操作研修・管理者向け運用研修 | 教育実施報告書 | SIer トレーナー |
+| 並行稼働 | 現行システムと Misogi の並行運用・差異分析・問題修正 | 並行稼働レポート | SIer SE + 顧客SE |
+| 本番切替 | 本番稼働開始・切替後のヘルスチェック・初期トラブル対応 | 本番切替完了報告（検収署名付き）| SIer PM + 顧客代表 |
+
+### Phase 4: 運用開始
+
+| 項目 | 内容 | 頻度 | 担当 |
+|------|------|------|------|
+| 日次運用 | ヘルスチェック・エラーログ確認・ディスク容量監視 | 毎日 | 顧客運用担当 |
+| 週次レビュー | 転送件数統計・PII 検出傾向分析・誤検出レビュー | 毎週 | 顧客セキュリティ担当 |
+| 月次報告 | 運用サマリー・SLA 達成率・改善提案 | 毎月 | SIer + 顧客 |
+| 四半期レビュー | コンプライアンス見直し・セキュリティパッチ適用・キャパシティプランニング | 3ヶ月毎 | SIer + 顧客 + 監査 |
+| 年次監査 | 監査証跡の第三者レビュー・合規性再評価・契約更新 | 年1回 | 第三者監査人 |
+
+> **関連ドキュメント**: [日常運用手順書](docs/ja/operation/daily-operation.md) | [Windows タスクスケジューラ設定](docs/ja/operation/task-scheduler.md) | [トラブルシューティング FAQ](docs/ja/operation/troubleshooting.md)
+
+---
+
+## 3. 競品比較：Misogi vs FileZen vs VOTIRO
+
+日本市場における主要な CDR セキュアファイル転送ソリューションとの機能比較です。官公庁・金融機関の入札評価基準としてご利用ください。
+
+### 3.1 機能比較マトリックス
+
+| 機能 | **Misogi (禊ぎ)** | **FileZen** | **VOTIRO** |
+|------|-------------------|-------------|------------|
+| 一太郎 (.jtd) サポート | ✅ 完全対応 | ❌ 非対応 | ❌ 非対応 |
+| マイナンバー検出 | ✅ 内蔵PIIエンジン | △ オプション | △ オプション |
+| 和暦日付処理 | ✅ CalendarProvider | ❌ 非対応 | ❌ 非対応 |
+| Shift-JIS エンコーディング | ✅ 自動検出・変換 | △ 制限あり | △ 制限あり |
+| EUC-JP / ISO-2022-JP | ✅ 自動検出 | ❌ 非対応 | ❌ 非対応 |
+| PDF True CDR | ✅ PdfStreamParser | ✅ 対応 | ✅ 対応 |
+| OOXML (Excel/Word/PPT) | ✅ OoxmlStreamParser | ✅ 対応 | ✅ 対応 |
+| ZIP 無害化 | ✅ ZipSanitizer | ✅ 対応 | ✅ 対応 |
+| SVG 無害化 | ✅ SvgSanitizer | ❌ 非対応 | △ 制限あり |
+| LDAP/AD 連携 | ✅ LdapAuthProvider | ✅ 対応 | ✅ 対応 |
+| 承認フロー (Approval) | ✅ StateMachine + ApprovalTrigger | △ 限定 | ✅ 対応 |
+| ベンダー権限分離 | ✅ VendorIsolationManager | ❌ 非対応 | ❌ 非対応 |
+| 監査ログ (JSON/Syslog/CEF) | ✅ LogEngine + MultiFormatter | ✅ 対応 | ✅ 対応 |
+| 転送モード多様化 | ✅ Pull/BlindSend/Local | △ Pushのみ | ✅ 対応 |
+| 外部ストレージ連携 | ✅ StorageBackend Trait | △ 限定 | △ 限定 |
+| WASM ブラウザ内 CDR | ✅ **misogi-wasm（独占）** | ❌ 非対応 | ❌ 非対応 |
+| クラウドネイティブ (K8s) | ✅ Helm Chart | ❌ アプライアンス | △ 限定 |
+| ライセンス形態 | Apache 2.0 (オープンソース) | プロプライエタリ | プロプライエタリ |
+| プログラミング言語 | Rust (メモリ安全) | Java/C# | C#/.NET |
+| 日本語ドキュメント | ✅ 13 部完備 | △ 英語主 | △ 英語主 |
+
+> **注**: 一太郎（.jtd）形式のサポートは、日本の官公庁・地方自治体での導入において
+> **極めて重要な差別化要因**となります。日本独自の文書フォーマットである .jtd ファイルは、
+> 多くの政府機関で標準的に使用されており、このサポートなしでは実運用が困難です。
+
+### 3.2 デジタル庁ガイドライン準拠状況比較
+
+| DS-100 (Normative) 要件 | **Misogi** | **VOTIRO** | **FileZen** |
+|---------------------|-----------|-----------|-----------|
+| ログ記録・監査証跡 | ✅ 完全対応 | ✅ | ✅ |
+| アクセス管理（職務分離） | ✅ 完全対応 | △ | △ |
+| 通信経路の暗号化 | ✅ TLS 1.2+ | ✅ | ✅ |
+| 設定管理 | ✅ TOML + CLI | GUI | GUI |
+| 日本語ドキュメント | ✅ 13 部完備 | △ 部分的 | △ 部分的 |
+| 一太郎 (.jtd) 対応 | ✅ **独占** | ❌ | ❌ |
+| 和暦処理 | ✅ **独占** | ❌ | ❌ |
+| ベンダー権限隔離 | ✅ **独占** | ❌ | ❌ |
+| オープンソース | ✅ Apache 2.0 | ❌ 商用 | ❌ 商用 |
+| **ZTA (デジタル庁 2024.5)** | **✅ 8/8 要件中 7 完全対応** | **△ CDR のみ（認証/WASM/クラウド非対応）** | **△ ファイル転送のみ（CDR 外製）** |
+
+---
+
+## 4. Zero Trust Architecture（ゼロトラスト）対応
+
+### 4.1 デジタル庁 2024年5月方針
+
+デジタル庁は 2024年5月に **「三層分離の廃止とゼロトラスト（ZTA: Zero Trust Architecture）への段階的移行」** 方針を発表しました。従来の「インターネット・DMZ・業務ネットワーク」の三層分離モデルから脱却し、**2030年頃の完全移行**を目標に、ガバメントクラウド（G-Cloud）との並行活用を進める方針です。
+
+> 参照: [デジタル庁ガバメントクラウド](https://www.digital.go.jp/policies/gov_cloud)
+
+ZTA の核心原則は **「信頼しない（Never Trust, Always Verify）」** — ネットワーク位置に基づくアクセス制御を廻し、すべてのアクセス要求についてアイデンティティ・デバイス・コンテキストに基づいた動的な検証を行います。ファイル転送システムにおいては、「ネットワーク境界での無害化」から **「エンドポイント単位の個別検証」** へのパラダイムシフトが求められます。
+
+### 4.2 ZTA 対応機能マトリックス
+
+| # | ZTA 要件（デジタル庁方針） | 分類 | Misogi の実装方式 | 対応モジュール | 状態 |
+|---|------------------------|------|-----------------|-------------|------|
+| **ZT-1** | **ファイルレベルの無害化**（ネットワーク境界に依存しないファイル単位セキュリティ）| **必須** | True CDR エンジン: PDF/OOXML/ZIP/SVG/JTD の各形式についてストリーム解析 → 脅威除去 → ゼロコピー再構築。サーバー側処理および WASM クライアント側処理の両モード対応 | `misogi-cdr` (全サニタイザ) + `misogi-wasm` | ✅ 完全対応 |
+| **ZT-2** | **エッジ / クライアント側処理**（可能な限りサーバーにファイルを送信せずに処理）| **強く推奨** | `misogi-wasm` (wasm32-unknown-unknown) によるブラウザ内 CDR 処理。PDF/Office ファイルをクライアントサイドで完全に浄化。サーバーへのファイル転送不要 | `misogi-wasm` | ✅ **独占的対応** |
+| **ZT-3** | **アイデンティティベースアクセス制御**（ユーザー・端末・コンテキストによる動的認可）| **必須** | RS256 JWT + LDAP/AD + OIDC(Keycloak/Azure AD) + SAML 2.0 + RBAC（9権限アクション）。gRPC Interceptor + Axum Extractor で統一認証 | `misogi-auth` (全プロバイダー) | ✅ 完全対応 |
+| **ZT-4** | **クラウドネイティブ対応**（ガバメントクラウド / パブリッククラウド上での稼働）| **必須** | Kubernetes Helm Chart デプロイ。HPA による自動スケール。gRPC-Web によるブラウザ→K8s 直接通信。OIDC でクラウド IdP 連携 | Helm Chart + `misogi-rest-api` | ✅ 完全対応 |
+| **ZT-5** | **最小権限の原則**（Least Privilege: 必要最小限の権限のみ付与）| **必須** | RBAC 9 権限アクション（UPLOAD/DOWNLOAD/SCAN/APPROVE/ADMIN 等）。承認ワークフロー（StateMachine）。ベンダー権限隔離（VendorIsolationManager） | `misogi-auth::role` + `engine::StateMachine` + `contrib::jp::VendorIsolationManager` | ✅ 完全対応 |
+| **ZT-6** | **監査証跡の不変性**（改ざん不可能な操作ログ）| **必須** | JSON 構造化ログ + SHA-256 イベントハッシュ + Write-Only 追記ポリシー。PostgreSQL / S3 / NAS への長期保存（3〜7年） | `LogEngine` + `JsonLogFormatter` + `audit_log` | ✅ 完全対応 |
+| **ZT-7** | **デバイスプルーフ / 端末検証**（アクセス元端末の健全性確認）| 推奨 | TLS クライアント証明書 + API Key + JWT クレーム内 device_id バインディング。将来的な TCM (Trusted Computing Module) 連携用拡張ポイントあり | `misogi-auth::extractors` | △ 部分対応 |
+| **ZT-8** | **マイクロセグメンテーション**（水平方向の内部ネットワーク分離）| 推奨 | K8s NetworkPolicy (デフォルト Deny All)。Sender/Receiver/DB 間の通信をポリシーで制御。Namespace 単位の分離 | K8s manifests + `NetworkPolicy` | ✅ 対応 |
+
+**ZTA 達成率: 7/8 完全対応 + 1 部分対応 = 87.5%**
+
+### 4.3 移行パスウェイ: 三層分離 → Zero Trust
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    ZTA 移行パスウェイ                                 │
+│                  （デジタル庁 2024.5 方針対応）                        │
+└─────────────────────────────────────────────────────────────────────┘
+
+  Phase 1: αモデル（現行三層分離）          Phase 2: β/β'モデル（クラウド統合）
+  ─────────────────────────              ──────────────────────────
+  ┌──────────┐    ┌──────────┐            ┌──────────┐    ┌──────────────┐
+  │ Internet │    │  DMZ     │            │ Internet │    │ G-Cloud      │
+  │          │    │          │            │          │    │ (Gov Cloud)  │
+  └────┬─────┘    └────┬─────┘            └────┬─────┘    └──────┬───────┘
+       │               │                        │                 │
+       ▼               ▼                        ▼                 ▼
+  ┌──────────┐    ┌──────────┐           ┌──────────┐       ┌──────────────┐
+  │  Sender  │◄──►│  CDR GW  │           │  Sender  │◄─────►│  Receiver    │
+  │(External)│    │(Gateway) │           │(On-Prem) │  gRPC │ (G-Cloud)    │
+  └──────────┘    └────┬─────┘           └──────────┘  TLS   └──────┬───────┘
+                       │                                          │
+                       ▼                                          ▼
+                ┌──────────┐                               ┌──────────────┐
+                │ Receiver │                               │ Intranet     │
+                │(Internal)│                               │ (Business)   │
+                └──────────┘                               └──────────────┘
+
+  Mode: BlindSend / StorageRelay         Mode: gRPC over TLS + OIDC
+  各セグメントに専用端末配置               ハイブリッド: On-Prem ↔ Cloud
+
+
+  Phase 3: Zero Trust（2030年目標）
+  ─────────────────────────────
+  ┌──────────────────────────────────────────────────────────────┐
+  │                   Single Network + Per-File Verification     │
+  │                                                              │
+  │   Browser ──► WASM CDR ──► Clean File ──► gRPC-Web ──► K8s  │
+  │              (Edge)        (Verified)      + OIDC/MFA        │
+  │                                                              │
+  │   Key Technologies:                                           │
+  │   • misogi-wasm: Browser-side sanitization (<200ms)          │
+  │   • Policy-as-Code: Dynamic authorization per request        │
+  │   • MFA + Device Posture: Continuous verification            │
+  └──────────────────────────────────────────────────────────────┘
+
+  Mode: WASM Edge CDR + Cloud Native + Policy-as-Code
 ```
 
-### プロジェクトのビルド
+| 移行フェーズ | デジタル庁想定 | Misogi サポート内容 | 対応モード |
+|------------|--------------|-------------------|----------|
+| **Phase 1: αモデル**（現行三層分離）| 各セグメントに専用端末 | BlindSend / StorageRelay ドライバーで物理分離環境でのファイル転送 + CDR | Sender/Receiver 各セグメント配置 |
+| **Phase 2: β/β'モデル**（クラウド統合）| 一部システムをクラウドへ移行 | ハイブリッド構成: Sender(オンプレ) ↔ Receiver(G-Cloud)。OIDC 統一認証 | gRPC over TLS + StorageRelay |
+| **Phase 3: Zero Trust**（2030年目標）| 単一ネットワーク + 個別検証 | **WASM Edge CDR**（ブラウザ内完結）+ gRPC-Web + OIDC/MFA + Policy-as-Code | クラウドネイティブ or WASM エッジ |
 
-```bash
-cargo build --release
+### 4.4 WASM Edge CDR — ZTA のキラーアプリケーション
+
+Misogi の WASM (WebAssembly) Edge CDR は、ZTA 移行の中核となる技術です。従来のサーバー側 CDR とは根本的に異なるアプローチを提供します。
+
+| 比較項目 | 従来型サーバー側 CDR | **Misogi WASM Edge CDR** |
+|---------|-------------------|------------------------|
+| 処理場所 | サーバー（DMZ / CDR ゲートウェイ）| **クライアント（ブラウザ内）** |
+| ファイル転送 | ファイルを一旦サーバーへ送信 | **ファイルはクライアントから出ない** |
+| ZTA 適合性 | △ ネットワーク境界依存 | ✅ **「データを信頼境界に入れない」を実現** |
+| レイテンシ | ネットワーク遅延 + サーバー処理時間 | **< 200ms（ローカル処理）** |
+| サーバー依存 | サーバーダウン時はサービス停止 | **オフラインでも動作可能** |
+| スケーラビリティ | サーバー負荷に依存 | **クライアントサイドで分散処理** |
+| 競合対応 | VOTIRO / FileZen ともにサーバー側のみ | **⭐ 競合製品全て非対応（独占的機能）** |
+
+**技術仕様**:
+- ターゲット: `wasm32-unknown-unknown`
+- 対応形式: PDF (`sanitize_pdf`)、Office (`sanitize_office`)、PII スキャン (`scan_pii`)、ファイルタイプ検出 (`detect_file_type`)
+- 依存関係: ゼロ（ブラウザネイティブ実行）
+
+---
+
+## 5. デプロイメントオプション（日本特化）
+
+日本の官公庁・金融機関における代表的なネットワーク環境に対応したデプロイメントパターンです。
+
+| デプロイメントパターン | 対象環境 | ネットワーク構成 | 推奨転送モード | 主な特徴 |
+|------------------|---------|---------------|-------------|---------|
+| **LGWAN（地方政府網）** | 都道府県・市区町村 | LGWAN 内閉域網 + インターネット分離 | **BlindSend** / StorageRelay | 物理的分離（Data Diode）対応。片方向光ゲートウェイ経由での転送 |
+| **G-Cloud（ガバメントクラウド）** | 国の機関・独立行政法人 | G-Cloud (さくらのクラウド) 上へ移行 | **gRPC over TLS** + Pull | OIDC 統一認証。Kubernetes Helm Chart で自動スケール |
+| **ZTA クラウドネイティブ** | 先進的導入機関 | 単一クラウドネットワーク + 個別検証 | **WASM Edge** + gRPC-Web | ブラウザ内 CDR + Policy-as-Code。Phase 3 目標アーキテクチャ |
+| **オンプレミス（従来）** | 金融機関・民間企業 | インターネット ⇔ DMZ ⇔ Intranet 三層分離 | Push / Pull | AD/LDAP 連携。既存ファイアウォール/VLAN 活用 |
+| **ハイブリッド（移行期）** | 移行中の機関 | オンプレ Sender ↔ G-Cloud Receiver | **StorageRelay** + gRPC TLS | Phase 1 → Phase 2 の中間形態。段階的移行を支援 |
+
+**各パターンの詳細設定**:
+
+| 項目 | LGWAN | G-Cloud | ZTA | オンプレ |
+|------|-------|---------|-----|---------|
+| OS | Windows Server 2019/2022 | RHEL 9 / Ubuntu 24.04 LTS | Container (K8s) | Windows Server / RHEL |
+| 認証 | LDAP/AD | OIDC (Azure AD / Keycloak) | OIDC + MFA | LDAP/AD |
+| ログ保存 | ローカル NAS (3-7年) | S3 互換 / Azure Blob | Cloud Native (ELK Stack) | ローカル / SIEM 連携 |
+| 高可用性 | Active-Standby | HPA 自動スケール | Multi-AZ / Multi-Region | Cluster / HA 構成 |
+| 対応ドキュメント | [Windows Server 2022 インストールガイド](docs/ja/installation/windows-server-2022.md) | Helm Chart (`helm/`) | WASM ドキュメント（準備中）| [前提条件チェックリスト](docs/ja/installation/prerequisites.md) |
+
+---
+
+## 6. セキュリティチェックリスト
+
+本番稼働前に確認すべきセキュリティ項目を、ISMAP（情報セキュリティマネジメントシステム評価制度）、LGWAN、ZTA の各観点から整理します。
+
+### ISMAP / 一般セキュリティ
+
+| # | チェック項目 | 確認方法 | 対応ドキュメント |
+|---|------------|---------|---------------|
+| S-1 | OS は最新のセキュリティ更新プログラムが適用されている | Windows Update / `yum update` | [前提条件チェックリスト B1-2](docs/ja/compliance/デジタル庁標準ガイドライン準拠対照表.md) |
+| S-2 | CDR エンジンが有効になっている | `[cdr].enabled = true` 確認 | [基本設定ガイド](docs/ja/configuration/basic-config.md) |
+| S-3 | PII 検出エンジンが有効になっている | `[pii].enabled = true` 確認 | [PII 検出設定](docs/ja/security/pii-detection.md) |
+| S-4 | PII アクションが組織のポリシーに合致している | `[pii].action_on_detect` 確認 | [PII 検出設定 §2](docs/ja/security/pii-detection.md) |
+| S-5 | 監査ログが有効になり、書き込み権限がある | `[audit_log].enabled = true` + `icacls` | [監査ログフィールドガイド](docs/ja/security/audit-log-guide.md) |
+| S-6 | TLS 証明書が有効期限内である | 証明書有効期限確認 | [基本設定ガイド](docs/ja/configuration/basic-config.md) |
+| S-7 | ファイアウォールルールが全て有効 | `Get-NetFirewallRule` 確認 | [前提条件 B1-9](docs/ja/compliance/デジタル庁標準ガイドライン準拠対照表.md) |
+| S-8 | アンチウイルスの除外設定が行われている | `Get-MpPreference -ExclusionPath` | [セキュリティ設定 B3-10](docs/ja/compliance/デジタル庁標準ガイドライン準拠対照表.md) |
+| S-9 | 専用サービスアカウントで稼働している | `Get-LocalUser` 確認 | [前提条件 B1-11](docs/ja/compliance/デジタル庁標準ガイドライン準拠対照表.md) |
+| S-10 | 不必要なポートが閉じている | ポートスキャン確認 | [前提条件 B1-9](docs/ja/compliance/デジタル庁標準ガイドライン準拠対照表.md) |
+
+### LGWAN 特有
+
+| # | チェック項目 | 確認方法 |
+|---|------------|---------|
+| L-1 | 物理分離（Data Diode / 光ゲートウェイ）が正しく構成されている | 双方向通信不可を確認 |
+| L-2 | BlindSend モードで正しく動作する | 送信のみ、受信不可を確認 |
+| L-3 | ストレージリレー経路が確保されている | 共有ストレージのアクセス権限確認 |
+| L-4 | LGWAN セキュリティポリシーに違反する通信がない | ファイアウォールログ監視 |
+
+### ZTA 特有
+
+| # | チェック項目 | ZT 要件 | 確認方法 |
+|---|------------|---------|---------|
+| Z-1 | WASM Edge CDR が有効（Phase 3 目標）| ZT-2 | ブラウザ DevTools で wasm モジュールロード確認 |
+| Z-2 | OIDC / SAML IdP 連携が確立されている | ZT-3 | トークン発行・検証フロー確認 |
+| Z-3 | RBAC 9 権限アクションが正しく割り当てられている | ZT-5 | 各ロールの権限テスト |
+| Z-4 | 監査ログに SHA-256 ハッシュが付与されている | ZT-6 | ログイベントの hash フィールド確認 |
+| Z-5 | K8s NetworkPolicy が Deny All ベースで設定されている | ZT-8 | `kubectl get networkpolicy` 確認 |
+| Z-6 | MFA（多要素認証）が有効（推奨）| ZT-3 拡張 | IdP 側 MFA 設定確認 |
+
+> **完全版チェックリスト**: [導入チェックリスト Part 3](docs/ja/compliance/デジタル庁標準ガイドライン準拠対照表.md) を参照（B.1 事前準備〜B.5 検収テスト、全 38 項目）
+
+---
+
+## 7. 日本語特化機能詳細
+
+### 7.1 PII 検出エンジン（マイナンバー法準拠）
+
+Misogi の PII（Personally Identifiable Information）検出エンジンは、日本の **マイナンバー法（行政手続における特定の個人を識別するための番号の利用等に関する法律）** 第28条および **個人情報保護法（APPI）** 第22条に準拠して設計されています。
+
+#### サポートする PII タイプ（デフォルトルール）
+
+| ルール名 | 正規表現パターン | 検出対象 | デフォルトアクション | 法規制対応 |
+|---------|----------------|---------|-------------------|----------|
+| `my_number` | `\b\d{12}\b` | マイナンバー（12桁） | **Mask** | 📋 マイナンバー法 |
+| `email` | RFC 5322 簡易パターン | メールアドレス | AlertOnly | 📋 APPI |
+| `ip_address_v4` | IPv4 dotted-decimal | IP アドレス | AlertOnly | — |
+| `credit_card` | `\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b` | クレジットカード番号 | **Mask** | 📋 PCI-DSS v4.0 |
+| `phone_jp` | 日本国内電話番号パターン | 電話番号 | AlertOnly | 📋 APPI |
+| `postal_code_jp` | `\b\d{3}-\d{4}\b` | 郵便番号 | AlertOnly | 📋 APPI |
+| `drivers_license` | `\b\d{10,12}\b` | 運転免許証番号 | **Mask** | 📋 道路交通法 |
+
+#### アクションの種類
+
+| アクション | 挙動 | 使用すべき場面 |
+|----------|------|--------------|
+| `"block"` | ファイル転送を**完全拒否** | 機密性が最優先される環境 |
+| `"mask"` | 検出箇所を**マスキング**して転送 | **バランス重視（推奨）** |
+| `"alert_only"` | **ログ記録のみ**で転送継続 | 運用開始初期 / 監査目的 |
+
+#### Mask 処理の仕組み
+
+```
+原文:  "マイナンバーは123456789012です"
+               └──────┘
+               検出!
+                    ↓
+マスク: "マイナンバーは1**********2です"
+
+ルール:
+・3 文字以上の場合: 先頭 1 文字 + 中間マスク + 末尾 1 文字を保持
+・2 文字以下: 全てマスク文字に置換
 ```
 
-### バイナリの個別ビルド
+| ルール | 原文 | マスク結果 |
+|-------|------|-----------|
+| my_number | `123456789012` | `1**********2` |
+| credit_card | `4111 1111 1111 1111` | `4XXXXXXXXXXXXXXXXX1` |
+| drivers_license | `A123456789012` | `A###########0` |
 
-```bash
-# 送信者のビルド
-cargo build --release --bin misogi-sender
+#### マイナンバー誤検出対策
 
-# 受信者のビルド
-cargo build --release --bin misogi-receiver
-```
+12 桁の数字列はマイナンバー以外にも存在し得るため、誤検出（False Positive）に注意が必要です。
 
-## 使用方法
+| 誤検出パターン | 例 | 推奨対策 |
+|--------------|-----|---------|
+| 伝票番号 | `伝票No. 20240115001` | 導入初期は `alert_only` で様子見 |
+| 口座番号（一部銀行）| `口座: 123456789012` | 誤検出率が < 1% になったら `mask` へ切り替え |
+| 製品シリアル番号 | `SN: 987654321098` | 重要文書のみ `block` を適用 |
 
-### 送信ノード
+#### セキュリティレベル別推奨設定
 
-#### サーバーモード
+- **レベル 1: 監視のみ（導入初期）** → `action_on_detect = "alert_only"`
+- **レベル 2: マスキング（通常運用）** → `action_on_detect = "mask"`
+- **レベル 3: ブロック（高セキュリティ）** → `action_on_detect = "block"`
 
-```bash
-misogi-sender server --config config.toml
-```
+> **詳細設定**: [PII 検出設定ガイド](docs/ja/security/pii-detection.md) を参照
 
-#### デーモンモード
+### 7.2 JTD（一太郎）サポート
 
-```bash
-misogi-sender daemon --config config.toml
-```
+JustSystems 一太郎（.jtd）は、日本の官公庁・地方自治体・教育機関で広く使用されているワープロソフトの独自文書形式です。Misogi は業界で **唯一** .jtd 形式に対応する CDR ソリューションです。
 
-#### コマンドラインオプション
-
-```bash
-misogi-sender --help
-```
-
-### 受信ノード
-
-#### サーバーモード
-
-```bash
-misogi-receiver server --config config.toml
-```
-
-#### デーモンモード
-
-```bash
-misogi-receiver daemon --config config.toml
-```
-
-#### コマンドラインオプション
-
-```bash
-misogi-receiver --help
-```
-
-## 設定
-
-以下の構造で `config.toml` ファイルを作成します：
-
-### 送信者設定
-
-```toml
-[server]
-addr = "127.0.0.1:3000"
-storage_dir = "./storage"
-chunk_size = 1048576  # 1MB
-log_level = "info"
-
-[receiver]
-addr = "127.0.0.1:50051"  # オプション：gRPC 受信者アドレス
-```
-
-### 受信者設定
-
-```toml
-[server]
-addr = "127.0.0.1:3001"
-download_dir = "./downloads"
-storage_dir = "./storage"
-tunnel_port = 50051
-log_level = "info"
-```
-
-## プロジェクト構造
+#### 処理フロー
 
 ```
-Misogi/
-├── Cargo.toml              # ワークスペース設定
-├── Cargo.lock              # 依存関係ロックファイル
-├── crates/
-│   ├── misogi-core/        # コアライブラリ
-│   │   ├── Cargo.toml
-│   │   ├── build.rs
-│   │   ├── proto/          # Protobuf 定義
-│   │   └── src/
-│   │       ├── lib.rs
-│   │       ├── protocol.rs
-│   │       ├── hash.rs
-│   │       ├── error.rs
-│   │       └── types.rs
-│   ├── misogi-sender/      # 送信者アプリケーション
-│   │   ├── Cargo.toml
-│   │   └── src/
-│   │       ├── main.rs
-│   │       ├── cli.rs
-│   │       ├── config.rs
-│   │       ├── state.rs
-│   │       ├── upload_engine.rs
-│   │       ├── http_routes.rs
-│   │       ├── grpc_service.rs
-│   │       └── tunnel_task.rs
-│   └── misogi-receiver/    # 受信者アプリケーション
-│       ├── Cargo.toml
-│       └── src/
-│           ├── main.rs
-│           ├── cli.rs
-│           ├── config.rs
-│           ├── state.rs
-│           ├── storage.rs
-│           ├── http_routes.rs
-│           ├── grpc_service.rs
-│           └── tunnel_handler.rs
+入力: report.jtd (一太郎文書)
+    │
+    ▼ JtdConverter trait
+┌─────────────────────────────┐
+│  変換エンジン（二モード対応）    │
+│                              │
+│  Mode A: LibreOffice Headless │
+│    soffice --headless --convert-to pdf │
+│                              │
+│  Mode B: 一太郎ビューア API     │
+│    JustViewer COM Interface   │
+└──────────────┬──────────────┘
+               │
+               ▼
+        出力: report.pdf
+               │
+               ▼ 既存 CDR パイプライン
+        PdfStreamParser → 無害化 → 再構築
+               │
+               ▼
+        安全な PDF → 転送
 ```
 
-## 開発
+#### 必要ソフトウェア
 
-### テストの実行
+| ソフトウェア | 用途 | Mode A | Mode B |
+|------------|------|--------|--------|
+| LibreOffice | JTD → PDF 変換 | ✅ 必須 | 任意 |
+| .NET Runtime | 一太郎ビューア使用時 | 任意 | ✅ 必須 |
+| 一太郎ビューア | COM API 経由の変換 | 任意 | ✅ 必須 |
 
-```bash
-cargo test
+> **設定**: [JTD コンバーター設定](docs/ja/configuration/jtd-converter.md) を参照
+
+### 7.3 PPAP 排除ワークフロー
+
+PPAP（Password Protected Attachment Pattern：パスワード付き添付メール）は、日本のビジネス慣習として長く使われてきましたが、2022年に経済産業省が **PPAP の廃止** を強く推奨しており、多くの官公庁・企業で PPAP 禁止の方針が採用されています。
+
+Misogi は PPAP に関連する以下のセキュリティ機能を提供します：
+
+| 機能 | 説明 | 対応モジュール |
+|------|------|-------------|
+| **パスワード保護ファイル検出** | ZIP パスワード付き / Office 暗号化ファイルを検出し警告 | `ZipSanitizer` / `OoxmlStreamParser` |
+| **パスワード付きファイルポリシー** | Block（拒否）/ AlertOnly（警告して通過）から選択可能 | `[cdr].password_protected_policy` |
+| **代替安全転送支援** | PPAP に代わる安全なファイル転送（CDR + 暗号化転送）を促進 | 全体的な CDR パイプライン |
+
+> **参考**: 経済産業省「[PPAB（Password Protected Attachment Ban）推進サイト](https://www.meti.go.jp/policy/netsecurity/ppap/)」
+
+### 7.4 その他日本語特化機能
+
+#### 和暦日付処理
+
+`JapaneseCalendarProvider` による和暦↔西暦双方向変換。元号データベースに大正・昭和・平成・令和を内蔵し、祝日カレンダーのインポートにも対応します。
+
+- 対応元号: 令和（R）・平成（H）・昭和（S）・大正（T）・明治（M）
+- 自動認識例: `R08_年度報告.jtd` → `2026_年度報告.jtd`
+- ⭐ **競合製品は非対応**
+
+#### Shift-JIS / EUC-JP / ISO-2022-JP エンコーディング対応
+
+`JapaneseEncodingHandler` による多層エンコーディング自動検出アルゴリズム：
+
+```
+検出優先順位（信頼度が高い順）:
+
+1. BOM (Byte Order Mark) 検出 → 信頼度 1.0（確定）
+2. ISO-2022-JP エスケープ配列検出 → 95% 信頼
+3. UTF-8 有効性チェック → 90% 信頼
+4. Shift-JIS vs EUC-JP バイト周波数解析 → 60-90% 信頼
+5. フォールバック → 設定された fallback_encoding
 ```
 
-### ドキュメントのビルド
+| エンコーディング | IANA 名 | 典型的な出典 | 自動検出信頼度 |
+|---------------|---------|-----------|-------------|
+| UTF-8 | `UTF-8` | 現代 Web/API システム | ⭐⭐⭐ 最高 |
+| Shift-JIS (CP932) | `Shift_JIS` | Windows レガシーアプリ | ⭐⭐ 高 |
+| Windows-31J | `Windows-31J` | Microsoft 固有 SJIS | ⭐⭐ 高 |
+| EUC-JP | `EUC-JP` | Unix/Linux レガシー | ⭐⭐ 中 |
+| ISO-2022-JP (JIS) | `ISO-2022-JP` | メール (JIS コード) | ⭐⭐⭐ 高 |
 
-```bash
-cargo doc --open
-```
+#### VendorIsolationManager（委託業者権限分離）
 
-### コードのフォーマット
+総務省「地方公共団体における情報システムの委託に係るガイドライン」第4章（アクセス制限）に対応する、委託業者（ベンダー）別のアクセス制御機能です。2024-2025 年の日本委託業者ランサム攻撃対策として特に重要です。
 
-```bash
-cargo fmt
-```
+| 機能 | 説明 |
+|------|------|
+| IP ホワイトリスト | 業者ごとに接続元 IP を制限 |
+| 強制 CDR ポリシー | 業者がアップロードする全ファイルに CDR を強制適用 |
+| 二重承認要求 | 業者の操作には自組織承認者の二次承認を必須化 |
+| アップロード頻度制限 | 業者ごとのアップロード回数・サイズを制限 |
 
-### リンティング
+> ⭐ **競合製品（VOTIRO / FileZen）は非対応**
 
-```bash
-cargo clippy
-```
+---
 
-## 技術的詳細
+## 8. 合規性対応サマリー
 
-### プロトコル
+Misogi の各種規格・ガイドライン・法令に対する適合状況の概要です。詳細な対照表は以下のドキュメントを参照してください。
 
-Misogi は Protocol Buffers（Protobuf）を使用して gRPC サービスを定義しています：
+| カテゴリ | 対応規格 | 総要求数 | ✅ 完全対応 | △ 部分対応 | 達成率 |
+|---------|----------|---------|------------|-----------|--------|
+| ファイル無害化 (CDR) | DS-200 / DS-120 / 総務省セキュリティポリシー | 6 | 6 | 0 | **100%** |
+| 監査証跡 | DS-100 (Normative) / DS-200 | 4 | 4 | 0 | **100%** |
+| アクセス管理・承認 | DS-100 (Normative) / DS-200 / 委託ガイドライン | 4 | 4 | 0 | **100%** |
+| 個人情報保護 | マイナンバー法 / APPI / DS-200 | 5 | 5 | 0 | **100%** |
+| 日本語特化機能 | 総務省セキュリティポリシー / DS-120 | 3 | 3 | 0 | **100%** |
+| 通信・インフラ | DS-100 (Normative) / DS-120 / DS-200 | 4 | 4 | 0 | **100%** |
+| **Zero Trust Architecture** | **デジタル庁 ZTA 方針 (2024.5)** | **8** | **7** | **1** | **87.5%** |
+| **合計** | **DS-100 + DS-200 + 法律 + ZTA** | **34** | **33** | **1** | **97%** |
 
-- **FileTransfer**: ファイル転送操作のコアサービス
-- **ChunkStream**: チャンクファイルデータのためのストリーミングサービス
-- **Status Reporting**: リアルタイム転送ステータス更新
+> **「Normative」とある項目は DS-100 に定義される政府情報システムの整備及び管理に関する**法的拘束力を持つ順守ルール**です。
+>
+> **詳細**: [デジタル庁標準ガイドライン準拠対照表](docs/ja/compliance/デジタル庁標準ガイドライン準拠対照表.md) — 入札応募書類・コンプライアンス申告書としてそのままコピー＆ペースト可能な合規宣言テンプレート（Part 2 Appendix A）および導入チェックリスト（Part 3 Appendix B）を含む完全版対照表
 
-### エラーハンドリング
+### 総務省ガイドライン「11対策分野」対応
 
-`thiserror` を使用して包括的なエラーハンドリングを実装：
-- ネットワークエラー
-- ファイル I/O エラー
-- プロトコルエラー
-- 設定エラー
+総務省「地方公共団体における情報セキュリティポリシーガイドライン」（令和7年3月改定）第2章が定める **5つの基本方針** と **11の対策分野** に対する達成率: **9/11 = 82%**（物理的保安 #10・人的保安 #11 は CDR システムの Scope 外）
 
-### ロギング
+| 基本方針 | 対応内容 |
+|---------|---------|
+| ① 情報資産の保護 | CDR無害化 + PII検出 + データ分類 |
+| ② リスクへの対応 | 脅威除去(CDR) + Block/Mask/Alert |
+| ③ 法令等の遵守 | マイナンバー法/APPI準拠 |
+| ④ 組織的な取組 | 承認WF + 監査証跡 + ポリシー設定 |
+| ⑤ 継続的な改善 | CLI/TOML構成 + ログ分析 |
 
-`tracing` と `tracing-subscriber` による構造化 JSON ロギング：
-- 設定可能なログレベル（trace, debug, info, warn, error）
-- 環境変数ベースのフィルタリング
-- パース容易な JSON 出力
+---
 
-## コントリビュート
+## 9. ドキュメントインデックス
 
-コントリビューションを歓迎します！以下の手順に従ってください：
+日本語サブドキュメントの一覧です。各ドキュメントは特定の目的・役割に特化して作成されています。
 
-1. リポジトリをフォーク
-2. 機能ブランチを作成（`git checkout -b feature/amazing-feature`）
-3. 変更をコミット（`git commit -m 'Add some amazing feature'`）
-4. ブランチにプッシュ（`git push origin feature/amazing-feature`）
-5. プルリクエストをオープン
+### インストール関連
 
-### コードスタイル
+| ドキュメント | 説明 |
+|------------|------|
+| [前提条件チェックリスト](docs/ja/installation/prerequisites.md) | システム要件・ハードウェア要件・ソフトウェア依存関係・事前確認項目 |
+| [Windows Server 2022 インストールガイド](docs/ja/installation/windows-server-2022.md) | ステップバイステップの詳細インストール手順・スクリーンショット付き |
 
-- すべてのコードは Rust 2024 Edition でコンパイル可能であること
-- Rust コミュニティガイドラインに従うこと
-- 包括的なドキュメントコメントを追加すること
-- 送信前にすべてのテストに合格すること
+### 設定関連
 
-## ライセンス
+| ドキュメント | 説明 |
+|------------|------|
+| [基本設定ガイド](docs/ja/configuration/basic-config.md) | `misogi.toml` の完全フィールドリファレンス・各セクションの詳細説明 |
+| [JTD コンバーター設定](docs/ja/configuration/jtd-converter.md) | 一太郎変換の各種モード設定（LibreOffice / 一太郎ビューア）|
+| [Active Directory 連携ガイド](docs/ja/configuration/active-directory.md) | LDAP/AD 接続設定・組織単位(OU)例・グループベース認可設定 |
 
-このプロジェクトは Apache 2.0 ライセンスの下でライセンスされています - 詳細は [LICENSE](LICENSE) ファイルを参照してください。
-特許許諾については [PATENTS](PATENTS) も併せてご確認ください。
+### 運用関連
 
-## ⚠️ 免責事項 / Disclaimer
+| ドキュメント | 説明 |
+|------------|------|
+| [Windows タスクスケジューラ設定](docs/ja/operation/task-scheduler.md) | 定期実行タスクの登録手順・自動起動設定 |
+| [日常運用手順書](docs/ja/operation/daily-operation.md) | 日次チェックリスト・ヘルスチェック・バックアップ・ログ確認手順 |
+| [トラブルシューティング FAQ](docs/ja/operation/troubleshooting.md) | エラーコード一覧・Q&A 形式の解決策・既知の制限事項 |
 
-**JP**: 本ソフトウェアは**「現状のまま（As Is）」**提供され、明示・黙示を問わず
-いかなる保証も伴いません。作者は、データ漏洩、情報流出、業務中断、金銭的損失、
-設定ミスまたは未知の脆弱性（ゼロデイ攻撃を含む）によるセキュリティインシデント等、
-本ソフトウェアの使用によって生じたいかなる損害について**一切の責任を負いません。**
+### セキュリティ関連
+
+| ドキュメント | 説明 |
+|------------|------|
+| [監査ログフィールドガイド](docs/ja/security/audit-log-guide.md) | ログイベント解説・JSON/Syslog/CEF フォーマット説明・SIEM 連携方法 |
+| [PII 検出設定](docs/ja/security/pii-detection.md) | マイナンバー検出・カスタムルール作成・エンコーディング対応・誤検出対策 |
+
+### 合規性関連
+
+| ドキュメント | 説明 |
+|------------|------|
+| [デジタル庁標準ガイドライン準拠対照表](docs/ja/compliance/デジタル庁標準ガイドライン準拠対照表.md) | **政府調達用コンプライアンス証明資料**。DS-100/DS-200/ZTA 対応・合規宣言テンプレート・導入チェックリスト（38項目）・競品比較・参考文献 |
+
+### API / リファレンス
+
+| ドキュメント | 説明 |
+|------------|------|
+| [CLI コマンドリファレンス](docs/ja/api-reference/cli-reference.md) | 全コマンド・オプション・終了コード・使用例 |
+
+---
+
+## 免責事項 / Disclaimer
+
+本ソフトウェアは**「現状のまま（As Is）」**提供され、明示・黙示を問わずいかなる保証も伴いません。
+作者は、データ漏洩、情報流出、業務中断、金銭的損失、設定ミスまたは未知の脆弱性（ゼロデイ攻撃を含む）
+によるセキュリティインシデント等、本ソフトウェアの使用によって生じたいかなる損害について
+**一切の責任を負いません。**
+
 **本ソフトウェアが全ての悪意あるコンテンツを100%検出することを保証するものではありません。**
 政府機関、金融機関、重要インフラ等での本番稼働前に、
 **各自の責任において十分な内部セキュリティ審査とコンプライアンスレビューを実施してください。**
 
-**EN**: This software is provided **"AS IS"** without warranty of any kind.
-The authors assume **NO LIABILITY** for damages including data breaches,
-business interruption, or security incidents from unknown vulnerabilities.
-This software does NOT guarantee 100% threat detection.
-Conduct internal security review before production deployment.
-
-Copyright 2026 Misogi Contributors
-
-## 謝辞
-
-- [Tokio](https://tokio.rs/) - 非同期ランタイム
-- [Axum](https://github.com/tokio-rs/axum) - ウェブフレームワーク
-- [Tonic](https://github.com/hyperium/tonic) - gRPC ライブラリ
-- [Prost](https://github.com/tokio-rs/prost) - プロトコルバッファ
-
 ---
 
-**Misogi** - Rust の安全性とパフォーマンスでファイル転送を浄化します。
+Copyright 2026 Misogi Contributors. Licensed under the Apache License, Version 2.0.
+See the [LICENSE](LICENSE) file for details.
+See also [PATENTS](PATENTS) for patent grant information.

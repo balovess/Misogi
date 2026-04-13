@@ -24,7 +24,8 @@ use crate::log_engine::{JsonLogFormatter, SyslogCefFormatter};
 /// # Compliance Notes
 ///
 /// The `FileProcessed` event type is specifically designed for Japanese government
-/// audit requirements under LGWAN (Local Government Wide Area Network) regulations.
+/// audit requirements under **LGWAN (Local Government Wide Area Network) regulations**
+/// and **Digital Agency Zero Trust Architecture (ZTA) migration** (2024.5 policy directive).
 /// It captures the complete sanitization chain of custody including:
 /// - Policy application details (which CDR rules were applied)
 /// - Sanitization outcome (SUCCESS/FAILED/PARTIAL)
@@ -52,7 +53,7 @@ pub enum AuditEventType {
     /// |-------------------|-------------------------------------|
     /// | Act on Protection of PMI | `contains_personal_info`     |
     /// | JIS Q 27001       | `policy_applied`, `sanitize_status`  |
-    /// | LGWAN Guidelines  | All FILE_PROCESSED fields            |
+    /// | LGWAN / ZTA Guidelines | All FILE_PROCESSED fields            |
     FileProcessed,
     /// User initiated transfer request (triggers approval workflow)
     TransferRequested,
@@ -183,7 +184,7 @@ pub struct AuditLogEntry {
 
     // === FILE_PROCESSED Extended Fields (Japanese Government Compliance) ===
     ///
-    /// These fields are specifically designed for LGWAN compliance requirements
+    /// These fields are specifically designed for **LGWAN / ZTA** compliance requirements
     /// under Japanese government regulations (Act on Protection of Personal Information,
     /// JIS Q 27001 ISMS standard, MIC/METI guidelines).
     ///
@@ -507,7 +508,8 @@ impl AuditLogEntry {
 }
 
 /// Thread-safe audit log manager with dual storage: in-memory ring buffer + persistent file.
-/// Designed for LGWAN compliance requiring immutable audit trails with 365-day retention.
+/// Designed for **LGWAN compliance** (legacy) and **Digital Agency ZTA migration** (2024.5+),
+/// requiring immutable audit trails with configurable retention (365–2555 days).
 ///
 /// # Architecture
 ///
@@ -564,7 +566,7 @@ pub struct AuditLogManager {
     log_dir: PathBuf,
     /// Maximum number of entries to keep in memory (older entries evicted)
     max_memory_entries: usize,
-    /// Number of days to retain log files on disk (LGWAN requires 365)
+    /// Number of days to retain log files on disk (LGWAN: 365, ZTA: up to 2555)
     #[allow(dead_code)]
     retention_days: u64,
     /// Pluggable formatter for log output (default: JsonLogFormatter)
@@ -610,7 +612,7 @@ impl AuditLogManager {
     /// * `max_memory_entries` - Maximum entries in in-memory ring buffer.
     ///                          Older entries are evicted when exceeded.
     /// * `retention_days` - Number of days to retain log files on disk.
-    ///                      LGWAN compliance requires minimum 365 days.
+    ///                      LGWAN: 365 minimum, ZTA: up to 2555 (7 years).
     /// * `formatter` - Optional custom [`LogFormatter`] implementation.
     ///                 If `None`, defaults to [`JsonLogFormatter`].
     ///
@@ -1041,6 +1043,11 @@ pub struct AuditStats {
 mod tests {
     use super::*;
 
+    #[inline]
+    fn test_dir(name: &str) -> std::path::PathBuf {
+        std::env::temp_dir().join(format!("misogi_test_{}", name))
+    }
+
     #[tokio::test]
     async fn test_audit_entry_creation() {
         let entry = AuditLogEntry::new(AuditEventType::FileUploaded)
@@ -1093,7 +1100,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_audit_log_manager_record_and_query() {
-        let manager = AuditLogManager::new("/tmp/misogi_test_audit");
+        let manager = AuditLogManager::new(test_dir("audit"));
 
         let entry1 = AuditLogEntry::new(AuditEventType::FileUploaded)
             .with_actor("user-001", "田中 太郎", "staff")
@@ -1117,7 +1124,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_audit_log_stats() {
-        let manager = AuditLogManager::new("/tmp/misogi_test_audit_stats");
+        let manager = AuditLogManager::new(test_dir("audit_stats"));
 
         for _ in 0..5 {
             let entry = AuditLogEntry::new(AuditEventType::FileUploaded)
@@ -1135,7 +1142,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_csv_export() {
-        let manager = AuditLogManager::new("/tmp/misogi_test_export");
+        let manager = AuditLogManager::new(test_dir("csv_export"));
 
         let entry = AuditLogEntry::new(AuditEventType::TransferApproved)
             .with_actor("approver-001", "承認者", "approver")
@@ -1155,7 +1162,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_memory_buffer_limit() {
-        let manager = AuditLogManager::with_config("/tmp/test_limit", 3, 30, None);
+        let manager = AuditLogManager::with_config(test_dir("buffer_limit"), 3, 30, None);
 
         for i in 0..5 {
             let entry = AuditLogEntry::new(AuditEventType::FileUploaded)
@@ -1272,7 +1279,7 @@ mod tests {
     #[tokio::test]
     async fn test_audit_log_manager_with_default_formatter() {
         // Verify backward compatibility: default formatter produces JSON output
-        let manager = AuditLogManager::new("/tmp/test_default_formatter");
+        let manager = AuditLogManager::new(test_dir("audit_default"));
 
         let entry = AuditLogEntry::new(AuditEventType::FileUploaded)
             .with_actor("user-001", "テスト", "staff")
@@ -1294,7 +1301,7 @@ mod tests {
         // Create manager with CEF formatter
         let cef_formatter: Arc<dyn LogFormatter> = Arc::new(SyslogCefFormatter::new());
         let manager = AuditLogManager::with_config(
-            "/tmp/test_cef_formatter",
+            test_dir("audit_custom"),
             100,
             30,
             Some(cef_formatter),
@@ -1325,7 +1332,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_export_syslog_produces_valid_cef() {
-        let manager = AuditLogManager::new("/tmp/test_syslog_export");
+        let manager = AuditLogManager::new(test_dir("syslog_cef"));
 
         // Record a mix of events
         for (i, event_type) in [
@@ -1375,7 +1382,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_export_cef_alias_matches_syslog() {
-        let manager = AuditLogManager::new("/tmp/test_cef_alias");
+        let manager = AuditLogManager::new(test_dir("cef_alias"));
 
         let entry = AuditLogEntry::new(AuditEventType::FileProcessed)
             .with_actor("user-001", "テスト", "staff")
@@ -1397,7 +1404,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_export_syslog_with_filters() {
-        let manager = AuditLogManager::new("/tmp/test_syslog_filter");
+        let manager = AuditLogManager::new(test_dir("syslog_filters"));
 
         // Upload events
         for _ in 0..3 {

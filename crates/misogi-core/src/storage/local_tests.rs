@@ -31,8 +31,9 @@ use std::sync::Arc;
 /// Create a LocalStorage backed by a temp directory (must exist).
 async fn make_test_storage() -> (LocalStorage, tempfile::TempDir) {
     let dir = tempfile::tempdir().expect("failed to create temp dir");
-    let storage =
+    let mut storage =
         LocalStorage::new(dir.path()).expect("failed to create LocalStorage");
+    storage.create_dir_if_missing = true;
     (storage, dir)
 }
 
@@ -72,7 +73,7 @@ async fn test_put_get_roundtrip() {
 
 #[tokio::test]
 async fn test_delete_idempotency() {
-    let (storage, _dir) = make_test_storage().await;
+    let (storage, dir) = make_test_storage().await;
 
     // Delete of non-existent key must succeed (idempotent contract)
     let result = storage.delete("no/such/key").await;
@@ -93,6 +94,8 @@ async fn test_delete_idempotency() {
         double_delete.is_ok(),
         "second delete must also succeed (idempotent)"
     );
+
+    let _guard = &dir;
 }
 
 // ---------------------------------------------------------------------
@@ -256,7 +259,7 @@ async fn test_health_check_invalid_path_rejected_at_construction() {
 
 #[tokio::test]
 async fn test_concurrent_access_safety() {
-    let (storage, _dir) = make_test_storage().await;
+    let (storage, dir) = make_test_storage().await;
     let storage = Arc::new(storage);
 
     // Spawn 20 concurrent writers to different keys
@@ -285,6 +288,9 @@ async fn test_concurrent_access_safety() {
         let retrieved = storage.get(&info.key).await.unwrap();
         assert_eq!(retrieved.len() as u64, info.size);
     }
+
+    // Keep TempDir alive until all async tasks complete.
+    let _guard = &dir;
 }
 
 // ---------------------------------------------------------------------
@@ -293,7 +299,7 @@ async fn test_concurrent_access_safety() {
 
 #[tokio::test]
 async fn test_large_data_handling() {
-    let (storage, _dir) = make_test_storage().await;
+    let (storage, dir) = make_test_storage().await;
 
     let large_data = Bytes::from(vec![0xCDu8; 2 * 1024 * 1024]); // 2 MB
     let info = storage
@@ -305,6 +311,8 @@ async fn test_large_data_handling() {
 
     let retrieved = storage.get("large/binary.blob").await.unwrap();
     assert_eq!(retrieved, large_data, "large data roundtrip must be exact");
+
+    let _guard = &dir;
 }
 
 // ---------------------------------------------------------------------
@@ -346,7 +354,7 @@ async fn test_overlong_key_rejection() {
 
 #[tokio::test]
 async fn test_trait_object_compatibility() {
-    let (storage, _dir) = make_test_storage().await;
+    let (storage, dir) = make_test_storage().await;
 
     // Must be usable as dyn StorageBackend behind Arc (plugin architecture)
     let backend: Arc<dyn StorageBackend> = Arc::new(storage);
@@ -363,6 +371,8 @@ async fn test_trait_object_compatibility() {
     assert!(backend.exists("dyn/test.txt").await.unwrap());
     backend.health_check().await.unwrap();
     backend.delete("dyn/test.txt").await.unwrap();
+
+    let _guard = &dir;
 }
 
 // ---------------------------------------------------------------------

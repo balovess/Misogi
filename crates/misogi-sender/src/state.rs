@@ -71,7 +71,7 @@ use misogi_core::cdr_strategies::VbaWhitelistStrategy;
 use misogi_core::cdr_strategies::FormatDowngradeStrategy;
 use misogi_core::file_types::CompositeDetector;
 use misogi_core::pii::RegexPIIDetector;
-use misogi_core::drivers::DirectTcpDriver;
+use crate::driver_instance::TransferDriverInstance;
 use misogi_core::log_engine::{JsonLogFormatter, SyslogCefFormatter};
 use misogi_core::traits::LogFormatter;
 
@@ -167,7 +167,7 @@ pub struct AppState {
     /// Future enhancement: Change to `Arc<dyn TransferDriver<Config = ConcreteDriverConfig>>`
     /// once TransferDriver trait API is stabilized and Config type is unified.
     #[allow(dead_code)]
-    pub transfer_driver: Arc<misogi_core::drivers::DirectTcpDriver>,
+    pub transfer_driver: Arc<TransferDriverInstance>,
 
     /// Ordered chain of CDR (Content Disarmament and Reconstruction) strategies.
     ///
@@ -217,6 +217,11 @@ pub struct AppState {
     pub vendor_isolation: Option<Arc<VendorIsolationManager>>,
 }
 
+/// Shared reference to application state, suitable for Axum's `.with_state()`.
+///
+/// All route extractors receive `&SharedState` (which derefs to `&AppState`).
+pub type SharedState = Arc<AppState>;
+
 impl AppState {
     // =========================================================================
     // Construction — Factory Method (Task 5.14)
@@ -254,14 +259,49 @@ impl AppState {
     /// ```
     pub fn from_config(config: &SenderConfig) -> Arc<Self> {
         // --- 1. Transport Driver ---
-        // Task 5.14 Note: Currently always constructs DirectTcpDriver as concrete type.
-        // Future enhancement: Use config.transfer_driver_type to select driver implementation
-        // and return Arc<dyn TransferDriver<Config = ConcreteConfig>> once trait API stabilizes.
+        // Select driver implementation based on config.transfer_driver_type.
         let receiver_addr = config.tunnel_remote_addr.clone()
             .unwrap_or_else(|| "127.0.0.1:9000".to_string());
         let node_id = format!("misogi-sender-{}", &config.server_addr);
-        let driver: Arc<misogi_core::drivers::DirectTcpDriver> =
-            Arc::new(DirectTcpDriver::new(receiver_addr, node_id));
+
+        let driver: Arc<TransferDriverInstance> = match config.transfer_driver_type.as_str() {
+            "storage_relay" => {
+                let output_dir = config.transfer_output_dir
+                    .clone()
+                    .unwrap_or_else(|| "./data/relay/outbound".to_string());
+                let input_dir = config.transfer_input_dir
+                    .clone()
+                    .unwrap_or_else(|| "./data/relay/inbound".to_string());
+                Arc::new(TransferDriverInstance::storage_relay(
+                    output_dir,
+                    input_dir,
+                    config.transfer_poll_interval_secs,
+                ))
+            }
+            "external_command" => {
+                let send_cmd = config.transfer_send_command
+                    .clone()
+                    .unwrap_or_else(|| "scp %s remote:/tmp/".to_string());
+                let status_cmd = config.transfer_status_command
+                    .clone()
+                    .unwrap_or_else(|| "echo done".to_string());
+                Arc::new(TransferDriverInstance::external_command(
+                    send_cmd,
+                    status_cmd,
+                    config.transfer_timeout_secs,
+                ))
+            }
+            "udp_blast" => {
+                let target = config.blast_config
+                    .as_ref()
+                    .map(|b| b.target_addr.clone())
+                    .unwrap_or_else(|| "127.0.0.1:9002".to_string());
+                Arc::new(TransferDriverInstance::udp_blast(target))
+            }
+            _ => {
+                Arc::new(TransferDriverInstance::direct_tcp(receiver_addr, node_id))
+            }
+        };
 
         // --- 2. CDR Strategy Chain ---
         let mut strategies: Vec<Arc<dyn CDRStrategy>> = vec![
@@ -392,7 +432,7 @@ impl AppState {
                 30,
                 None,
             ),
-            transfer_driver: Arc::new(DirectTcpDriver::new(
+            transfer_driver: Arc::new(TransferDriverInstance::direct_tcp(
                 "127.0.0.1:9000".to_string(), // Default address
                 "legacy-sender".to_string(),
             )),
@@ -550,12 +590,3 @@ impl AppState {
         (paginated, total)
     }
 }
-
-// =============================================================================
-// Shared State Type Alias
-// =============================================================================
-
-/// Shared reference to application state, suitable for Axum's `.with_state()`.
-///
-/// All route extractors receive `&SharedState` (which derefs to `&AppState`).
-pub type SharedState = Arc<AppState>;

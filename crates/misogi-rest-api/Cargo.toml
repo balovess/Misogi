@@ -53,3 +53,8 @@ misogi-nocode = { path = "../misogi-nocode" }
 default = ["full"]
 full = []
 openapi = ["dep:utoipa", "dep:utoipa-swagger-ui"]
+
+[dev-dependencies]
+tower = { version = "0.4", features = ["util"] }
+http-body-util = "0.1"
+misogi-sender = { path = "../misogi-sender" }

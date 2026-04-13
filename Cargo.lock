@@ -2704,6 +2704,7 @@ dependencies = [
  "jsonwebtoken",
  "ldap3",
  "lru",
+ "misogi-auth",
  "misogi-core",
  "quick-xml 0.37.5",
  "rand 0.8.5",
@@ -2897,10 +2898,12 @@ dependencies = [
  "axum-extra",
  "chrono",
  "dashmap",
+ "http-body-util",
  "misogi-auth",
  "misogi-cdr",
  "misogi-core",
  "misogi-nocode",
+ "misogi-sender",
  "pin-project-lite",
  "reqwest",
  "serde",
@@ -2920,6 +2923,7 @@ name = "misogi-sender"
 version = "0.1.0"
 dependencies = [
  "axum 0.7.9",
+ "bytes",
  "chrono",
  "clap",
  "misogi-auth",

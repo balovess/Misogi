@@ -241,6 +241,40 @@ impl CompliancePreset {
         }
     }
 
+    /// Digital Agency (Japan) Zero Trust Architecture aligned profile.
+    ///
+    /// Conforms to the May 2024 Digital Agency policy directive for
+    /// transitioning from three-layer network separation (三層分離) to
+    /// Zero Trust Architecture by ~2030, with Government Cloud (G-Cloud)
+    /// as the primary deployment target.
+    ///
+    /// Key differences from legacy LGWAN profiles:
+    /// - Stricter sanitization (`ConvertToFlat` for maximum safety in flat networks)
+    /// - Reduced ZIP depth (ZTA assumes files are processed at endpoints)
+    /// - Mandatory approval + reason (per-file audit trail for ZTA compliance)
+    /// - Extended retention (7-year ZTA audit requirement)
+    pub fn digital_agency_zt() -> Self {
+        let mut localized = HashMap::new();
+        localized.insert("ja".to_string(), "デジタル庁ゼロトラストアーキテクチャ対応プロファイル（2030年移行目標）".to_string());
+
+        Self {
+            name: "digital_agency_zt".to_string(),
+            description: "Digital Agency Japan Zero Trust Architecture migration profile (G-Cloud native)".to_string(),
+            localized_descriptions: localized,
+            approval_required: true,
+            reason_required: true,
+            sanitization_policy: SanitizationPolicy::ConvertToFlat,
+            zip_max_depth: 1,
+            zip_max_expansion_ratio: 3,
+            max_pdf_size_mb: 50,
+            max_office_size_mb: 25,
+            max_zip_size_mb: 100,
+            audit_retention_days: 2555,
+            log_ip_address: true,
+            log_user_agent: true,
+        }
+    }
+
     /// List all available presets across all supported regions.
     pub fn all_presets() -> Vec<Self> {
         vec![
@@ -250,6 +284,7 @@ impl CompliancePreset {
             Self::nist_zta(),
             Self::acsc_au(),
             Self::fss_kr(),
+            Self::digital_agency_zt(),
         ]
     }
 
