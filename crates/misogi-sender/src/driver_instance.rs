@@ -107,6 +107,7 @@ impl TransferDriverInstance {
 
     /// Returns the driver type identifier used in configuration files.
     #[must_use]
+    #[allow(dead_code)]
     pub fn type_id(&self) -> &'static str {
         match self {
             Self::DirectTcp(_) => "direct_tcp",
@@ -126,6 +127,7 @@ impl TransferDriverInstance {
     /// For `StorageRelay`: validates directories exist.
     /// For `ExternalCommand`: verifies command template is executable.
     /// For `UdpBlast`: binds local UDP socket.
+    #[allow(dead_code)]
     pub async fn init(&mut self) -> Result<()> {
         match self {
             Self::DirectTcp(driver) => {
@@ -189,6 +191,7 @@ impl TransferDriverInstance {
     /// Perform a health check against the transport backend.
     ///
     /// Returns [`DriverHealthStatus`] indicating connectivity and latency.
+    #[allow(dead_code)]
     pub async fn health_check(&self) -> Result<DriverHealthStatus> {
         match self {
             Self::DirectTcp(driver) => driver.health_check().await,
@@ -201,6 +204,7 @@ impl TransferDriverInstance {
     /// Gracefully shut down the transport connection.
     ///
     /// Flushes pending buffers and releases network resources.
+    #[allow(dead_code)]
     pub async fn shutdown(&self) -> Result<()> {
         match self {
             Self::DirectTcp(driver) => driver.shutdown().await,

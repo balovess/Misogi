@@ -13,6 +13,8 @@
 //! 3. **Auto-registration** — The `#[misogi_plugin]` macro generates all trait
 //!    implementations and registers into GLOBAL_REGISTRY at startup.
 
+#![allow(dead_code)]
+
 use misogi_macros::{misogi_plugin, on_metadata, on_file_stream};
 
 /// Korea Financial Supervisory Service (FSS) compliance plugin.
@@ -39,6 +41,7 @@ pub struct KoreaFssCompliancePlugin;
 /// | `.gul`    | Hangul Document | Old-style Korean word processing      |
 /// | `.cel`    | CEL Template    | Hancom template format               |
 #[on_metadata]
+#[allow(dead_code)]
 fn classify_korean_format(filename: &str) -> &'static str {
     let filename_lower = filename.to_lowercase();
 
@@ -72,6 +75,7 @@ fn classify_korean_format(filename: &str) -> &'static str {
 /// Scans for the pattern `\d{6}-?\d{7}` and validates the check digit
 /// using the official Korean government algorithm.
 #[on_file_stream]
+#[allow(dead_code)]
 async fn scan_korean_rrn(chunk: &mut [u8]) -> Result<(), std::io::Error> {
     let data_str: &str = match std::str::from_utf8(chunk) {
         Ok(s) => s,
@@ -101,6 +105,7 @@ async fn scan_korean_rrn(chunk: &mut [u8]) -> Result<(), std::io::Error> {
 /// where weights = [2,3,4,5,6,7,8,9,2,3,4,5]
 /// check = (11 - (sum % 11)) % 10
 /// ```
+#[allow(dead_code)]
 fn validate_rrn_check_digit(rrn: &str) -> bool {
     if rrn.len() != 13 {
         return false;

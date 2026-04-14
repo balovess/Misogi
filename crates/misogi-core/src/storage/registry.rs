@@ -618,6 +618,7 @@ impl StorageRegistry {
     /// - [`StorageError::ConfigurationError`] if `type` is missing or unknown,
     ///   or the required backend-specific config section is absent/malformed.
     /// - Backend-specific errors from construction (e.g., invalid path).
+    #[allow(unused_variables)]
     pub fn from_config(config: &toml::Value) -> Result<Self, StorageError> {
         let storage_table = config
             .get("storage")
@@ -835,6 +836,7 @@ impl StorageRegistry {
     /// | `"api_forward"`| (always)       | No     |
     /// | `"azure_blob"` | `storage-azure`| **Yes**|
     /// | `"gcs"`        | `storage-gcs`  | **Yes**|
+    #[allow(unused_variables)]
     pub async fn from_config_async(config: &toml::Value) -> Result<Self, StorageError> {
         let storage_table = config
             .get("storage")

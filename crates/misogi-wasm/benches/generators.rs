@@ -16,6 +16,8 @@
 //
 // =============================================================================
 
+#![allow(dead_code, unused_imports)]
+
 /// Default PDF version string used in synthetic document headers.
 const PDF_HEADER: &[u8] = b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n";
 

@@ -9,6 +9,7 @@
 //! 6. Registry completeness (count verification)
 
 use misogi_core::file_types::MagicNumberRegistry;
+use misogi_cdr::StegoTechnique;
 
 // =============================================================================
 // Section 1: Magic Number Detection Tests for New Formats
@@ -447,7 +448,7 @@ fn test_stego_detector_creation() {
 
 #[test]
 fn test_stego_detect_appended_data_in_png() {
-    use misogi_cdr::{SteganographyDetector, StegoRecommendation, StegoTechnique};
+    use misogi_cdr::{SteganographyDetector, StegoRecommendation};
 
     let detector = SteganographyDetector::with_defaults();
 
@@ -481,7 +482,7 @@ fn test_stego_detect_appended_data_in_png() {
 
 #[test]
 fn test_stego_detect_appended_data_in_jpeg() {
-    use misogi_cdr::{SteganographyDetector, StegoTechnique};
+    use misogi_cdr::SteganographyDetector;
 
     let detector = SteganographyDetector::with_defaults();
 
@@ -514,7 +515,7 @@ fn test_stego_detect_appended_data_in_jpeg() {
 
 #[test]
 fn test_stego_detect_clean_image_is_safe() {
-    use misogi_cdr::{SteganographyDetector, StegoTechnique};
+    use misogi_cdr::SteganographyDetector;
 
     let detector = SteganographyDetector::with_defaults();
     let clean_png = build_minimal_png();
@@ -537,7 +538,7 @@ fn test_stego_detect_clean_image_is_safe() {
 
 #[test]
 fn test_stego_detect_chunk_sequence_anomaly() {
-    use misogi_cdr::{SteganographyDetector, StegoTechnique};
+    use misogi_cdr::SteganographyDetector;
 
     let detector = SteganographyDetector::with_defaults();
 

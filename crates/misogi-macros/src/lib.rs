@@ -61,6 +61,8 @@ pub fn misogi_plugin(attr: TokenStream, item: TokenStream) -> TokenStream {
     let expanded = quote::quote! {
         #input
 
+        use ctor::ctor;
+
         impl misogi_core::traits::PluginMetadata for #struct_name {
             fn name(&self) -> &'static str { #plugin_name }
             fn version(&self) -> &'static str { #plugin_version }
@@ -68,7 +70,7 @@ pub fn misogi_plugin(attr: TokenStream, item: TokenStream) -> TokenStream {
             fn implemented_interfaces(&self) -> Vec<&'static str> { vec!["PluginMetadata"] }
         }
 
-        #[cfg_attr(not(test), ::ctor)]
+        #[cfg_attr(not(test), ctor)]
         fn #ctor_fn_name() {
             let instance = #struct_name;
             let _ = misogi_core::plugin_registry::GLOBAL_REGISTRY

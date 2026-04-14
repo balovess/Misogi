@@ -136,7 +136,8 @@ pub struct ContextAnalysisResponse {
 
     /// Keywords or signals that suggested "not PII" (false positive).
     #[serde(default)]
-    pub false_positive_signals: Vec<String>},
+    pub false_positive_signals: Vec<String>,
+}
 
 // =============================================================================
 // C. Context Error Types

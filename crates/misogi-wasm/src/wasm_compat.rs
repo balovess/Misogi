@@ -33,7 +33,7 @@
 //
 // =============================================================================
 
-use std::io::{Cursor, Read, Seek, Write};
+use std::io::{Cursor, Read, Write};
 
 use misogi_cdr::{
     pdf_sanitizer::{PdfSanitizer, PdfThreat},
@@ -733,7 +733,7 @@ mod tests {
             .unwrap();
 
         assert!(result.report.success);
-        assert!(!result.actions_taken.is_empty());
+        assert!(!result.report.actions_taken.is_empty());
         // Output should not contain the original JS value
         let output_str = String::from_utf8_lossy(&result.output_data);
         assert!(
@@ -751,7 +751,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(result.output_data, clean_pdf.as_slice());
-        assert!(result.actions_taken.is_empty());
+        assert!(result.report.actions_taken.is_empty());
     }
 
     // =========================================================================

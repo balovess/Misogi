@@ -4,6 +4,7 @@ members = [
     "crates/misogi-core",
     "crates/misogi-cdr",
     "crates/misogi-macros",
+    "crates/korea-fss-plugin",
     "crates/misogi-sender",
     "crates/misogi-receiver",
     "crates/misogi-smtp",

@@ -1,0 +1,15 @@
+[package]
+name = "korea-fss-plugin"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[[bin]]
+name = "korea_fss_plugin"
+path = "src/main.rs"
+
+[dependencies]
+misogi-macros = { path = "../misogi-macros" }
+misogi-core = { path = "../misogi-core" }
+regex = "1"
+ctor = "0.3"
