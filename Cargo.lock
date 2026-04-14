@@ -2511,10 +2511,13 @@ dependencies = [
 name = "korea-fss-plugin"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "ctor",
  "misogi-core",
  "misogi-macros",
  "regex",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

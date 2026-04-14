@@ -9,6 +9,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+#### misogi-macros — Production-Grade Procedural Macro SDK
+- **5 Hook attribute macros upgraded from pass-through to full trait code generation**:
+  - `#[on_metadata(impl_for = S)]` → generates `FileTypeDetector` trait impl
+  - `#[on_file_stream(impl_for = S, extensions = [...])]` → generates `CDRStrategy` trait impl
+  - `#[on_scan_content(impl_for = S)]` → generates `PIIDetector` trait impl
+  - `#[on_format_log(impl_for = S)]` → generates `LogFormatter` trait impl
+  - `#[on_approval_event(impl_for = S)]` → generates `ApprovalTrigger<S>` trait impl
+- **Compile-time signature validation framework** ([`src/sig_check.rs`](crates/misogi-macros/src/sig_check.rs)):
+  - Async/sync correctness enforcement with span-aware error messages
+  - Parameter count bounds checking (min/max range support)
+  - Structural return type prefix matching (`Result<T,E>` matches `"Result"` pattern)
+  - Disallowed qualifier rejection (`unsafe`, `const`, `extern`, generics)
+  - Visibility constraint enforcement (no `pub(crate)` on hook functions)
+  - Plugin name kebab-case format validation (`[a-z][a-z0-9_-]*`)
+- **`#[misogi_plugin]` enhanced** with optional `interfaces = ["..."]` parameter for
+  explicit interface list override in `implemented_interfaces()`
+- **`async_trait` integration**: All generated async trait methods correctly use
+  `#[async_trait::async_trait]` to match core trait definitions
+- **Unit test suite**: 3 tests covering plugin name validation, invalid name rejection,
+  and structural return type matching — run via `cargo test -p misogi-macros`
+- **Zero clippy warnings** across both `misogi-macros` and consumer `korea-fss-plugin`
+
+#### korea-fss-plugin — Integration Test Consumer (Upgraded)
+- Migrated from example-level dead-code to production-grade plugin exercising all 3 hooks:
+  - `#[on_metadata]` → Korean document format classifier (HWP/HWPX/GUL/CEL/PDF)
+  - `#[on_file_stream]` → RRN (주민등록번호) stream scanner with check-digit validation
+  - `#[on_scan_content]` → Structured PIIMatch reporter with masking utility
+- Added `mask_rrn()` helper for safe log output: `900101-1234567` → `900101-******7`
+
 #### misogi-wasm — Production-Grade WASM Module
 - **Dual-target architecture**: `misogi-wasm` now supports both native (wasmi plugin runtime)
   and browser (wasm-bindgen FFI) compilation targets via feature flags (`native` / `browser`)
