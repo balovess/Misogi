@@ -8,7 +8,7 @@ description = "SMTP Email Sanitization Gateway — intercepts emails, extracts a
 misogi-core = { path = "../misogi-core" }
 misogi-cdr = { path = "../misogi-cdr" }
 tokio = { version = "1", features = ["full"] }
-mailparse = "0.14"
+mailparse = "0.16"
 lettre = { version = "0.11", features = ["smtp-transport", "builder"] }
 tracing = "0.1"
 serde = { version = "1", features = ["derive"] }
