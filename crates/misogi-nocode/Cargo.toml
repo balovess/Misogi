@@ -36,7 +36,7 @@ http = "1"
 clap = { version = "4", features = ["derive", "env"] }
 
 # Colored terminal output
-colored = "2"
+colored = "3"
 
 # File watching for hot-reload
 notify = "7"
