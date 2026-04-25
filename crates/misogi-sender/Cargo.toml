@@ -23,7 +23,7 @@ serde = { version = "1", features = ["derive"] }
 clap = { version = "4", features = ["derive"] }
 toml = "0.8"
 notify = "7"
-prost = "0.13"
+prost = "0.14"
 misogi-core = { path = "../misogi-core" }
 misogi-auth = { path = "../misogi-auth" }
 misogi-cdr = { path = "../misogi-cdr" }
