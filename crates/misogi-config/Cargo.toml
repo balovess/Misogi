@@ -6,7 +6,7 @@ description = "Centralized TOML configuration loader for Misogi system"
 
 [dependencies]
 # TOML parsing and serialization
-toml = { version = "0.8", features = ["preserve_order"] }
+toml = { version = "1.1", features = ["preserve_order"] }
 
 # Serialization framework
 serde = { version = "1", features = ["derive"] }

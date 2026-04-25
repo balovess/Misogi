@@ -22,7 +22,7 @@ pin-project-lite = "0.2"
 clap = { version = "4", features = ["derive"] }
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 anyhow = "1"
-toml = "0.8"
+toml = "1.1"
 num_cpus = "1"
 quoted_printable = "0.1"
 md-5 = "0.7"
