@@ -1,0 +1,13 @@
+# =============================================================================
+# Misogi — Minimal Configuration Example
+# =============================================================================
+# This is the absolute minimum configuration required to run Misogi.
+# Suitable for development, testing, and quick evaluation.
+# =============================================================================
+
+[server]
+addr = "0.0.0.0:3001"
+
+[storage]
+upload_dir = "./data/uploads"
+staging_dir = "./data/staging"

@@ -1,0 +1,261 @@
+# =============================================================================
+# Misogi (禊) — Default Configuration Template
+# =============================================================================
+# This is the default configuration file for Misogi secure file transfer system.
+# Copy this file to 'misogi.toml' and customize as needed.
+#
+# Configuration layers (highest priority first):
+#   1. CLI arguments (--flag)
+#   2. Environment variables (MISOGI_*)
+#   3. This TOML file
+#   4. Built-in defaults
+#
+# For production deployment, see examples/ directory for pre-configured profiles.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Server Configuration (Required)
+# -----------------------------------------------------------------------------
+[server]
+# HTTP API bind address (format: "host:port")
+# Default: "0.0.0.0:3001" for sender, "0.0.0.0:3002" for receiver
+addr = "0.0.0.0:3001"
+
+# -----------------------------------------------------------------------------
+# Storage Configuration (Required)
+# -----------------------------------------------------------------------------
+[storage]
+# Directory for uploaded files awaiting processing
+upload_dir = "./data/uploads"
+
+# Staging area for files undergoing CDR sanitization
+staging_dir = "./data/staging"
+
+# -----------------------------------------------------------------------------
+# Tunnel Configuration (Optional)
+# -----------------------------------------------------------------------------
+# Enable reverse tunnel for NAT traversal when sender cannot directly
+# connect to receiver.
+[tunnel]
+# Remote tunnel server address (e.g., "relay.example.com:9000")
+# Leave empty to disable tunnel mode.
+# remote_addr = ""
+
+# Authentication token for tunnel registration
+# auth_token = ""
+
+# Local port for tunnel listener
+local_port = 9000
+
+# -----------------------------------------------------------------------------
+# Daemon Mode Configuration (Optional)
+# -----------------------------------------------------------------------------
+# Run as background service with file watching.
+[daemon]
+enabled = false
+# pid_file = "/var/run/misogi-sender.pid"
+# log_file = "/var/log/misogi/sender.log"
+
+# -----------------------------------------------------------------------------
+# Approval Flow Configuration (Optional)
+# -----------------------------------------------------------------------------
+# Require explicit approval before file transfer proceeds.
+# Required for LGWAN cross-network transfers under Japanese government guidelines.
+[approval_flow]
+require_approval = false
+initial_state = "PENDING_APPROVAL"
+
+# Example HTTP callback trigger:
+# [[approval_flow.triggers]]
+# type = "http_callback"
+# path = "/api/v1/files/{file_id}/approve"
+# auth_header = "X-Approval-Token"
+
+# -----------------------------------------------------------------------------
+# Transfer Driver Configuration (Optional)
+# -----------------------------------------------------------------------------
+# Select transfer backend: direct_tcp, storage_relay, external_command
+[transfer_driver]
+type = "direct_tcp"
+
+# For storage_relay mode (air-gapped networks):
+# output_dir = "./relay/outbound"
+# input_dir = "./relay/inbound"
+# poll_interval_secs = 10
+# cleanup_after_pickup = true
+
+# For external_command mode:
+# send_command = "/usr/local/bin/secure-transfer send %s %d"
+# status_command = "/usr/local/bin/secure-transfer status %s"
+# timeout_secs = 120
+
+# -----------------------------------------------------------------------------
+# CDR Strategies Configuration (Optional)
+# -----------------------------------------------------------------------------
+# Content Disarm & Reconstruction policy settings.
+[cdr_strategies]
+
+# VBA macro whitelist (allow specific macros by hash or name)
+[cdr_strategies.vba_whitelist]
+enabled = false
+whitelist_type = "hash"  # "hash" or "name"
+entries = []  # List of allowed macro hashes or names
+default_action = "remove"  # "remove" or "quarantine"
+
+# Format downgrade (convert complex formats to safer equivalents)
+[cdr_strategies.format_downgrade]
+enabled = false
+# [[cdr_strategies.format_downgrade.rules]]
+# source_ext = ".xlsx"
+# target_ext = ".csv"
+# auto_apply = true
+
+# ClamAV antivirus integration
+[cdr_strategies.clamav_integration]
+enabled = false
+socket_path = "/var/run/clamd.sock"  # Unix socket or "tcp://localhost:3310"
+max_scan_size_mb = 100
+timeout_secs = 30
+action_on_virus = "block"  # "block", "quarantine", "warn"
+action_on_clean = "pass_with_warning"  # "pass", "pass_with_warning", "log_only"
+
+# -----------------------------------------------------------------------------
+# File Types Configuration (Optional)
+# -----------------------------------------------------------------------------
+# File type registry and blocking rules.
+[file_types]
+default_action = "allow"  # "allow" or "block"
+
+# Example file type registration:
+# [[file_types.registry]]
+# extension = ".pdf"
+# magic_hex = "255044462D"  # %PDF- header
+# required_magic = true
+# sanitizer = "pdf_builtin"
+
+# Example blocked extensions:
+# [[file_types.blocked_extensions]]
+# extension = ".exe"
+# reason = "Executable files are not allowed"
+
+# -----------------------------------------------------------------------------
+# PII Detector Configuration (Optional)
+# -----------------------------------------------------------------------------
+# Personal Identifiable Information scanning for APPI/GDPR compliance.
+[pii_detector]
+enabled = false
+default_action = "alert_only"  # "block", "mask", "alert_only"
+mask_char = "*"
+
+# Example PII rules:
+# [[pii_detector.rules]]
+# name = "japanese_my_number"
+# pattern = "\\b\\d{12}\\b"  # 12-digit My Number
+# action = "mask"
+# description = "Japanese My Number (マイナンバー)"
+
+# [[pii_detector.rules]]
+# name = "email_address"
+# pattern = "\\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}\\b"
+# action = "alert_only"
+# description = "Email address"
+
+# -----------------------------------------------------------------------------
+# Log Configuration (Optional)
+# -----------------------------------------------------------------------------
+# Audit log format and retention settings.
+[log]
+format = "json"  # "json", "syslog", "cef", "custom"
+# template_path = "./log-template.txt"  # Required when format = "custom"
+max_memory_entries = 1000
+retention_days = 365
+
+# -----------------------------------------------------------------------------
+# Vendor Isolation Configuration (Optional)
+# -----------------------------------------------------------------------------
+# Multi-tenant access control for external vendor accounts.
+[vendor_isolation]
+enabled = false
+
+# Example vendor account:
+# [[vendor_isolation.accounts]]
+# user_id = "vendor_a"
+# display_name = "Vendor A"
+# ip_whitelist = ["10.0.0.0/8"]
+# force_max_cdr_policy = "convert_to_flat"
+# require_dual_approval = true
+# upload_rate_limit_per_hour = 20
+# max_file_size_mb = 50
+
+# -----------------------------------------------------------------------------
+# Calendar Configuration (Optional)
+# -----------------------------------------------------------------------------
+# Japanese calendar (Wareki / 和暦) integration.
+[calendar]
+enabled = false
+# calendar_file = "/etc/misogi/calendar.toml"  # Custom organizational holidays
+auto_defense_mode = false  # Elevate security during holidays
+wareki_filename_detection = true  # Detect R08, H28, etc. in filenames
+
+# -----------------------------------------------------------------------------
+# Encoding Configuration (Optional)
+# -----------------------------------------------------------------------------
+# Japanese text encoding detection and handling.
+[encoding]
+default_encoding = "utf-8"  # "utf-8", "Shift_JIS", "Windows-31J", "EUC-JP"
+unknown_font_action = "preserve"  # "preserve", "strip", "replace"
+fallback_fonts = ["IPAexMincho", "IPAGothic"]
+
+# -----------------------------------------------------------------------------
+# External Sanitizers Configuration (Optional)
+# -----------------------------------------------------------------------------
+# Third-party tool adapters for non-native format support.
+# [[external_sanitizers.adapter]]
+# extension = ".jtd"
+# command = "/usr/local/bin/jtd_cleaner"
+# args = ["--input", "{{input_path}}", "--output", "{{output_path}}"]
+# timeout_secs = 120
+# on_success = "trust_output"  # "trust_output", "verify_hash"
+# on_failure = "block_and_log"  # "block_and_log", "warn_and_pass"
+
+# -----------------------------------------------------------------------------
+# PPAP Configuration (Optional)
+# -----------------------------------------------------------------------------
+# Password Protected Attachment Protocol detection and handling.
+# PPAP is Japan's insecure file transfer practice (password-protected ZIPs).
+[ppap]
+enabled = true
+policy = "warn_and_sanitize"  # "block", "warn_and_sanitize", "quarantine", "convert_to_secure"
+confidence_threshold = 0.7
+generate_compliance_event = true
+# quarantine_dir = "./quarantine/ppap"
+quarantine_retention_days = 90
+
+# -----------------------------------------------------------------------------
+# UDP Blast Configuration (Optional)
+# -----------------------------------------------------------------------------
+# Air-gap data diode transfer via unidirectional UDP.
+[blast]
+enabled = false
+# target_addr = "192.168.254.2:9002"  # Receiver's data diode input
+fec_data_shards = 16
+fec_parity_shards = 4
+repeat_count = 3  # Redundancy for loss tolerance
+session_timeout_secs = 300
+
+# -----------------------------------------------------------------------------
+# Versioning Configuration (Optional)
+# -----------------------------------------------------------------------------
+# Multi-version API management and deprecation handling.
+[versioning]
+default_version = "v1"
+deprecation_warnings_enabled = true
+deprecation_headers = true  # RFC 8594 Sunset/Deprecated headers
+
+# Example sunset policy:
+# [[versioning.sunset_policies]]
+# version = "v1"
+# phase = "deprecated"  # "stable", "deprecated", "soft_sunset", "hard_sunset"
+# hard_sunset_date = "2027-03-31"
+# announced_date = "2025-04-11"
+# migration_guide_url = "https://docs.misogi.dev/migration/v1-to-v2"

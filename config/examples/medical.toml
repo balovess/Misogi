@@ -1,0 +1,198 @@
+# =============================================================================
+# Misogi — Medical Institution Configuration
+# =============================================================================
+# Japanese healthcare provider configuration for HIPAA-Japan alignment.
+# Prioritizes patient data privacy under 個人情報保護法 and 医療分野ガイドライン.
+#
+# Compliance: HIPAA-Japan, APPI (Act on the Protection of Personal Information)
+# Preset: medical_hipaa_jp
+# =============================================================================
+
+[server]
+addr = "0.0.0.0:3001"
+
+[storage]
+upload_dir = "/data/misogi-medical/uploads"
+staging_dir = "/data/misogi-medical/staging"
+
+# -----------------------------------------------------------------------------
+# Approval Flow — Dual approval for patient data transfers
+# -----------------------------------------------------------------------------
+[approval_flow]
+require_approval = true
+initial_state = "PENDING_DUAL_APPROVAL"
+
+[[approval_flow.triggers]]
+type = "http_callback"
+path = "/api/v1/medical/approvals/{file_id}"
+auth_header = "X-Medical-Approval-Token"
+
+[[approval_flow.transitions]]
+from = "PENDING_DUAL_APPROVAL"
+to = "APPROVED"
+trigger = "dual_approve"
+
+[[approval_flow.transitions]]
+from = "APPROVED"
+to = "TRANSFERRING"
+trigger = "auto"
+
+# -----------------------------------------------------------------------------
+# Transfer Driver
+# -----------------------------------------------------------------------------
+[transfer_driver]
+type = "direct_tcp"
+
+# -----------------------------------------------------------------------------
+# CDR Strategies — Convert to flat format for maximum safety
+# -----------------------------------------------------------------------------
+[cdr_strategies]
+
+[cdr_strategies.vba_whitelist]
+enabled = false
+default_action = "remove"
+
+[cdr_strategies.format_downgrade]
+enabled = true
+
+# Convert all Office documents to PDF for patient record safety
+[[cdr_strategies.format_downgrade.rules]]
+source_ext = ".docx"
+target_ext = ".pdf"
+auto_apply = true
+
+[[cdr_strategies.format_downgrade.rules]]
+source_ext = ".xlsx"
+target_ext = ".pdf"
+auto_apply = true
+
+[[cdr_strategies.format_downgrade.rules]]
+source_ext = ".pptx"
+target_ext = ".pdf"
+auto_apply = true
+
+[cdr_strategies.clamav_integration]
+enabled = true
+socket_path = "/var/run/clamd.sock"
+max_scan_size_mb = 200
+timeout_secs = 120
+action_on_virus = "block"
+action_on_clean = "pass_with_warning"
+
+# -----------------------------------------------------------------------------
+# File Types — Medical document formats
+# -----------------------------------------------------------------------------
+[file_types]
+default_action = "block"
+
+[[file_types.registry]]
+extension = ".pdf"
+magic_hex = "255044462D"
+required_magic = true
+sanitizer = "pdf_builtin"
+
+[[file_types.registry]]
+extension = ".docx"
+magic_hex = "504B0304"
+required_magic = true
+sanitizer = "office_builtin"
+
+[[file_types.registry]]
+extension = ".dcm"
+magic_hex = "4449434D"
+required_magic = false
+sanitizer = "dcm_builtin"
+
+[[file_types.blocked_extensions]]
+extension = ".exe"
+reason = "Executable files are prohibited in medical environment"
+
+[[file_types.blocked_extensions]]
+extension = ".zip"
+reason = "ZIP files require manual review for patient data"
+
+# -----------------------------------------------------------------------------
+# PII Detector — Medical-specific PII patterns
+# -----------------------------------------------------------------------------
+[pii_detector]
+enabled = true
+default_action = "block"
+mask_char = "X"
+
+[[pii_detector.rules]]
+name = "japanese_my_number"
+pattern = "\\b\\d{12}\\b"
+action = "block"
+description = "Japanese My Number (マイナンバー)"
+
+[[pii_detector.rules]]
+name = "patient_id_jp"
+pattern = "\\b[A-Z]{2}\\d{8}\\b"
+action = "mask"
+description = "Japanese patient ID format"
+
+[[pii_detector.rules]]
+name = "health_insurance_number_jp"
+pattern = "\\b\\d{8}\\b"
+action = "mask"
+description = "Japanese health insurance number"
+
+[[pii_detector.rules]]
+name = "email_address"
+pattern = "\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\\b"
+action = "mask"
+description = "Email address"
+
+[[pii_detector.rules]]
+name = "phone_number_jp"
+pattern = "\\b0[1-9]\\d{0,3}-?\\d{1,4}-?\\d{3,4}\\b"
+action = "mask"
+description = "Japanese phone number"
+
+# -----------------------------------------------------------------------------
+# Log — Extended retention for medical compliance
+# -----------------------------------------------------------------------------
+[log]
+format = "json"
+max_memory_entries = 10000
+retention_days = 3650  # 10 years for medical records
+
+# -----------------------------------------------------------------------------
+# Vendor Isolation — External lab/vendor access control
+# -----------------------------------------------------------------------------
+[vendor_isolation]
+enabled = true
+
+[[vendor_isolation.accounts]]
+user_id = "external_lab_a"
+display_name = "External Laboratory A"
+ip_whitelist = ["192.168.100.0/24"]
+require_dual_approval = true
+upload_rate_limit_per_hour = 10
+max_file_size_mb = 100
+
+# -----------------------------------------------------------------------------
+# Calendar
+# -----------------------------------------------------------------------------
+[calendar]
+enabled = true
+auto_defense_mode = true
+wareki_filename_detection = true
+
+# -----------------------------------------------------------------------------
+# Encoding
+# -----------------------------------------------------------------------------
+[encoding]
+default_encoding = "UTF-8"
+unknown_font_action = "replace"
+fallback_fonts = ["IPAexMincho", "IPAGothic"]
+
+# -----------------------------------------------------------------------------
+# PPAP — Strict handling for medical data
+# -----------------------------------------------------------------------------
+[ppap]
+enabled = true
+policy = "block"
+confidence_threshold = 0.5
+generate_compliance_event = true
+quarantine_retention_days = 365

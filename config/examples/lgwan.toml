@@ -1,0 +1,187 @@
+# =============================================================================
+# Misogi — LGWAN Government Configuration
+# =============================================================================
+# Japanese local government LGWAN (Local Government Wide Area Network) compliance.
+# Maximum security for handling citizen PII (個人情報) on cross-network transfers.
+#
+# Compliance: 地方公共機関情報システム安全対策基準
+# Preset: lgwan_government
+# =============================================================================
+
+[server]
+addr = "0.0.0.0:3001"
+
+[storage]
+upload_dir = "/data/misogi/uploads"
+staging_dir = "/data/misogi/staging"
+
+# -----------------------------------------------------------------------------
+# Approval Flow — Mandatory for LGWAN cross-network transfers
+# -----------------------------------------------------------------------------
+[approval_flow]
+require_approval = true
+initial_state = "PENDING_APPROVAL"
+
+[[approval_flow.triggers]]
+type = "http_callback"
+path = "/api/v1/approvals/{file_id}"
+auth_header = "X-Approval-Token"
+
+[[approval_flow.transitions]]
+from = "PENDING_APPROVAL"
+to = "APPROVED"
+trigger = "admin_approve"
+
+[[approval_flow.transitions]]
+from = "APPROVED"
+to = "TRANSFERRING"
+trigger = "auto"
+
+# -----------------------------------------------------------------------------
+# Transfer Driver — Direct TCP for LGWAN internal network
+# -----------------------------------------------------------------------------
+[transfer_driver]
+type = "direct_tcp"
+
+# -----------------------------------------------------------------------------
+# CDR Strategies — Maximum security
+# -----------------------------------------------------------------------------
+[cdr_strategies]
+
+[cdr_strategies.vba_whitelist]
+enabled = false  # Block all macros
+default_action = "remove"
+
+[cdr_strategies.format_downgrade]
+enabled = true
+
+[[cdr_strategies.format_downgrade.rules]]
+source_ext = ".xlsx"
+target_ext = ".csv"
+auto_apply = true
+
+[[cdr_strategies.format_downgrade.rules]]
+source_ext = ".docx"
+target_ext = ".pdf"
+auto_apply = true
+
+[cdr_strategies.clamav_integration]
+enabled = true
+socket_path = "/var/run/clamd.sock"
+max_scan_size_mb = 100
+timeout_secs = 60
+action_on_virus = "block"
+action_on_clean = "pass_with_warning"
+
+# -----------------------------------------------------------------------------
+# File Types — Strict validation
+# -----------------------------------------------------------------------------
+[file_types]
+default_action = "block"
+
+[[file_types.registry]]
+extension = ".pdf"
+magic_hex = "255044462D"
+required_magic = true
+sanitizer = "pdf_builtin"
+
+[[file_types.registry]]
+extension = ".docx"
+magic_hex = "504B0304"
+required_magic = true
+sanitizer = "office_builtin"
+
+[[file_types.registry]]
+extension = ".xlsx"
+magic_hex = "504B0304"
+required_magic = true
+sanitizer = "office_builtin"
+
+[[file_types.blocked_extensions]]
+extension = ".exe"
+reason = "Executable files are prohibited"
+
+[[file_types.blocked_extensions]]
+extension = ".scr"
+reason = "Screen saver files are prohibited"
+
+[[file_types.blocked_extensions]]
+extension = ".bat"
+reason = "Batch files are prohibited"
+
+[[file_types.blocked_extensions]]
+extension = ".ps1"
+reason = "PowerShell scripts are prohibited"
+
+# -----------------------------------------------------------------------------
+# PII Detector — Japanese My Number and personal information
+# -----------------------------------------------------------------------------
+[pii_detector]
+enabled = true
+default_action = "block"
+mask_char = "*"
+
+[[pii_detector.rules]]
+name = "japanese_my_number"
+pattern = "\\b\\d{12}\\b"
+action = "block"
+description = "Japanese My Number (マイナンバー) — 12 digits"
+
+[[pii_detector.rules]]
+name = "japanese_postal_code"
+pattern = "\\b\\d{3}-?\\d{4}\\b"
+action = "mask"
+description = "Japanese postal code (郵便番号)"
+
+[[pii_detector.rules]]
+name = "email_address"
+pattern = "\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\\b"
+action = "alert_only"
+description = "Email address"
+
+[[pii_detector.rules]]
+name = "phone_number_jp"
+pattern = "\\b0[1-9]\\d{0,3}-?\\d{1,4}-?\\d{3,4}\\b"
+action = "mask"
+description = "Japanese phone number"
+
+# -----------------------------------------------------------------------------
+# Log — CEF format for SIEM integration
+# -----------------------------------------------------------------------------
+[log]
+format = "cef"
+max_memory_entries = 5000
+retention_days = 2555  # 7 years per government requirement
+
+# -----------------------------------------------------------------------------
+# Vendor Isolation — Multi-tenant access control
+# -----------------------------------------------------------------------------
+[vendor_isolation]
+enabled = true
+
+# -----------------------------------------------------------------------------
+# Calendar — Japanese business calendar
+# -----------------------------------------------------------------------------
+[calendar]
+enabled = true
+calendar_file = "/etc/misogi/calendar.toml"
+auto_defense_mode = true
+wareki_filename_detection = true
+
+# -----------------------------------------------------------------------------
+# Encoding — Japanese text support
+# -----------------------------------------------------------------------------
+[encoding]
+default_encoding = "Windows-31J"
+unknown_font_action = "replace"
+fallback_fonts = ["IPAexMincho", "IPAGothic", "MS Mincho"]
+
+# -----------------------------------------------------------------------------
+# PPAP — Block insecure password-protected ZIPs
+# -----------------------------------------------------------------------------
+[ppap]
+enabled = true
+policy = "block"
+confidence_threshold = 0.6
+generate_compliance_event = true
+quarantine_retention_days = 365
