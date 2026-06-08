@@ -254,12 +254,11 @@ impl MimeHandler {
         let mut body_html: Option<String> = None;
         let mut attachments: Vec<EmailAttachment> = Vec::new();
 
-        self.extract_parts_recursive(
+        self.extract_parts_iterative(
             &parsed,
             &mut body_text,
             &mut body_html,
             &mut attachments,
-            0,
         )?;
 
         debug!(
@@ -434,146 +433,157 @@ impl MimeHandler {
         })
     }
 
-    /// Recursively walk the MIME tree to extract body text, HTML, and attachments.
+    /// Iteratively walk the MIME tree to extract body text, HTML, and attachments.
     ///
     /// # Depth Limiting
     ///
-    /// Recursion is capped at [`MAX_NESTING_DEPTH`] levels. Beyond this limit,
+    /// Processing is capped at [`MAX_NESTING_DEPTH`] levels. Beyond this limit,
     /// the method returns [`SmtpError::NestingDepthExceeded`] to prevent
     /// memory exhaustion from maliciously crafted deeply-nested MIME structures.
-    fn extract_parts_recursive(
+    ///
+    /// # Implementation Note
+    ///
+    /// This method uses an explicit stack-based iteration instead of recursion
+    /// to avoid stack overflow on deeply nested MIME structures. This is a
+    /// defense against multipart bomb attacks.
+    fn extract_parts_iterative(
         &self,
-        part: &ParsedMail,
+        root: &ParsedMail,
         body_text: &mut Option<String>,
         body_html: &mut Option<String>,
         attachments: &mut Vec<EmailAttachment>,
-        depth: usize,
     ) -> Result<()> {
-        if depth > MAX_NESTING_DEPTH {
-            return Err(SmtpError::NestingDepthExceeded {
-                depth,
-                max_depth: MAX_NESTING_DEPTH,
-            });
-        }
+        // Use a stack of (part reference, depth) pairs.
+        // We store references directly since we're iterating over the same tree.
+        let mut stack: Vec<(&ParsedMail, usize)> = vec![(root, 0)];
 
-        let ctype = part.ctype.mimetype.to_string();
-
-        match part.subparts.as_slice() {
-            // Leaf node: single content part
-            [] => {
-                // Get decoded body content
-                let data = part.get_body().unwrap_or_default();
-
-                // Determine content disposition
-                let content_disposition = part
-                    .headers
-                    .iter()
-                    .find(|h| h.get_key().to_lowercase() == "content-disposition")
-                    .map(|h| {
-                        h.get_value()
-                            .split(';')
-                            .next()
-                            .unwrap_or("attachment")
-                            .trim()
-                            .to_lowercase()
-                    })
-                    .unwrap_or_else(|| "inline".to_string());
-
-                // Determine if this is an attachment or body part
-                let is_attachment =
-                    content_disposition == "attachment"
-                        || (content_disposition == "inline"
-                            && !ctype.starts_with("text/")
-                            && !data.is_empty());
-
-                // Check for explicit filename from Content-Disposition or Content-Type header
-                let filename = part
-                    .headers
-                    .iter()
-                    .find(|h| {
-                        let key = h.get_key().to_lowercase();
-                        key == "content-disposition" || key == "content-type"
-                    })
-                    .and_then(|h| {
-                        // Parse filename parameter from header value
-                        h.get_value()
-                            .split(';')
-                            .find(|s| s.trim().starts_with("filename="))
-                            .and_then(|s| {
-                                s.trim()
-                                    .strip_prefix("filename=")
-                                    .map(|f| f.trim_matches('"').trim().to_string())
-                            })
-                    });
-
-                // Get Content-ID
-                let content_id = part
-                    .headers
-                    .iter()
-                    .find(|h| h.get_key().to_lowercase() == "content-id")
-                    .map(|h| h.get_value())
-                    .filter(|s| !s.is_empty());
-
-                // Get Content-Location
-                let content_location = part
-                    .headers
-                    .iter()
-                    .find(|h| h.get_key().to_lowercase() == "content-location")
-                    .map(|h| h.get_value())
-                    .filter(|s| !s.is_empty());
-
-                // Get transfer encoding from Content-Transfer-Encoding header
-                let transfer_encoding = part
-                    .headers
-                    .iter()
-                    .find(|h| h.get_key().to_lowercase() == "content-transfer-encoding")
-                    .map(|h| h.get_value())
-                    .filter(|s| !s.is_empty());
-
-                // Get raw bytes for binary attachments (get_body does charset decoding which corrupts binary)
-                let (raw_data, data_for_body) = if is_attachment || (!ctype.starts_with("text/") && !data.is_empty()) {
-                    let raw = part.get_body_raw().unwrap_or_else(|_| data.clone().into_bytes());
-                    (raw, None)
-                } else {
-                    // Keep a copy for body assignment since into_bytes consumes
-                    let data_copy = data.clone();
-                    (data_copy.into_bytes(), Some(data))
-                };
-
-                if is_attachment {
-                    // Determine effective MIME type
-                    let effective_mime_type = if ctype.is_empty() {
-                        "application/octet-stream".to_string()
-                    } else {
-                        ctype.clone()
-                    };
-
-                    let attachment_size = raw_data.len();
-                    attachments.push(EmailAttachment {
-                        content_id,
-                        filename,
-                        mime_type: effective_mime_type,
-                        content_disposition,
-                        transfer_encoding,
-                        data: raw_data,
-                        size: attachment_size,
-                        content_location,
-                    });
-                } else if let Some(body_data) = data_for_body {
-                    if ctype.starts_with("text/plain") && body_text.is_none() {
-                        *body_text = Some(body_data);
-                    } else if ctype.starts_with("text/html") && body_html.is_none() {
-                        *body_html = Some(body_data);
-                    }
-                }
+        while let Some((part, depth)) = stack.pop() {
+            if depth > MAX_NESTING_DEPTH {
+                return Err(SmtpError::NestingDepthExceeded {
+                    depth,
+                    max_depth: MAX_NESTING_DEPTH,
+                });
             }
 
-            // Container node: multipart structure
-            subparts => {
-                // For multipart/alternative: prefer text/plain over text/html for body extraction
-                // Order matters: mailparse returns alternatives in preference order
-                for subpart in subparts {
-                    self.extract_parts_recursive(subpart, body_text, body_html, attachments, depth + 1)?;
+            let ctype = part.ctype.mimetype.to_string();
+
+            match part.subparts.as_slice() {
+                // Leaf node: single content part
+                [] => {
+                    // Get decoded body content
+                    let data = part.get_body().unwrap_or_default();
+
+                    // Determine content disposition
+                    let content_disposition = part
+                        .headers
+                        .iter()
+                        .find(|h| h.get_key().to_lowercase() == "content-disposition")
+                        .map(|h| {
+                            h.get_value()
+                                .split(';')
+                                .next()
+                                .unwrap_or("attachment")
+                                .trim()
+                                .to_lowercase()
+                        })
+                        .unwrap_or_else(|| "inline".to_string());
+
+                    // Determine if this is an attachment or body part
+                    let is_attachment =
+                        content_disposition == "attachment"
+                            || (content_disposition == "inline"
+                                && !ctype.starts_with("text/")
+                                && !data.is_empty());
+
+                    // Check for explicit filename from Content-Disposition or Content-Type header
+                    let filename = part
+                        .headers
+                        .iter()
+                        .find(|h| {
+                            let key = h.get_key().to_lowercase();
+                            key == "content-disposition" || key == "content-type"
+                        })
+                        .and_then(|h| {
+                            // Parse filename parameter from header value
+                            h.get_value()
+                                .split(';')
+                                .find(|s| s.trim().starts_with("filename="))
+                                .and_then(|s| {
+                                    s.trim()
+                                        .strip_prefix("filename=")
+                                        .map(|f| f.trim_matches('"').trim().to_string())
+                                })
+                        });
+
+                    // Get Content-ID
+                    let content_id = part
+                        .headers
+                        .iter()
+                        .find(|h| h.get_key().to_lowercase() == "content-id")
+                        .map(|h| h.get_value())
+                        .filter(|s| !s.is_empty());
+
+                    // Get Content-Location
+                    let content_location = part
+                        .headers
+                        .iter()
+                        .find(|h| h.get_key().to_lowercase() == "content-location")
+                        .map(|h| h.get_value())
+                        .filter(|s| !s.is_empty());
+
+                    // Get transfer encoding from Content-Transfer-Encoding header
+                    let transfer_encoding = part
+                        .headers
+                        .iter()
+                        .find(|h| h.get_key().to_lowercase() == "content-transfer-encoding")
+                        .map(|h| h.get_value())
+                        .filter(|s| !s.is_empty());
+
+                    // Get raw bytes for binary attachments (get_body does charset decoding which corrupts binary)
+                    let (raw_data, data_for_body) = if is_attachment || (!ctype.starts_with("text/") && !data.is_empty()) {
+                        let raw = part.get_body_raw().unwrap_or_else(|_| data.clone().into_bytes());
+                        (raw, None)
+                    } else {
+                        // Keep a copy for body assignment since into_bytes consumes
+                        let data_copy = data.clone();
+                        (data_copy.into_bytes(), Some(data))
+                    };
+
+                    if is_attachment {
+                        // Determine effective MIME type
+                        let effective_mime_type = if ctype.is_empty() {
+                            "application/octet-stream".to_string()
+                        } else {
+                            ctype.clone()
+                        };
+
+                        let attachment_size = raw_data.len();
+                        attachments.push(EmailAttachment {
+                            content_id,
+                            filename,
+                            mime_type: effective_mime_type,
+                            content_disposition,
+                            transfer_encoding,
+                            data: raw_data,
+                            size: attachment_size,
+                            content_location,
+                        });
+                    } else if let Some(body_data) = data_for_body {
+                        if ctype.starts_with("text/plain") && body_text.is_none() {
+                            *body_text = Some(body_data);
+                        } else if ctype.starts_with("text/html") && body_html.is_none() {
+                            *body_html = Some(body_data);
+                        }
+                    }
+                }
+
+                // Container node: multipart structure
+                subparts => {
+                    // Push subparts onto the stack in reverse order
+                    // so they are processed in original order (LIFO stack behavior)
+                    for subpart in subparts.iter().rev() {
+                        stack.push((subpart, depth + 1));
+                    }
                 }
             }
         }
@@ -583,7 +593,7 @@ impl MimeHandler {
 
     /// Detect S/MIME encrypted content (`application/pkcs7-mime` with `smime-type=enveloped-data`).
     fn detect_encryption(&self, parsed: &ParsedMail) -> bool {
-        self.check_content_type_recursive(parsed, |ctype| {
+        self.check_content_type_iterative(parsed, |ctype| {
             ctype == "application/pkcs7-mime"
                 && parsed
                     .headers
@@ -603,7 +613,7 @@ impl MimeHandler {
         });
 
         // Check for multipart/signed
-        let has_smime_sig = self.check_content_type_recursive(parsed, |ctype| {
+        let has_smime_sig = self.check_content_type_iterative(parsed, |ctype| {
             ctype == "multipart/signed"
         });
 
@@ -619,20 +629,32 @@ impl MimeHandler {
             .cloned()
     }
 
-    /// Recursively check if any MIME part matches the given content type predicate.
-    fn check_content_type_recursive<F>(&self, part: &ParsedMail, predicate: F) -> bool
+    /// Iteratively check if any MIME part matches the given content type predicate.
+    ///
+    /// # Implementation Note
+    ///
+    /// This method uses an explicit stack-based iteration instead of recursion
+    /// to avoid stack overflow on deeply nested MIME structures.
+    fn check_content_type_iterative<F>(&self, root: &ParsedMail, predicate: F) -> bool
     where
         F: Fn(&str) -> bool,
     {
-        let ctype = part.ctype.mimetype.as_str();
+        let mut stack: Vec<&ParsedMail> = vec![root];
 
-        if predicate(ctype) {
-            return true;
+        while let Some(part) = stack.pop() {
+            let ctype = part.ctype.mimetype.as_str();
+
+            if predicate(ctype) {
+                return true;
+            }
+
+            // Push subparts onto the stack for processing
+            for subpart in part.subparts.iter().rev() {
+                stack.push(subpart);
+            }
         }
 
-        part.subparts
-            .iter()
-            .any(|sp| self.check_content_type_recursive(sp, &predicate))
+        false
     }
 
     /// Extract domain portion from an email address string.

@@ -106,7 +106,9 @@ pub fn allocate_buffer(size: usize) -> i32 {
     {
         let ptr = buffer.as_mut_ptr();
         std::mem::forget(buffer);
-        ptr as i32
+        // On non-wasm32 targets, cast pointer to usize then to i32
+        // This is only for testing purposes
+        (ptr as *mut ()) as usize as i32
     }
 }
 
@@ -180,6 +182,7 @@ pub fn console_log(level: &str, message: &str) {
 ///   "bigint": true
 /// }
 /// ```
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub fn detect_wasm_features() -> String {
     let mut features = HashMap::new();
@@ -201,6 +204,17 @@ pub fn detect_wasm_features() -> String {
     features.insert("bigint".to_string(), has_bigint);
 
     serde_json::to_string(&features).unwrap_or_else(|_| "{}".to_string())
+}
+
+/// Non-WASM target: return static JSON with all features disabled.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn detect_wasm_features() -> String {
+    serde_json::json!({
+        "webassembly": false,
+        "shared_array_buffer": false,
+        "bigint": false
+    })
+    .to_string()
 }
 
 // ===========================================================================
@@ -260,6 +274,7 @@ mod tests {
     // Test: Feature Detection JSON Output
     // -----------------------------------------------------------------------
 
+    #[cfg(target_arch = "wasm32")]
     #[test]
     fn test_detect_wasm_features_returns_valid_json() {
         let json = detect_wasm_features();
@@ -270,6 +285,21 @@ mod tests {
         // SharedArrayBuffer and BigInt depend on test environment
         assert!(parsed.contains_key("shared_array_buffer"));
         assert!(parsed.contains_key("bigint"));
+    }
+
+    // Non-wasm32 target: feature detection returns a static JSON
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn test_detect_wasm_features_returns_valid_json() {
+        let json = detect_wasm_features();
+        // On non-wasm targets, returns a static JSON with all features disabled
+        let parsed: HashMap<String, bool> =
+            serde_json::from_str(&json).expect("should be valid JSON");
+
+        // All features should be false on non-wasm targets
+        assert!(!parsed.get("webassembly").unwrap());
+        assert!(!parsed.get("shared_array_buffer").unwrap());
+        assert!(!parsed.get("bigint").unwrap());
     }
 
     // -----------------------------------------------------------------------

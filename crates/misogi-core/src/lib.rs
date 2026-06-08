@@ -2,11 +2,13 @@ pub mod error;
 pub mod types;
 
 // Core modules (always available)
+pub mod abac;
 pub mod approval;
 pub mod presets;
 pub mod pii;
 pub mod fec;
 pub mod hash;
+pub mod integrity;
 
 // Protocol module: contains framing utilities, some async functions gated internally
 pub mod protocol;
@@ -22,6 +24,14 @@ pub mod audit_log;
 
 #[cfg(feature = "runtime")]
 pub mod cdr_strategies;
+
+/// CDR Engine v2 — signature-less proactive threat elimination system.
+///
+/// Provides AST-based document analysis, staged pipeline processing,
+/// policy-driven sanitization decisions, and comprehensive audit reporting.
+/// This is the next-generation CDR architecture, independent of V1 traits.
+#[cfg(feature = "runtime")]
+pub mod cdr_v2;
 
 #[cfg(feature = "runtime")]
 pub mod file_types;
@@ -86,6 +96,7 @@ pub mod contrib;
 pub use error::{MisogiError, Result};
 pub use types::*;
 pub use protocol::*;
+pub use abac::*;
 
 #[cfg(feature = "runtime")]
 pub use tunnel::*;

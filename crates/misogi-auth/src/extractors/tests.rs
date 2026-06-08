@@ -19,10 +19,10 @@
 use super::*;
 use axum::{
     body::Body,
+    extract::FromRequestParts,
     http::{self, Request},
 };
-use std::sync::Arc;
-use tower_service::Service;
+use tower::Service;
 
 // ===========================================================================
 // Helper Functions
@@ -140,10 +140,10 @@ mod jwt_extractor_tests {
             .body(Body::empty())
             .unwrap();
 
-        let parts = build_request_parts(request).await;
+        let mut parts = build_request_parts(request).await;
 
         let result =
-            JwtAuthExtractor::from_request_parts(parts, &()).await;
+            JwtAuthExtractor::from_request_parts(&mut parts, &()).await;
 
         assert!(result.is_err());
         match result.unwrap_err() {
@@ -160,10 +160,10 @@ mod jwt_extractor_tests {
             .body(Body::empty())
             .unwrap();
 
-        let parts = build_request_parts(request).await;
+        let mut parts = build_request_parts(request).await;
 
         let result =
-            JwtAuthExtractor::from_request_parts(parts, &()).await;
+            JwtAuthExtractor::from_request_parts(&mut parts, &()).await;
 
         assert!(result.is_err());
         match result.unwrap_err() {
@@ -182,10 +182,10 @@ mod jwt_extractor_tests {
             .body(Body::empty())
             .unwrap();
 
-        let parts = build_request_parts(request).await;
+        let mut parts = build_request_parts(request).await;
 
         let result =
-            JwtAuthExtractor::from_request_parts(parts, &()).await;
+            JwtAuthExtractor::from_request_parts(&mut parts, &()).await;
 
         assert!(result.is_err());
         match result.unwrap_err() {
@@ -222,10 +222,10 @@ mod jwt_extractor_tests {
             .body(Body::empty())
             .unwrap();
 
-        let parts = build_request_parts(request).await;
+        let mut parts = build_request_parts(request).await;
 
         let result =
-            JwtAuthExtractor::from_request_parts(parts, &()).await;
+            JwtAuthExtractor::from_request_parts(&mut parts, &()).await;
 
         assert!(result.is_err());
         match result.unwrap_err() {
@@ -243,11 +243,11 @@ mod jwt_extractor_tests {
             .body(Body::empty())
             .unwrap();
 
-        let parts = build_request_parts(request).await;
+        let mut parts = build_request_parts(request).await;
 
         // This will fail at validation stage (not a real token), not at parsing stage
         let result =
-            JwtAuthExtractor::from_request_parts(parts, &()).await;
+            JwtAuthExtractor::from_request_parts(&mut parts, &()).await;
 
         assert!(result.is_err());
         // Should NOT be InvalidBearerToken (parsing succeeded)
@@ -507,7 +507,7 @@ mod edge_case_tests {
             .body(Body::empty())
             .unwrap();
 
-        let parts = build_request_parts(request).await;
+        let mut parts = build_request_parts(request).await;
 
         // Should extract the first (only) Authorization header
         let auth = parts.headers.get(http::header::AUTHORIZATION);

@@ -28,6 +28,17 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "runtime")]
 use crate::audit_log::AuditLogEntry;
 use crate::error::Result;
+use crate::types::ChunkMeta;
+
+/// Re-exported integrity types for self-healing transport integration.
+///
+/// These types are used by the optional integrity-aware methods on
+/// [`TransferDriver`] (`send_chunk_integrity`, `repair_chunks`) and
+/// provide cryptographic verification, repair tracking, and session
+/// management for tamper-detected transport operations.
+pub use crate::integrity::{
+    IntegrityAck as IntegrityChunkAck, IntegrityEnvelope, RepairProgress,
+};
 
 // =============================================================================
 // StateMachine Trait (implemented in engine::state_machine module)
@@ -288,6 +299,148 @@ pub trait TransferDriver: Send + Sync {
     /// Calling `shutdown()` multiple times MUST be safe; subsequent calls
     /// after the first SHOULD return `Ok(())` immediately.
     async fn shutdown(&self) -> Result<()>;
+
+    // =====================================================================
+    // Self-Healing Integrity Layer (Optional Methods)
+    // =====================================================================
+    //
+    // The following methods provide integration points between the
+    // TransferDriver abstraction and the self-healing integrity subsystem
+    // (crate::integrity). Both methods ship with default implementations
+    // that fall back to legacy (non-integrity-aware) behavior, ensuring
+    // full backward compatibility with existing driver implementations.
+    //
+    // Implementations that support cryptographic envelope verification
+    // SHOULD override these methods to enable tamper detection and
+    // automatic chunk repair without requiring upper-layer changes.
+
+    /// Send a single chunk with integrity envelope for tamper detection.
+    ///
+    /// Wraps the payload in an optional [`IntegrityEnvelope`] carrying
+    /// cryptographic digests (data hash, envelope hash, sequence nonce,
+    /// chain-link hash) that enables the receiver to independently verify
+    /// both payload integrity and transmission authenticity.
+    ///
+    /// # Default Behavior
+    ///
+    /// The default implementation delegates to [`TransferDriver::send_chunk()`]
+    /// without any integrity wrapping, then constructs a synthetic
+    /// [`IntegrityChunkAck`] indicating successful receipt. This ensures
+    /// existing driver implementations compile and operate without changes.
+    ///
+    /// # Arguments
+    /// * `file_id` — Unique identifier of the file being transferred.
+    /// * `chunk_index` — Zero-based position of this chunk within the file.
+    /// * `data` — Raw bytes of the chunk payload.
+    /// * `metadata` — Chunk metadata containing MD5 and size information.
+    /// * `envelope` — Optional integrity envelope with cryptographic proofs.
+    ///   When `None`, the default implementation falls back to plain transfer.
+    ///
+    /// # Returns
+    /// An [`IntegrityChunkAck`] indicating whether the receiver accepted
+    /// the chunk and verified its integrity (when envelope was provided).
+    ///
+    /// # Errors
+    /// - Propagates any error from [`TransferDriver::send_chunk()`].
+    /// - Implementations overriding this method may return integrity-specific
+    ///   errors (e.g., hash computation failure, envelope validation failure).
+    ///
+    /// # Backward Compatibility
+    /// Existing implementations of [`TransferDriver`] need not override this
+    /// method. The default provides transparent pass-through behavior.
+    async fn send_chunk_integrity(
+        &self,
+        file_id: &str,
+        chunk_index: u32,
+        data: &[u8],
+        metadata: &ChunkMeta,
+        _envelope: Option<&IntegrityEnvelope>,
+    ) -> Result<IntegrityChunkAck> {
+        let _metadata = metadata;
+        let chunk_ack = self
+            .send_chunk(file_id, chunk_index, Bytes::copy_from_slice(data))
+            .await?;
+        Ok(IntegrityChunkAck {
+            chunk_index,
+            received_ok: chunk_ack.is_success(),
+            error: chunk_ack.error,
+        })
+    }
+
+    /// Request retransmission of specific chunk indices after corruption detection.
+    ///
+    /// Called by the self-healing layer when post-transfer verification
+    /// identifies missing or corrupted chunks. Initiates sequential repair
+    /// by re-sending each requested chunk via [`TransferDriver::send_chunk()`].
+    ///
+    /// # Default Behavior
+    ///
+    /// The default implementation iterates over `indices` sequentially,
+    /// calling [`TransferDriver::send_chunk()`] for each pair of `(index, data)`.
+    /// Successful repairs increment the completed counter; failures are
+    /// collected into `failed_indices`. This is a safe but non-optimal
+    /// baseline: production implementations SHOULD override this method
+    /// to enable batch or parallel repair for better throughput.
+    ///
+    /// # Arguments
+    /// * `file_id` — Unique identifier of the file being repaired.
+    /// * `indices` — Chunk indices requiring retransmission (must match
+    ///   `chunks` slice length).
+    /// * `chunks` — Raw payload data for each chunk to re-send, ordered
+    ///   to correspond positionally with `indices`.
+    /// * `metadata` — Chunk metadata template for repair chunks (MD5/size
+    ///   are recomputed per-chunk by the receiver; this is for logging context).
+    ///
+    /// # Returns
+    /// A [`RepairProgress`] tracking how many repairs succeeded/failed and
+    /// which specific indices remain unrepaired after all attempts.
+    ///
+    /// # Errors
+    /// This method does NOT return an error on individual chunk failures;
+    /// those are recorded in [`RepairProgress::failed_indices`]. It returns
+    /// an error only if the underlying transport reports a fatal condition
+    /// that prevents any further operation.
+    ///
+    /// # Edge Cases
+    /// - Empty `indices` / `chunks` slices return zero-progress immediately.
+    /// - Mismatched lengths cause trailing indices without corresponding
+    ///   data to be recorded as failed.
+    ///
+    /// # Backward Compatibility
+    /// Existing implementations need not override this method. The default
+    /// provides correct (if sequential) repair behavior out of the box.
+    async fn repair_chunks(
+        &self,
+        file_id: &str,
+        indices: &[u32],
+        chunks: &[&[u8]],
+        metadata: &ChunkMeta,
+    ) -> Result<RepairProgress> {
+        let _metadata = metadata;
+        let mut completed = 0u32;
+        let mut failed = Vec::new();
+
+        for (i, &idx) in indices.iter().enumerate() {
+            if let Some(chunk_data) = chunks.get(i) {
+                match self
+                    .send_chunk(file_id, idx, Bytes::copy_from_slice(chunk_data))
+                    .await
+                {
+                    Ok(_) => completed += 1,
+                    Err(_) => failed.push(idx),
+                }
+            } else {
+                // Index present but no corresponding chunk data — record as failed.
+                failed.push(idx);
+            }
+        }
+
+        Ok(RepairProgress {
+            total_requested: indices.len() as u32,
+            completed,
+            failed_indices: failed,
+        })
+    }
 }
 
 // =============================================================================
@@ -1350,3 +1503,7 @@ pub mod jtd_libreoffice;
 pub mod jtd_ichitaro;
 
 pub use jtd_converter::{JtdConverter, JtdConversionResult, JtdConversionError};
+
+// Self-healing integrity layer tests for TransferDriver trait.
+#[cfg(test)]
+mod transfer_driver_integrity_tests;

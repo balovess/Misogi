@@ -457,7 +457,8 @@ async fn test_ooxml_docx_processing_sanitizes_macros() {
     let policy = SanitizePolicy::default();
 
     let docx_input = make_sample_docx_with_macros();
-    let result = registry.parse(docx_input, &policy).await.expect("OOXML parsing should succeed");
+    // Use parse_with_filename to provide extension hint for correct routing
+    let result = registry.parse_with_filename(docx_input, &policy, "document.docx").await.expect("OOXML parsing should succeed");
 
     assert_eq!(result.parser_name, "MockOoxmlCdrParser");
     assert!(result.has_actions());
@@ -690,7 +691,7 @@ async fn test_policy_lenient_allows_more_content() {
     );
 
     // For OOXML with macros — only macros should be removed
-    let docx_result = registry.parse(make_sample_docx_with_macros(), &lenient_policy).await.unwrap();
+    let docx_result = registry.parse_with_filename(make_sample_docx_with_macros(), &lenient_policy, "document.docx").await.unwrap();
     assert!(
         docx_result.actions_taken.contains(&SanitizeAction::MacroStripped),
         "even lenient policy should still remove macros"

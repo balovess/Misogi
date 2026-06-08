@@ -78,6 +78,7 @@ impl CsvPiiScanner {
         let start = Instant::now();
         let bytes_processed = content.len() as u64;
         let mut pii_fields: Vec<FieldScanResult> = Vec::new();
+        let mut total_rows = 0usize;
 
         let mut reader = csv::ReaderBuilder::new()
             .delimiter(self.config.delimiter)
@@ -108,6 +109,8 @@ impl CsvPiiScanner {
             if self.config.skip_empty_rows && record.iter().all(|f| f.is_empty()) {
                 continue;
             }
+
+            total_rows = row_idx + 1;
 
             for (col_idx, value) in record.iter().enumerate() {
                 if col_idx >= classifications.len() || value.is_empty() {
@@ -142,7 +145,7 @@ impl CsvPiiScanner {
         Ok(StructuredScanResult {
             format: StructuredFormat::Csv,
             total_fields: pii_fields.len()
-                + (row_idx.saturating_sub(1)
+                + (total_rows.saturating_sub(1)
                     * headers.len().max(1)),
             pii_fields,
             overall_action,
@@ -159,7 +162,7 @@ impl CsvPiiScanner {
                 } else {
                     let chars: Vec<char> = value.chars().collect();
                     format!(
-                        "{}{}",
+                        "{}{}{}",
                         chars[0],
                         "*".repeat(chars.len() - 2).as_str(),
                         chars[chars.len() - 1]

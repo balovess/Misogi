@@ -62,8 +62,9 @@ impl ApiVersion {
     /// # Examples
     ///
     /// ```
-    /// assert_eq!(ApiVersion::from_uri_path("/api/v1/upload"), Some(V1));
-    /// assert_eq!(ApiVersion::from_uri_path("/api/v2/sanitize"), Some(V2));
+    /// use misogi_core::versioning::api_version::ApiVersion;
+    /// assert_eq!(ApiVersion::from_uri_path("/api/v1/upload"), Some(ApiVersion::V1));
+    /// assert_eq!(ApiVersion::from_uri_path("/api/v2/sanitize"), Some(ApiVersion::V2));
     /// assert_eq!(ApiVersion::from_uri_path("/health"), None);
     /// ```
     pub fn from_uri_path(path: &str) -> Option<Self> {
@@ -105,6 +106,7 @@ impl ApiVersion {
     ///
     /// # Example
     /// ```
+    /// use misogi_core::versioning::api_version::ApiVersion;
     /// assert_eq!(ApiVersion::V1.proto_package_suffix(), ".file_transfer.v1");
     /// ```
     pub fn proto_package_suffix(&self) -> &'static str {
@@ -118,6 +120,7 @@ impl ApiVersion {
     ///
     /// # Example
     /// ```
+    /// use misogi_core::versioning::api_version::ApiVersion;
     /// assert_eq!(ApiVersion::V1.url_prefix(), "/api/v1");
     /// ```
     pub fn url_prefix(&self) -> &'static str {

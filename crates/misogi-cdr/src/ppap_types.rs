@@ -35,7 +35,7 @@ use serde::{Deserialize, Serialize};
 ///
 /// # Example
 ///
-/// ```rust,no_run
+/// ```ignore
 /// let result = detector.detect(&file_path).await?;
 /// if result.is_ppap && result.confidence >= 0.7 {
 ///     println!("PPAP detected! Reason: {}", result.reason);

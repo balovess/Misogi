@@ -133,7 +133,7 @@ impl AzureBlobConfig {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum AzureAuthMode {
     AccessKey,
     SasToken,

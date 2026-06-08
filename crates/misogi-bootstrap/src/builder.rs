@@ -380,13 +380,7 @@ impl MisogiApplicationBuilder {
                 ))
             })?;
 
-        let provider =
-            LdapIdentityProvider::new(cfg.id.clone(), plugin_config).map_err(|e| {
-                BootstrapError::ProviderRegistrationError {
-                    provider_id: cfg.id.clone(),
-                    reason: e.to_string(),
-                }
-            })?;
+        let provider = LdapIdentityProvider::new(plugin_config);
 
         Ok(Arc::new(provider))
     }
@@ -420,7 +414,7 @@ impl MisogiApplicationBuilder {
             })?;
 
         let provider =
-            OidcIdentityProvider::new(cfg.id.clone(), provider_config).map_err(|e| {
+            OidcIdentityProvider::new(provider_config).map_err(|e| {
                 BootstrapError::ProviderRegistrationError {
                     provider_id: cfg.id.clone(),
                     reason: e.to_string(),
@@ -459,7 +453,7 @@ impl MisogiApplicationBuilder {
             })?;
 
         let provider =
-            SamlIdentityProvider::new(cfg.id.clone(), plugin_config).map_err(|e| {
+            SamlIdentityProvider::new(plugin_config).map_err(|e| {
                 BootstrapError::ProviderRegistrationError {
                     provider_id: cfg.id.clone(),
                     reason: e.to_string(),

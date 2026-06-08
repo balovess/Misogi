@@ -166,7 +166,7 @@ pub enum OcrError {
     },
 
     /// Authentication failure.
-    #[error("OCR authentication failed for provider '{provider}': {0}")]
+    #[error("OCR authentication failed for provider '{provider}': {message}")]
     Authentication {
         provider: String,
         message: String,

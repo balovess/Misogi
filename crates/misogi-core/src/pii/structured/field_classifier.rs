@@ -100,8 +100,12 @@ impl FieldClassifier {
             Err(_) => return FieldClassification::unmatched(field_name),
         };
 
+        let config = match self.config.read() {
+            Ok(c) => c,
+            Err(_) => return FieldClassification::unmatched(field_name),
+        };
+
         let mut best_match: Option<&FieldMapping> = None;
-        let config = self.config.read().unwrap_or_else(|_| FieldClassifierConfig::default());
 
         for mapping in mappings.iter() {
             if mapping.matches_field(field_name) {

@@ -87,7 +87,7 @@ pub use http_api_adapter::{HttpApiAdapter, HttpApiConfig};
 /// # Examples
 ///
 /// ```rust
-/// use misogi_core::scanners::ScanResult;
+/// use misogi_core::scanners::{ScanResult, ThreatSeverity};
 ///
 /// let clean = ScanResult::Clean;
 /// assert!(clean.is_clean());

@@ -250,6 +250,13 @@ impl ParserRegistry {
         input: Bytes,
         policy: &SanitizePolicy,
     ) -> Result<SanitizedOutput, ParseError> {
+        // Check file size limit before routing to parser
+        if let Some(max_size) = policy.max_file_size_bytes {
+            if input.len() as u64 > max_size {
+                return Err(ParseError::FileTooLarge(input.len() as u64));
+            }
+        }
+
         let sample_size = input.len().min(MAGIC_MIN_SAMPLE_SIZE);
         let magic_bytes = &input[..sample_size];
         let parser = self.find_parser(magic_bytes, None);
@@ -267,6 +274,13 @@ impl ParserRegistry {
         policy: &SanitizePolicy,
         filename: &str,
     ) -> Result<SanitizedOutput, ParseError> {
+        // Check file size limit before routing to parser
+        if let Some(max_size) = policy.max_file_size_bytes {
+            if input.len() as u64 > max_size {
+                return Err(ParseError::FileTooLarge(input.len() as u64));
+            }
+        }
+
         let sample_size = input.len().min(MAGIC_MIN_SAMPLE_SIZE);
         let magic_bytes = &input[..sample_size];
         let parser = self.find_parser(magic_bytes, Some(filename));
@@ -334,6 +348,10 @@ pub fn detect_format_from_bytes(data: &[u8]) -> Option<DetectedFormat> {
 pub fn extract_extension(filename: &str) -> Option<String> {
     let basename = filename.rsplit(['/', '\\']).next().unwrap_or(filename);
     let dot_pos = basename.rfind('.')?;
+    // Reject hidden files (e.g., ".hidden") where dot is at position 0
+    if dot_pos == 0 {
+        return None;
+    }
     if dot_pos + 1 >= basename.len() { return None; }
     let extension = &basename[dot_pos + 1..];
     if extension.chars().all(|c| c.is_alphanumeric()) {

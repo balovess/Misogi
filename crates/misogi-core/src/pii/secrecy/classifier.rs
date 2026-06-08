@@ -54,7 +54,7 @@ pub struct SecrecySchemeConfig {
 /// User-customizable secrecy level classifier.
 pub struct SecrecyClassifier {
     scheme: Arc<RwLock<SecrecySchemeConfig>>,
-    level_index: Arc<RwLock<HashMap<String, u32>>,
+    level_index: Arc<RwLock<HashMap<String, u32>>>,
 }
 
 impl SecrecyClassifier {
@@ -274,8 +274,9 @@ impl SecrecySchemeBuilder {
         rank: u32,
         color: impl Into<String>,
     ) -> Self {
+        let id_str: String = id.into();
         self.config.levels.insert(
-            id.into(),
+            id_str.clone(),
             SecrecyLevelDef {
                 id: String::new(),
                 display_name: display_name.into(),
@@ -286,8 +287,8 @@ impl SecrecySchemeBuilder {
             },
         );
 
-        if let Some(level) = self.config.levels.get_mut(&id.into().into()) {
-            level.id = id.into();
+        if let Some(level) = self.config.levels.get_mut(&id_str) {
+            level.id = id_str;
         }
 
         self

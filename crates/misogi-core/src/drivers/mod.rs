@@ -43,7 +43,9 @@ use crate::error::{MisogiError, Result};
 use crate::hash::compute_md5;
 use crate::traits::{
     ChunkAck, DriverHealthStatus, TransferDriver, TransferDriverConfig,
+    IntegrityChunkAck, IntegrityEnvelope,
 };
+use crate::types::ChunkMeta;
 use crate::tunnel::TunnelClient;
 
 // =============================================================================
@@ -327,6 +329,46 @@ impl TransferDriver for DirectTcpDriver {
             tracing::info!(driver = %self.name(), "DirectTcpDriver shutdown");
         }
         Ok(())
+    }
+
+    /// Integrity-aware chunk sending stub for TCP driver.
+    ///
+    /// Currently delegates to the default [`TransferDriver::send_chunk_integrity()`]
+    /// implementation which falls back to plain `send_chunk()` without cryptographic
+    /// envelope verification. Full integrity-aware sending for the TCP transport
+    /// is planned for a future release and will include:
+    ///
+    /// - Envelope construction before each chunk transmission.
+    /// - Receiver-side hash verification acknowledgment.
+    /// - Automatic repair triggering on verification failure.
+    ///
+    /// # Warning
+    /// This stub logs a deprecation notice on every invocation. Production
+    /// deployments requiring tamper detection should use a different transport
+    /// backend or await the full implementation.
+    async fn send_chunk_integrity(
+        &self,
+        file_id: &str,
+        chunk_index: u32,
+        data: &[u8],
+        metadata: &ChunkMeta,
+        envelope: Option<&IntegrityEnvelope>,
+    ) -> Result<IntegrityChunkAck> {
+        let _metadata = metadata;
+        let _envelope = envelope;
+
+        tracing::warn!(
+            driver = %self.name(),
+            file_id = %file_id,
+            chunk_index = chunk_index,
+            data_len = data.len(),
+            "integrity-aware sending not yet implemented for TCP driver; \
+             falling back to plain transfer"
+        );
+
+        // Delegate to the trait's default implementation.
+        TransferDriver::send_chunk_integrity(self, file_id, chunk_index, data, metadata, envelope)
+            .await
     }
 }
 

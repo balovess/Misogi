@@ -19,9 +19,10 @@
 
 use std::sync::{Arc, RwLock};
 
+use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use tracing::{debug, warn};
+use tracing::debug;
 
 use super::models::{
     EdrDevicePosture,
@@ -234,15 +235,15 @@ impl EdrProvider for DefenderEdrProvider {
                 .map_or(false, |e| e == "High" || e == "Medium");
 
         Ok(EdrDevicePosture {
-            device_id: machine.id.unwrap_or_else(|| device_id.to_string()),
-            hostname: machine.computer_dns_name,
+            device_id: machine.id.clone().unwrap_or_else(|| device_id.to_string()),
+            hostname: machine.computer_dns_name.clone(),
             has_active_threats,
             active_detection_count: 0, // Requires separate API call
             sensor_healthy: machine.health_status.as_deref() == Some("Active"),
             last_seen_at: machine.last_seen_time,
             os_info: Some(EdrOsInfo {
-                platform: machine.os_platform.unwrap_or_default(),
-                version: machine.os_version.unwrap_or_default(),
+                platform: machine.os_platform.clone().unwrap_or_default(),
+                version: machine.os_version.clone().unwrap_or_default(),
                 build: None,
             }),
             raw_response: Some(serde_json::to_value(&machine).unwrap_or_default()),

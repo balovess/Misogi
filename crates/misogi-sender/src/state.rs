@@ -63,6 +63,8 @@ use misogi_cdr::{
 // Re-export trait types for ergonomic access within this module
 use misogi_core::traits::{CDRStrategy, FileTypeDetector, PIIDetector};
 #[cfg(feature = "jp_contrib")]
+use misogi_core::traits::EncodingHandler;
+#[cfg(feature = "jp_contrib")]
 use misogi_core::contrib::jp::encoding::JapaneseEncodingHandler;
 #[cfg(feature = "jp_contrib")]
 use misogi_core::contrib::jp::vendor::VendorIsolationManager;

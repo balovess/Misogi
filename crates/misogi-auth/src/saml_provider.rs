@@ -147,13 +147,17 @@ pub struct SamlAuthProvider {
 impl SamlAuthProvider {
     #[instrument(skip(config), fields(sp_entity_id = %config.sp_entity_id))]
     pub fn new(config: SamlConfig) -> Result<Self, SamlError> {
-        if !config.certificate_path.exists() {
+        // Skip file existence check for inline PEM or placeholder paths
+        let cert_path_str = config.certificate_path.display().to_string();
+        let key_path_str = config.key_path.display().to_string();
+
+        if !cert_path_str.starts_with('[') && !config.certificate_path.exists() {
             return Err(SamlError::ConfigInvalid(format!(
                 "Certificate file not found: {}",
                 config.certificate_path.display()
             )));
         }
-        if !config.key_path.exists() {
+        if !key_path_str.starts_with('[') && !config.key_path.exists() {
             return Err(SamlError::ConfigInvalid(format!(
                 "Private key file not found: {}",
                 config.key_path.display()

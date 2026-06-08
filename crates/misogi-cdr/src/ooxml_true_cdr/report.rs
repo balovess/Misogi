@@ -89,6 +89,18 @@ impl OoxmlCdrReport {
             || self.powerpoint_threats_neutralized > 0
             || !self.actions_taken.is_empty()
     }
+
+    /// Check if any security threats were detected (excludes benign modifications).
+    pub fn has_security_threats(&self) -> bool {
+        self.vba_removed
+            || self.activex_removed > 0
+            || self.ole_removed > 0
+            || self.data_connections_removed > 0
+            || self.dde_attacks_detected > 0
+            || self.excel_threats_neutralized > 0
+            || self.word_threats_neutralized > 0
+            || self.powerpoint_threats_neutralized > 0
+    }
 }
 
 /// Individual CDR action record for audit trail compliance.

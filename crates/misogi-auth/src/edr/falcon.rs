@@ -16,6 +16,7 @@
 
 use std::sync::{Arc, RwLock};
 
+use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use tracing::debug;
@@ -182,7 +183,7 @@ impl FalconEdrProvider {
             .form(&params)
             .send()
             .await
-            map_err(|e| EdrError::Api(format!("Falcon token request failed: {e}")))?;
+            .map_err(|e| EdrError::Api(format!("Falcon token request failed: {e}")))?;
 
         if !response.status().is_success() {
             let status = response.status();
@@ -267,12 +268,13 @@ impl EdrProvider for FalconEdrProvider {
                 .unwrap_or(true);
 
         Ok(EdrDevicePosture {
-            device_id: device.device_id.unwrap_or_else(|| device_id.to_string()),
-            hostname: device.hostname,
+            device_id: device.device_id.clone().unwrap_or_else(|| device_id.to_string()),
+            hostname: device.hostname.clone(),
             has_active_threats: has_active_thrusts,
             active_detection_count: 0,
             sensor_healthy: device
                 .status
+                .as_ref()
                 .map_or(false, |s| s == "normal" || s == "enabled"),
             last_seen_at: device.last_seen,
             os_info: Some(EdrOsInfo {
@@ -281,8 +283,8 @@ impl EdrProvider for FalconEdrProvider {
                     .map(|v| v.split_whitespace().next().unwrap_or(""))
                     .unwrap_or("")
                     .to_string(),
-                version: device.os_version.unwrap_or_default(),
-                build: device.os_build.unwrap_or(None).flatten(),
+                version: device.os_version.clone().unwrap_or_default(),
+                build: Some(device.os_build.clone().flatten().unwrap_or_default()),
             }),
             raw_response: Some(serde_json::to_value(&device).unwrap_or_default()),
         })

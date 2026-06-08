@@ -169,7 +169,7 @@ pub enum ContextError {
     },
 
     /// Authentication failure with external NLP service.
-    #[error("Authentication failed for provider '{provider}': {0}")]
+    #[error("Authentication failed for provider '{provider}': {message}")]
     Authentication {
         provider: String,
         message: String,
@@ -210,5 +210,11 @@ impl ContextError {
             Self::Authentication { provider, .. } => Some(provider),
             _ => None,
         }
+    }
+}
+
+impl From<ContextError> for crate::error::MisogiError {
+    fn from(e: ContextError) -> Self {
+        crate::error::MisogiError::Context(e.to_string())
     }
 }

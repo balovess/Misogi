@@ -14,7 +14,7 @@ misogi-core = { path = "../misogi-core", default-features = false }
 # Async runtime dependency (gated behind "runtime" feature).
 # Pulls in `mio` which is INCOMPATIBLE with wasm32-unknown-unknown.
 # Disable this feature when compiling for browser/WASM target.
-tokio = { version = "1", features = ["full"], optional = true }
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "fs", "io-util", "net", "macros"], optional = true }
 
 # Core dependencies (always available, WASM-compatible)
 serde = { version = "1", features = ["derive"] }

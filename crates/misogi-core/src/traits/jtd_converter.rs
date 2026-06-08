@@ -127,7 +127,7 @@ impl JtdConversionResult {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```ignore
     /// // Typical range: 0.3 (heavy reduction) to 2.5 (font embedding)
     /// let ratio = result.size_ratio().unwrap_or(1.0);
     /// if ratio < 0.5 {

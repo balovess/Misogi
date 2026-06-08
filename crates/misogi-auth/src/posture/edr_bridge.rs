@@ -170,7 +170,7 @@ fn resolve_os_info(edr: &EdrDevicePosture, detected_os: Option<&OsPosture>) -> O
         return OsPosture {
             platform: os.platform.clone(),
             version: os.version.clone(),
-            build_number: os.build_number.clone().unwrap_or_default(),
+            build_number: os.build_number.clone(),
             is_supported: os.is_supported,
             minimum_required_version: None,
         };
@@ -255,8 +255,8 @@ fn build_patch_from_edr(edr: &EdrDevicePosture) -> PatchStatus {
 
     PatchStatus {
         last_patch_date: Some(last_seen),
-        days_since_last_patch: Some(days_since_contact),
-        critical_patches_missing: critical_missing,
+        days_since_last_patch: Some(days_since_contact as i64),
+        critical_patches_missing: critical_missing as u32,
         is_compliant: days_since_contact <= 30 && !edr.has_active_threats && edr.sensor_healthy,
     }
 }
@@ -428,13 +428,13 @@ mod tests {
             minimum_required_version: None,
         };
 
-        let mut without_canvas = make_test_fp(8.0, 0.85);
+        let mut without_canvas = make_test_fp(1.0, 0.85);
         without_canvas.canvas_hash = None;
 
-        let mut with_canvas = make_test_fp(8.0, 0.85);
+        let mut with_canvas = make_test_fp(1.0, 0.85);
         with_canvas.canvas_hash = Some(FingerprintSignal {
             value_hash: "ffffeeeeddddccccbbbbaaaa9999888877776666555544443333222211110000".into(),
-            entropy_bits: 12.0,
+            entropy_bits: 4.0, // Adds enough entropy to increase bonus
             is_stable: false,
         });
 
@@ -501,7 +501,7 @@ mod tests {
         let detected = OsPosture {
             platform: OsPlatform::MacOS,
             version: "14.0".into(),
-            build_number: Some("23A344".into()),
+            build_number: "23A344".into(),
             is_supported: true,
             minimum_required_version: None,
         };

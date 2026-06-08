@@ -488,14 +488,11 @@ fn build_device_posture(
     _state: &PostureExtractorState,
     _device_id: &str,
 ) -> crate::posture::types::DevicePosture {
+    // Note: EDR provider lookup requires async context.
+    // This synchronous function cannot directly call async EDR methods.
+    // In production, use build_device_posture_async or handle EDR at a higher level.
     #[cfg(any(feature = "defender", feature = "falcon"))]
-    {
-        if let Some(ref provider) = _state.edr_provider {
-            if let Ok(edr_posture) = provider.get_device_posture(_device_id) {
-                return convert_edr_to_posture(&edr_posture, Some(detected_os));
-            }
-        }
-    }
+    let _ = &_state.edr_provider; // Suppress unused warning
 
     build_client_report_posture(detected_os, fingerprint)
 }

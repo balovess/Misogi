@@ -42,6 +42,10 @@ pub enum EdrError {
         provider: String,
         message: String,
     },
+
+    /// Internal error (lock poisoned, unexpected state).
+    #[error("EDR internal error: {0}")]
+    Internal(String),
 }
 
 /// Comprehensive device posture data from an EDR solution.

@@ -12,7 +12,7 @@ use super::{
     build_stable_provider_id, map_saml_error, SamlAttributeMappings, SamlIdentityProvider,
     SamlPluginConfig, NameIdFormat,
 };
-use crate::provider::{AuthRequest, IdentityError};
+use crate::provider::{AuthRequest, IdentityError, IdentityProvider};
 use crate::saml_provider::{SamlAttributes as CoreSamlAttributes, SamlError};
 
 // ---------------------------------------------------------------------------
@@ -190,7 +190,15 @@ fn test_map_identity_gcloud_oid_attributes() {
         session_index: None,
         extra,
     };
-    let cfg = test_config();
+    // Configure attribute mappings for G-Cloud Japan OID attributes
+    let mut cfg = test_config();
+    cfg.attribute_mappings = SamlAttributeMappings {
+        name_id_attribute: "name_id".into(),
+        display_name_attribute: "urn:oid:2.5.4.42".into(), // givenName OID
+        email_attribute: "urn:oid:0.9.2342.19200300.100.1.3".into(), // email OID
+        department_attribute: Some("urn:oid:2.5.4.11".into()), // ou OID
+        organization_attribute: None,
+    };
     let identity = SamlIdentityProvider::map_to_identity(&attrs, &cfg);
 
     // Display name resolved from OID givenName attribute

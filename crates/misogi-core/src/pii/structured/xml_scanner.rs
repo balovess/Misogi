@@ -71,10 +71,10 @@ impl XmlPiiScanner {
         let mut current_text = String::new();
 
         let mut reader = quick_xml::Reader::from_str(content);
-        reader.config_mut().trim_text(true);
+        let mut buf = Vec::new();
 
         loop {
-            match reader.read_event() {
+            match reader.read_event_into(&mut buf) {
                 Ok(quick_xml::events::Event::Start(ref e)) => {
                     if path_stack.len() < self.config.max_depth {
                         let name = Self::element_name(e.name(), self.config.namespace_aware);
@@ -103,7 +103,7 @@ impl XmlPiiScanner {
                                 pii_fields.push(FieldScanResult {
                                     field_path: full_path,
                                     field_name: attr_name,
-                                    raw_value: attr_value.clone(),
+                                    raw_value: attr_value.to_string(),
                                     masked_value: Self::mask_value(
                                         &attr_value,
                                         classification.action,
@@ -119,7 +119,7 @@ impl XmlPiiScanner {
                     }
                 }
                 Ok(quick_xml::events::Event::Text(ref e)) => {
-                    current_text = e.unescape_value().unwrap_or_default().to_string();
+                    current_text = e.unescape().unwrap_or_default().to_string();
                 }
                 Ok(quick_xml::events::Event::End(_)) => {
                     if !path_stack.is_empty() {
@@ -155,13 +155,14 @@ impl XmlPiiScanner {
                 Ok(quick_xml::events::Event::Eof) => break,
                 Err(e) => {
                     return Err(crate::error::MisogiError::Protocol(format!(
-                        "XML parse error at {}: {}",
-                        reader.error_position(),
+                        "XML parse error at position {}: {}",
+                        reader.buffer_position(),
                         e
                     )));
                 }
                 _ => {}
             }
+            buf.clear();
         }
 
         let overall_action = Self::resolve_strictest_action(&pii_fields);
@@ -182,9 +183,9 @@ impl XmlPiiScanner {
         namespace_aware: bool,
     ) -> String {
         if namespace_aware {
-            name.to_string()
+            String::from_utf8_lossy(name.as_ref()).to_string()
         } else {
-            name.local_name().to_string()
+            String::from_utf8_lossy(name.local_name().as_ref()).to_string()
         }
     }
 
@@ -196,7 +197,7 @@ impl XmlPiiScanner {
                 } else {
                     let chars: Vec<char> = value.chars().collect();
                     format!(
-                        "{}{}",
+                        "{}{}{}",
                         chars[0],
                         "*".repeat(chars.len() - 2).as_str(),
                         chars[chars.len() - 1]

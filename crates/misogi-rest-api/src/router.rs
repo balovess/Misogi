@@ -300,13 +300,16 @@ pub fn create_app(
             info(
                 title = "Misogi REST API",
                 description = "Comprehensive admin API for Misogi secure file transfer system",
-                version = env!("CARGO_PKG_VERSION"),
+                version = "0.1.0",
             ),
         )]
         struct ApiDoc;
 
         let doc = ApiDoc::openapi();
-        api_routes.merge(SwaggerUi::new("/api/docs").url("/api/docs/openapi.json", doc))
+        let swagger_router: Router<()> = SwaggerUi::new("/api/docs")
+            .url("/api/docs/openapi.json", doc)
+            .into();
+        api_routes.merge(swagger_router)
     };
 
     // =====================================================================

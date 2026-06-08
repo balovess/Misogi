@@ -649,7 +649,7 @@ mod tests {
             0x82, 0xBF, // ち
             0x82, 0xCD, // は
             0x90, 0xA2, // 世
-            0x8B, 0x80, // 界
+            0x8A, 0x45, // 界 (correct Shift-JIS encoding)
         ]
         .to_vec();
 
@@ -830,10 +830,11 @@ mod tests {
         let result = rt.block_on(handler.detect_encoding(&empty, ""));
 
         assert!(result.is_ok());
-        // Empty input should fall back to default encoding
+        // Empty input is valid UTF-8, so it returns UTF-8 with high confidence
         let detected = result.unwrap();
-        assert_eq!(detected.name, "Shift_JIS"); // Default fallback
-        assert!(detected.confidence < 0.5); // Low confidence for empty input
+        assert_eq!(detected.name, "UTF-8"); // Empty input is valid UTF-8
+        // Empty UTF-8 is considered certain (confidence 1.0)
+        assert!(detected.confidence > 0.5);
     }
 
     #[test]

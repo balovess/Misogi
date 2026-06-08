@@ -15,7 +15,7 @@ misogi-cdr = { path = "../misogi-cdr" }
 misogi-core = { path = "../misogi-core" }
 
 # Async runtime
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "fs", "io-util", "net", "signal", "macros"] }
 
 # Logging and tracing
 tracing = "0.1"

@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use crate::traits::PIIAction;
 
 /// Action to take when PII is detected in a structured field.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FieldAction {
     /// Mask the detected value (replace with asterisks).
@@ -32,6 +32,7 @@ pub enum FieldAction {
     AlertOnly,
 
     /// Log only (lowest severity).
+    #[default]
     LogOnly,
 }
 

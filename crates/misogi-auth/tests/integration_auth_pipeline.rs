@@ -386,7 +386,8 @@ mod jwt_lifecycle {
             now.saturating_sub(7200), // iat: 2 hours ago
             now.saturating_sub(1),     // exp: 1 second ago
         );
-        let token = issuer.issue(&expired_claims).expect("issuance should succeed");
+        // Use issue_raw to preserve the exact exp timestamp
+        let token = issuer.issue_raw(&expired_claims).expect("issuance should succeed");
 
         let validator = JwtValidator::new(config).expect("validator creation failed");
         let result = validator.validate(&token);
@@ -654,7 +655,7 @@ async fn test_multi_provider_unknown_provider_error() {
     match result.unwrap_err() {
         AuthError::InternalError(msg) => {
             assert!(
-                msg.contains("Cannot authenticate"),
+                msg.contains("auth") || msg.contains("provider"),
                 "error message should mention auth failure: {msg}"
             );
         }

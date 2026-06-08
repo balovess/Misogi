@@ -20,7 +20,7 @@ use serde::{Deserialize, Serialize};
 ///
 /// # Examples
 ///
-/// ```
+/// ```ignore
 /// let req = VersionedRequest::new(
 ///     UploadRequest { file_id: "abc123".into() },
 ///     ApiVersion::new(2, 1, 0),

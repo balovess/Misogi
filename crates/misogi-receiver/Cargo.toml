@@ -9,7 +9,7 @@ name = "misogi-receiver"
 path = "src/main.rs"
 
 [dependencies]
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "fs", "io-util", "net", "signal", "macros"] }
 axum = "0.7"
 tonic = { version = "0.12", features = ["tls"] }
 tower = "0.4"

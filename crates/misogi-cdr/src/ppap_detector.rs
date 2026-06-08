@@ -224,7 +224,7 @@ impl PpapDetector {
     ///
     /// Scans local file headers to find encrypted entries.
     /// ZIP local file header format:
-    /// ```
+    /// ```text
     /// Offset  Size  Field
     /// 0      4     Local file header signature (0x04034b50)
     /// 4      2     Version needed to extract

@@ -46,6 +46,12 @@ pub enum MisogiError {
 
     #[error("PPAP conversion failed: {0}")]
     PpapConversionFailed(String),
+
+    #[error("Internal error: {0}")]
+    Internal(String),
+
+    #[error("Context error: {0}")]
+    Context(String),
 }
 
 pub type Result<T> = std::result::Result<T, MisogiError>;

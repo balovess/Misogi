@@ -327,6 +327,39 @@ impl JwtIssuer {
         Ok(jws)
     }
 
+    /// Issue a JWT token with **exact** claims (no timestamp override).
+    ///
+    /// This method encodes the claims exactly as provided, without modifying
+    /// `iat` or `exp` timestamps. Used primarily for testing edge cases
+    /// like expired tokens.
+    ///
+    /// # Security Warning
+    ///
+    /// This method bypasses normal timestamp handling. Do not use in
+    /// production code. Prefer [`issue`](Self::issue) or [`issue_with_ttl`](Self::issue_with_ttl).
+    ///
+    /// # Arguments
+    ///
+    /// * `claims` - The exact claims to encode (timestamps are NOT modified)
+    ///
+    /// # Returns
+    ///
+    /// A JWS Compact Serialization string.
+    #[doc(hidden)]
+    pub fn issue_raw(&self, claims: &MisogiClaims) -> Result<String, JwtError> {
+        let mut signed_claims = claims.clone();
+        signed_claims
+            .extra
+            .insert("iss".to_string(), serde_json::json!(self.config.issuer));
+        signed_claims
+            .extra
+            .insert("aud".to_string(), serde_json::json!(self.config.audience));
+
+        let header = Header::new(Algorithm::RS256);
+        encode(&header, &signed_claims, &self.encoding_key)
+            .map_err(|e| JwtError::EncodingFailed(e.to_string()))
+    }
+
     /// Issue a JWT token directly from an authenticated [`MisogiIdentity`].
     ///
     /// This is the **primary integration method** for the post-authentication

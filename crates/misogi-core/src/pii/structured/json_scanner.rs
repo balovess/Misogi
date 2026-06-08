@@ -165,7 +165,7 @@ impl JsonPiiScanner {
                 } else {
                     let chars: Vec<char> = value.chars().collect();
                     format!(
-                        "{}{}",
+                        "{}{}{}",
                         chars[0],
                         "*".repeat(chars.len() - 2).as_str(),
                         chars[chars.len() - 1]

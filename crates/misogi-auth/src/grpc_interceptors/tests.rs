@@ -20,6 +20,7 @@ mod grpc_interceptor_tests {
     use super::super::*;
     use crate::jwt::{JwtConfig, JwtValidator};
     use std::sync::Arc;
+    use tonic::service::Interceptor;
     use tonic::Request;
 
     // ===================================================================

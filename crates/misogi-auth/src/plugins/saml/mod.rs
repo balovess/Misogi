@@ -502,7 +502,7 @@ impl IdentityProvider for SamlIdentityProvider {
         // Delegate to core ACS handler for parsing + validation
         let attrs = self
             .core
-            .assertion_consumer_service(response)
+            .assertion_consumer_service(&response)
             .map_err(map_saml_error)?;
 
         info!(
@@ -606,7 +606,7 @@ fn map_saml_error(err: SamlError) -> IdentityError {
 fn self_build_core_config(
     config: &SamlPluginConfig,
 ) -> Result<saml_provider::SamlConfig, IdentityError> {
-    let cert_path = if let Some(_ref _pem) = config.certificate_pem {
+    let cert_path = if config.certificate_pem.is_some() {
         std::path::PathBuf::from("[inline-pem]")
     } else if let Some(ref path) = config.certificate_path {
         std::path::PathBuf::from(path.as_str())
@@ -614,7 +614,7 @@ fn self_build_core_config(
         std::path::PathBuf::from("[none]")
     };
 
-    let key_path = if let Some(_ref _pem) = config.private_key_pem {
+    let key_path = if config.private_key_pem.is_some() {
         std::path::PathBuf::from("[inline-pem]")
     } else if let Some(ref path) = config.private_key_path {
         std::path::PathBuf::from(path.as_str())

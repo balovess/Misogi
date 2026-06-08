@@ -9,7 +9,7 @@ name = "misogi-sender"
 path = "src/main.rs"
 
 [dependencies]
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "fs", "io-util", "net", "signal", "macros"] }
 axum = { version = "0.7", features = ["multipart"] }
 tonic = "0.12"
 tower = "0.4"

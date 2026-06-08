@@ -155,8 +155,8 @@ impl Interleaver {
     /// let il = Interleaver::new(12);
     /// // Logical shard 0 is transmitted first (position 0)
     /// assert_eq!(il.logical_to_physical(0), 0);
-    /// // Logical shard 1 is transmitted at position 4
-    /// assert_eq!(il.logical_to_physical(1), 4);
+    /// // Logical shard 1 is transmitted at position 3
+    /// assert_eq!(il.logical_to_physical(1), 3);
     /// ```
     pub fn logical_to_physical(&self, logical_idx: usize) -> usize {
         let group = logical_idx % self.width;

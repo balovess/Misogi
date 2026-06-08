@@ -23,18 +23,18 @@
 //!
 //! # Architecture
 //!
-//! ```
-//! ┌─────────────────────┐     issues      ┌──────────────────┐
-//! │   JwtIssuer         │ ──────────────>  │  JWS Compact     │
-//! │   (private key)     │                  │  Token String    │
-//! └─────────────────────┘                  └────────┬─────────┘
-//!                                                   │
-//!                                                   │ validates
-//!                                                   v
-//! ┌─────────────────────┐     delegates to  ┌──────────────────┐
-//! │  JwtAuthenticator   │ ──────────────>  │  JwtValidator    │
-//! │  (backward-compat)  │                  │  (public key)    │
-//! └─────────────────────┘                  └──────────────────┘
+//! ```text
+//! +---------------------+     issues      +------------------+
+//! |   JwtIssuer         | --------------> |  JWS Compact     |
+//! |   (private key)     |                 |  Token String    |
+//! +---------------------+                 +--------+---------+
+//!                                                  |
+//!                                                  | validates
+//!                                                  v
+//! +---------------------+     delegates to  +------------------+
+//! |  JwtAuthenticator   | -------------->  |  JwtValidator    |
+//! |  (backward-compat)  |                 |  (public key)    |
+//! +---------------------+                 +------------------+
 //! ```
 //!
 //! # Typical Usage (New API)

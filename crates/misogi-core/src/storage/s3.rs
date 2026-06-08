@@ -999,7 +999,7 @@ impl StorageBackend for S3Storage {
 // Unit Tests
 // =============================================================================
 
-#[cfg(test)]
+#[cfg(all(test, feature = "storage-s3"))]
 mod tests {
     use super::*;
 

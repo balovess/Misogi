@@ -10,7 +10,7 @@ axum = { version = "0.8", features = ["macros", "multipart"] }
 axum-extra = { version = "0.10", features = ["typed-header"] }
 
 # --- Async runtime ---
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "fs", "io-util", "net", "signal", "macros"] }
 
 # --- Serialization ---
 serde = { version = "1", features = ["derive"] }

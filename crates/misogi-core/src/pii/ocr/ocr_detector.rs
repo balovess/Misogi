@@ -26,7 +26,7 @@ use async_trait::async_trait;
 use super::ocr_provider::OcrProvider;
 use super::types::{OcrBoundingBox, OcrExtractionResult, OcrImageMetadata, OcrTextBlock, OcrError};
 use crate::pii::{PIIRule, RegexPIIDetector};
-use crate::traits::{PIIAction, PIIMatch};
+use crate::traits::{PIIAction, PIIDetector, PIIMatch};
 
 /// Configuration for [`OcrPiiDetector`] behavior.
 #[derive(Debug, Clone)]
@@ -174,6 +174,7 @@ impl OcrPiiDetector {
         }
 
         let mut all_matches: Vec<OcrPiiMatch> = Vec::new();
+        let mut actions: Vec<PIIAction> = Vec::new();
 
         for block in &ocr_result.blocks {
             if block.confidence < self.config.min_ocr_confidence {
@@ -184,6 +185,10 @@ impl OcrPiiDetector {
                 .text_detector
                 .scan(&block.text, file_id, "ocr-extracted")
                 .await?;
+
+            if scan_result.found {
+                actions.push(scan_result.action);
+            }
 
             for m in scan_result.matches {
                 all_matches.push(OcrPiiMatch {
@@ -199,7 +204,6 @@ impl OcrPiiDetector {
         }
 
         let found = !all_matches.is_empty();
-        let actions: Vec<&PIIAction> = all_matches.iter().map(|m| &m.match_data.action).collect();
         let action = Self::resolve_strictest_action(&actions);
 
         Ok(OcrPiiScanResult {
@@ -213,10 +217,10 @@ impl OcrPiiDetector {
         })
     }
 
-    fn resolve_strictest_action(actions: &[&PIIAction]) -> PIIAction {
-        if actions.iter().any(|a| **a == PIIAction::Block) {
+    fn resolve_strictest_action(actions: &[PIIAction]) -> PIIAction {
+        if actions.iter().any(|a| *a == PIIAction::Block) {
             PIIAction::Block
-        } else if actions.iter().any(|a| **a == PIIAction::Mask) {
+        } else if actions.iter().any(|a| *a == PIIAction::Mask) {
             PIIAction::Mask
         } else {
             PIIAction::AlertOnly

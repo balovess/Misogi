@@ -9,7 +9,7 @@ description = "Core library for Misogi file transfer system"
 # These pull in `mio` which is incompatible with wasm32-unknown-unknown target.
 # When compiling for WASM/browser target, disable this feature to get a pure
 # synchronous core with only hash, error types, and CDR logic.
-tokio = { version = "1", features = ["full"], optional = true }
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "fs", "io-util", "net", "signal", "macros", "process"], optional = true }
 tonic = { version = "0.12", features = ["tls"], optional = true }
 axum = { version = "0.7", optional = true }
 reqwest = { version = "0.12", features = ["json", "multipart"], optional = true }
@@ -39,6 +39,8 @@ parking_lot = "0.12"
 zip = { version = "2", default-features = false, features = ["deflate-zlib"] }
 # For SHA-256 hashing
 sha2 = "0.10"
+# For BLAKE3 hashing (integrity envelopes)
+blake3 = "1"
 # For HMAC-SHA256 (Azure Blob Storage SharedKey auth, gated behind storage-azure)
 hmac = { version = "0.12", optional = true }
 # For RSA private key parsing (GCS JWT auth, gated behind storage-gcs)
@@ -85,8 +87,8 @@ encoding_rs = { version = "0.8", optional = true }      # Japanese encoding dete
 encoding_rs_io = { version = "0.1", optional = true }   # Stream encoding support
 
 # AWS SDK for S3/MinIO/R2 storage backend (optional, gated behind storage-s3 feature)
-aws-config = { version = "1", optional = true }          # AWS SDK configuration loader
-aws-sdk-s3 = { version = "1", optional = true }          # S3 client crate
+aws-config = { version = "1", optional = true, features = ["behavior-version-latest"] }          # AWS SDK configuration loader
+aws-sdk-s3 = { version = "1", optional = true, features = ["behavior-version-latest"] }          # S3 client crate
 aws-smithy-types = { version = "1", optional = true }    # Smithy primitives (DateTime, Blob)
 aws-types = { version = "1", optional = true }           # AWS shared types (Region)
 aws-credential-types = { version = "1", optional = true } # AWS credentials (for static credential provider)

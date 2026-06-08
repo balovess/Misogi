@@ -30,6 +30,7 @@ use std::str::FromStr;
 /// # Examples
 ///
 /// ```
+/// use misogi_core::versioning::api_semver::ApiVersion;
 /// let v1 = ApiVersion::new(1, 0, 0);
 /// let v2 = ApiVersion::new(2, 1, 3);
 ///

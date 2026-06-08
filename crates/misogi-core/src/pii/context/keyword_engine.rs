@@ -286,7 +286,7 @@ impl KeywordRuleEngine {
     pub fn analyze(
         &self,
         request: &ContextAnalysisRequest,
-    ) -> Result<ContextAnalysisResponse, ContextError> {
+    ) -> std::result::Result<ContextAnalysisResponse, ContextError> {
         let rules = self.rules.read().map_err(|e| {
             ContextError::Internal(format!("Rules lock poisoned: {}", e))
         })?;
@@ -490,7 +490,7 @@ impl RuleEngineBuilder {
         mut self,
         type_id: impl Into<String>,
         display_name: impl Into<String>,
-    ) -> PiiTypeRuleBuilder<'_> {
+    ) -> PiiTypeRuleBuilder {
         let type_id = type_id.into();
         let display_name = display_name.into();
         self.rule_set.pii_types.insert(
@@ -538,12 +538,12 @@ impl Default for RuleEngineBuilder {
 }
 
 /// Sub-builder for adding rules to a specific PII type.
-pub struct PiiTypeRuleBuilder<'a> {
+pub struct PiiTypeRuleBuilder {
     parent: RuleEngineBuilder,
     type_id: String,
 }
 
-impl<'a> PiiTypeRuleBuilder<'a> {
+impl PiiTypeRuleBuilder {
     /// Add a positive keyword for this PII type.
     pub fn add_positive(
         mut self,

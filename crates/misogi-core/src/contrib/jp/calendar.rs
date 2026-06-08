@@ -445,7 +445,25 @@ impl JapaneseCalendarProvider {
     /// # Returns
     /// Reference to the matching [`EraDefinition`], or `None` if out of range.
     fn find_era_for_year(&self, year: i32) -> Option<&EraDefinition> {
-        ERA_DEFINITIONS.iter().find(|era| era.contains_gregorian_year(year))
+        // Search in reverse order (newest first) so current era is found first
+        // This is important for years at era boundaries (e.g., 2019 has both Heisei and Reiwa)
+        ERA_DEFINITIONS.iter().rev().find(|era| era.contains_gregorian_year(year))
+    }
+
+    /// Find the era definition for a specific date.
+    ///
+    /// This is more precise than `find_era_for_year` because it checks the exact
+    /// date boundaries, not just the year.
+    ///
+    /// # Arguments
+    /// * `date` - The specific date to look up.
+    ///
+    /// # Returns
+    /// Reference to the matching [`EraDefinition`], or `None` if out of range.
+    fn find_era_for_date(&self, date: NaiveDate) -> Option<&EraDefinition> {
+        ERA_DEFINITIONS.iter().find(|era| {
+            date >= era.start_date && era.end_date.map_or(true, |end| date <= end)
+        })
     }
 
     /// Find the era definition by its Kanji name or abbreviation.
@@ -521,30 +539,15 @@ impl CalendarProvider for JapaneseCalendarProvider {
         &self,
         date: NaiveDate,
     ) -> Result<(String, u32, u32, u32)> {
-        let year = date.year();
-        let era = self.find_era_for_year(year).ok_or_else(|| {
+        // Use find_era_for_date for precise date-based era lookup
+        let era = self.find_era_for_date(date).ok_or_else(|| {
             MisogiError::Protocol(format!(
-                "No era defined for year {} (earliest supported: Meiji 1868)",
-                year
+                "No era defined for date {} (earliest supported: Meiji 1868-01-25)",
+                date
             ))
         })?;
 
-        // Additional boundary check for edge cases at era transitions
-        if date < era.start_date {
-            return Err(MisogiError::Protocol(format!(
-                "Date {} predates {} era start ({})",
-                date, era.name_ja, era.start_date
-            )));
-        }
-        if let Some(end) = era.end_date {
-            if date > end {
-                return Err(MisogiError::Protocol(format!(
-                    "Date {} postdates {} era end ({})",
-                    date, era.name_ja, end
-                )));
-            }
-        }
-
+        let year = date.year();
         let wareki_year = era.gregorian_to_wareki_year(year);
         Ok((era.name_ja.to_string(), wareki_year, date.month() as u32, date.day()))
     }

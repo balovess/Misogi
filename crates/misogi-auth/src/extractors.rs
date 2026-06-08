@@ -235,6 +235,7 @@ impl IntoResponse for ExtractionError {
 ///     .layer(Extension(validator));
 /// ```
 #[cfg(all(feature = "jwt", feature = "axum"))]
+#[derive(Debug)]
 pub struct JwtAuthExtractor {
     /// Validated Misogi claims extracted from the verified JWT token.
     pub claims: MisogiClaims,
@@ -369,7 +370,7 @@ where
 /// - `source`: Which extraction method was used (header vs path)
 /// - `original_token`: Raw authentication token (if present) for forwarding to provider
 #[cfg(feature = "axum")]
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct IdentityContext {
     /// Identity provider identifier (e.g., `"azure-ad"`, `"keycloak"`, `"ldap-corp"`).
     pub provider_id: String,
@@ -382,6 +383,18 @@ pub struct IdentityContext {
     /// `None` if no authorization header was present; the handler may choose
     /// to initiate a fresh authentication flow (e.g., redirect to IdP login).
     pub original_token: Option<String>,
+}
+
+/// Custom Debug implementation that redacts sensitive token data.
+#[cfg(feature = "axum")]
+impl std::fmt::Debug for IdentityContext {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("IdentityContext")
+            .field("provider_id", &self.provider_id)
+            .field("source", &self.source)
+            .field("original_token", &self.original_token.as_ref().map(|_| "[REDACTED]"))
+            .finish()
+    }
 }
 
 /// Source of the provider identity context.
@@ -561,8 +574,19 @@ fn extract_provider_from_path(path: &str) -> Option<String> {
     if segments.len() >= 2 && segments[0] == "auth" {
         let provider_id = segments[1].trim();
 
-        // Reject empty provider IDs
+        // Reject empty provider IDs and double-slash paths (e.g., /auth//callback)
+        // Double-slash results in empty segments being filtered out, so if we have
+        // ["auth", "callback"] from "/auth//callback", we should reject it because
+        // the original path had an empty segment between auth and callback.
         if !provider_id.is_empty() && !provider_id.contains('.') {
+            // Check for double-slash in original path: reject if "//" appears after "/auth"
+            if let Some(auth_pos) = path.find("/auth/") {
+                let after_auth = &path[auth_pos + 6..]; // Skip "/auth/"
+                if after_auth.starts_with('/') {
+                    // Double slash detected (e.g., /auth//callback)
+                    return None;
+                }
+            }
             // Basic sanitization: only allow alphanumeric, hyphens, underscores
             if provider_id
                 .chars()
