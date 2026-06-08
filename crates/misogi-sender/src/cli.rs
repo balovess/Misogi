@@ -286,6 +286,87 @@ pub struct CommandLine {
         value_parser = clap::value_parser!(u64).range(10..=3600),
     )]
     pub jtd_timeout_secs: u64,
+
+    // ---- Usability Enhancement Commands ----
+
+    /// Run interactive configuration wizard to create a new configuration file.
+    ///
+    /// This command guides you through creating a misogi.toml configuration file
+    /// with sensible defaults for your deployment scenario. It will:
+    ///
+    /// 1. Ask for deployment mode (Docker, Kubernetes, bare metal)
+    /// 2. Let you select a compliance preset
+    /// 3. Configure network settings
+    /// 4. Enable optional features
+    /// 5. Generate configuration file and RSA keypair
+    ///
+    /// After running this command, you can start Misogi with:
+    /// ```bash
+    /// docker compose up -d
+    /// ```
+    ///
+    /// 対話型設定ウィザードを実行して、新しい設定ファイルを作成します。
+    #[arg(
+        long = "init",
+        action = ArgAction::SetTrue,
+        global = true,
+        help_heading = "Usability Commands",
+        display_order = 200,
+    )]
+    pub init: bool,
+
+    /// Check system dependencies and display status.
+    ///
+    /// Verifies that all required and optional dependencies are installed
+    /// and reports their versions. Useful for troubleshooting setup issues.
+    ///
+    /// Checks:
+    /// - Rust toolchain (required for source build)
+    /// - protoc (required for source build)
+    /// - Docker (required for Docker deployment)
+    /// - OpenSSL (required for key generation)
+    /// - LibreOffice (optional, for JTD conversion)
+    ///
+    /// システムの依存関係をチェックしてステータスを表示します。
+    #[arg(
+        long = "check-deps",
+        action = ArgAction::SetTrue,
+        global = true,
+        help_heading = "Usability Commands",
+        display_order = 201,
+    )]
+    pub check_deps: bool,
+
+    /// List all available compliance presets and exit.
+    ///
+    /// Displays all built-in compliance presets with their descriptions
+    /// and security configurations. Use with --preset to apply a preset.
+    ///
+    /// 利用可能なコンプライアンスプリセットを一覧表示して終了します。
+    #[arg(
+        long = "list-presets",
+        action = ArgAction::SetTrue,
+        global = true,
+        help_heading = "Usability Commands",
+        display_order = 202,
+    )]
+    pub list_presets: bool,
+
+    /// Validate a configuration file and report any issues.
+    ///
+    /// Checks the specified configuration file (or misogi.toml in current
+    /// directory if not specified) for syntax errors, missing required
+    /// fields, and invalid values.
+    ///
+    /// 設定ファイルを検証して問題を報告します。
+    #[arg(
+        long = "validate-config",
+        action = ArgAction::SetTrue,
+        global = true,
+        help_heading = "Usability Commands",
+        display_order = 203,
+    )]
+    pub validate_config: bool,
 }
 
 // =============================================================================

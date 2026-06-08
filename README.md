@@ -75,7 +75,28 @@ Misogi is a secure file transfer platform that combines **Content Disarm and Rec
 
 ## Quick Start
 
-### Docker Compose (Primary)
+### One-Command Setup (Recommended)
+
+**Linux/macOS:**
+```bash
+git clone https://github.com/balovess/Misogi.git && cd Misogi
+./scripts/quickstart.sh
+```
+
+**Windows (PowerShell):**
+```powershell
+git clone https://github.com/balovess/Misogi.git; cd Misogi
+.\scripts\quickstart.ps1
+```
+
+The quickstart script will:
+1. Check all dependencies (Docker, OpenSSL, etc.)
+2. Create default configuration files
+3. Generate RSA keypair for authentication
+4. Start services with Docker Compose
+5. Verify service health
+
+### Docker Compose (Manual)
 
 ```bash
 git clone https://github.com/balovess/Misogi.git && cd Misogi
@@ -90,8 +111,40 @@ git clone https://github.com/balovess/Misogi.git && cd Misogi
 cargo build --release --bins
 # Generate RSA keypair (first time only):
 cargo run --package misogi-auth --example generate-keys -- ./keys
-./target/release/misogi-sender --config config.toml &
-./target/release/misogi-receiver --config config.toml &
+./target/release/misogi-sender --config config/misogi.toml.default &
+./target/release/misogi-receiver --config config/misogi.toml.default &
+```
+
+### Interactive Configuration
+
+For guided setup with compliance presets:
+
+```bash
+# Run configuration wizard
+misogi-sender --init
+
+# Check system dependencies
+misogi-sender --check-deps
+
+# List available presets
+misogi-sender --list-presets
+
+# Validate configuration
+misogi-sender --validate-config misogi.toml
+```
+
+### Available Presets
+
+| Preset | Description | Use Case |
+|--------|-------------|----------|
+| `minimal` | Minimum configuration | Development, testing |
+| `lgwan` | LGWAN government compliance | Japanese local government |
+| `medical` | HIPAA-Japan aligned | Healthcare providers |
+| `enterprise` | Balanced security | General enterprise |
+
+Use presets with:
+```bash
+./scripts/quickstart.sh --preset lgwan
 ```
 
 ## Supported Formats

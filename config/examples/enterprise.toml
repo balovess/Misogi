@@ -1,0 +1,169 @@
+# =============================================================================
+# Misogi — Enterprise Configuration
+# =============================================================================
+# General enterprise configuration for private sector SIers.
+# Balanced security posture with operational efficiency focus.
+#
+# Preset: sler_general
+# =============================================================================
+
+[server]
+addr = "0.0.0.0:3001"
+
+[storage]
+upload_dir = "/data/misogi/uploads"
+staging_dir = "/data/misogi/staging"
+
+# -----------------------------------------------------------------------------
+# Tunnel — For NAT traversal
+# -----------------------------------------------------------------------------
+[tunnel]
+local_port = 9000
+# Configure if receiver is behind NAT:
+# remote_addr = "relay.company.com:9000"
+# auth_token = "your-tunnel-token"
+
+# -----------------------------------------------------------------------------
+# Approval Flow — Optional for enterprise
+# -----------------------------------------------------------------------------
+[approval_flow]
+require_approval = false
+initial_state = "PENDING_APPROVAL"
+
+# -----------------------------------------------------------------------------
+# Transfer Driver
+# -----------------------------------------------------------------------------
+[transfer_driver]
+type = "direct_tcp"
+
+# -----------------------------------------------------------------------------
+# CDR Strategies — Balanced security
+# -----------------------------------------------------------------------------
+[cdr_strategies]
+
+[cdr_strategies.vba_whitelist]
+enabled = true
+whitelist_type = "hash"
+entries = []  # Add approved macro hashes here
+default_action = "remove"
+
+[cdr_strategies.format_downgrade]
+enabled = false
+
+[cdr_strategies.clamav_integration]
+enabled = true
+socket_path = "/var/run/clamd.sock"
+max_scan_size_mb = 500
+timeout_secs = 60
+action_on_virus = "quarantine"
+action_on_clean = "pass"
+
+# -----------------------------------------------------------------------------
+# File Types — Permissive with basic blocking
+# -----------------------------------------------------------------------------
+[file_types]
+default_action = "allow"
+
+[[file_types.registry]]
+extension = ".pdf"
+magic_hex = "255044462D"
+required_magic = true
+sanitizer = "pdf_builtin"
+
+[[file_types.blocked_extensions]]
+extension = ".exe"
+reason = "Executable files require manual review"
+
+[[file_types.blocked_extensions]]
+extension = ".dll"
+reason = "DLL files require manual review"
+
+# -----------------------------------------------------------------------------
+# PII Detector — Alert-only mode for enterprise
+# -----------------------------------------------------------------------------
+[pii_detector]
+enabled = true
+default_action = "alert_only"
+mask_char = "*"
+
+[[pii_detector.rules]]
+name = "credit_card_visa"
+pattern = "\\b4[0-9]{12}(?:[0-9]{3})?\\b"
+action = "alert_only"
+description = "Visa credit card number"
+
+[[pii_detector.rules]]
+name = "credit_card_mastercard"
+pattern = "\\b5[1-5][0-9]{14}\\b"
+action = "alert_only"
+description = "Mastercard number"
+
+[[pii_detector.rules]]
+name = "email_address"
+pattern = "\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\\b"
+action = "alert_only"
+description = "Email address"
+
+# -----------------------------------------------------------------------------
+# Log — JSON format for log aggregation
+# -----------------------------------------------------------------------------
+[log]
+format = "json"
+max_memory_entries = 2000
+retention_days = 365
+
+# -----------------------------------------------------------------------------
+# Vendor Isolation — Partner access control
+# -----------------------------------------------------------------------------
+[vendor_isolation]
+enabled = true
+
+[[vendor_isolation.accounts]]
+user_id = "partner_a"
+display_name = "Partner Company A"
+ip_whitelist = ["10.0.1.0/24"]
+require_dual_approval = false
+upload_rate_limit_per_hour = 100
+max_file_size_mb = 500
+
+[[vendor_isolation.accounts]]
+user_id = "contractor_b"
+display_name = "Contractor B"
+ip_whitelist = ["10.0.2.0/24"]
+require_dual_approval = true
+upload_rate_limit_per_hour = 50
+max_file_size_mb = 200
+
+# -----------------------------------------------------------------------------
+# Calendar
+# -----------------------------------------------------------------------------
+[calendar]
+enabled = true
+auto_defense_mode = false
+wareki_filename_detection = true
+
+# -----------------------------------------------------------------------------
+# Encoding
+# -----------------------------------------------------------------------------
+[encoding]
+default_encoding = "UTF-8"
+unknown_font_action = "preserve"
+fallback_fonts = ["IPAexMincho", "IPAGothic"]
+
+# -----------------------------------------------------------------------------
+# PPAP — Warn and sanitize
+# -----------------------------------------------------------------------------
+[ppap]
+enabled = true
+policy = "warn_and_sanitize"
+confidence_threshold = 0.7
+generate_compliance_event = true
+quarantine_retention_days = 90
+
+# -----------------------------------------------------------------------------
+# Versioning — API version management
+# -----------------------------------------------------------------------------
+[versioning]
+default_version = "v1"
+deprecation_warnings_enabled = true
+deprecation_headers = true

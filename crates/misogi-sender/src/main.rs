@@ -10,6 +10,7 @@ mod router;
 mod tunnel_task;
 mod daemon;
 mod jtd_handler;
+mod usability;
 
 use tracing_subscriber::{fmt, EnvFilter};
 use clap::Parser;
@@ -20,6 +21,27 @@ use crate::state::AppState;
 #[tokio::main]
 async fn main() {
     let cli = CommandLine::parse();
+
+    // Handle usability commands that don't require full startup
+    if cli.list_presets {
+        usability::list_presets();
+        return;
+    }
+
+    if cli.check_deps {
+        usability::check_dependencies();
+        return;
+    }
+
+    if cli.init {
+        usability::run_init_wizard().await;
+        return;
+    }
+
+    if cli.validate_config {
+        usability::validate_config(&cli.config);
+        return;
+    }
 
     let config = SenderConfig::load_with_cli(&cli);
 
