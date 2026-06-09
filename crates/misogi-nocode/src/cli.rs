@@ -35,6 +35,7 @@
 //! misogi-admin watch /etc/misogi/config.yaml
 //! ```
 
+use std::io::IsTerminal;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -229,7 +230,7 @@ pub async fn execute(cli: Cli) -> i32 {
     let subscriber = tracing_subscriber::fmt()
         .with_max_level(log_level)
         .with_target(false)
-        .with_ansi(!cli.no_color && atty::is(atty::Stream::Stderr))
+        .with_ansi(!cli.no_color && std::io::stderr().is_terminal())
         .finish();
 
     // Try to set as global default; ignore if already set

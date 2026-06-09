@@ -1,0 +1,52 @@
+# =============================================================================
+# Cargo Audit Configuration
+# =============================================================================
+#
+# This file configures cargo-audit to ignore certain advisories that cannot
+# be fixed at this time due to indirect dependencies or lack of fixes.
+#
+# IMPORTANT: Each ignored advisory must have a clear justification and
+# should be reviewed periodically for available fixes.
+
+[advisories]
+# -----------------------------------------------------------------------------
+# Ignored Vulnerabilities
+# -----------------------------------------------------------------------------
+#
+# RSA Marvin Attack (RUSTSEC-2023-0071)
+# Severity: Medium (5.9)
+# Issue: Potential key recovery through timing sidechannels
+# Justification: No fixed upgrade is available for rsa 0.9.x. The rsa crate
+# maintainers have acknowledged the issue but have not released a fix.
+# Mitigation: RSA operations are only used for JWT signing (RS256) and GCS
+# authentication. These operations are performed in controlled environments
+# with limited exposure to timing attacks.
+# Review: Check for rsa 0.10 release or alternative crate (e.g., rustls-rsa)
+#
+# rustls-webpki 0.101.7 vulnerabilities (RUSTSEC-2026-0098, 0099, 0104)
+# Severity: Medium to High
+# Issue: Certificate validation issues in older rustls-webpki
+# Justification: This version is pulled in by AWS SDK's rustls 0.21.x dependency.
+# The main application uses rustls 0.23.40 with rustls-webpki 0.103.13 which is
+# not affected. The vulnerable version is only used for AWS SDK internal TLS.
+# Mitigation: AWS SDK handles its own certificate validation; our application
+# does not expose this to user input.
+# Review: Monitor AWS SDK releases for rustls 0.23+ upgrade
+# -----------------------------------------------------------------------------
+ignore = [
+    "RUSTSEC-2023-0071",  # rsa: Marvin Attack - no fix available
+    "RUSTSEC-2026-0098",  # rustls-webpki 0.101.7: URI name constraints (AWS SDK indirect dep)
+    "RUSTSEC-2026-0099",  # rustls-webpki 0.101.7: wildcard name constraints (AWS SDK indirect dep)
+    "RUSTSEC-2026-0104",  # rustls-webpki 0.101.7: CRL parsing panic (AWS SDK indirect dep)
+]
+
+# -----------------------------------------------------------------------------
+# Unmaintained crates (warnings only, not vulnerabilities)
+# These are indirect dependencies that we cannot directly update:
+# - instant (RUSTSEC-2024-0384): Used by old wgpu/egui dependencies
+# - proc-macro-error (RUSTSEC-2024-0370): Used by old derive macros
+# - rustls-pemfile (RUSTSEC-2025-0134): Used by old rustls versions (AWS SDK)
+#
+# These are warnings only and do not represent security vulnerabilities.
+# They will be resolved when upstream dependencies are updated.
+# -----------------------------------------------------------------------------
