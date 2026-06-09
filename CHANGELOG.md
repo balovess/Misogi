@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+#### New Crates
+
+- **misogi-rest-api** — Comprehensive RESTful admin API for system management with OpenAPI 3.0 support
+- **misogi-nocode** — No-code integration layer with YAML declarative configuration for non-developers
+- **misogi-bootstrap** — Application bootstrap with builder pattern for dependency injection
+- **misogi-config** — Centralized TOML configuration loader with environment variable overrides
+- **misogi-health** — Kubernetes-compatible health probes with deep component-level status reporting
+- **korea-fss-plugin** — Korea FSS (Financial Supervisory Service) compliance plugin with RRN detection
+
 #### misogi-macros — Production-Grade Procedural Macro SDK
 - **5 Hook attribute macros upgraded from pass-through to full trait code generation**:
   - `#[on_metadata(impl_for = S)]` → generates `FileTypeDetector` trait impl

@@ -226,14 +226,20 @@ Region-Specific Documentation
 Misogi/
 ├── Cargo.toml                  # Workspace root
 ├── crates/
-│   ├── misogi-core/            # Core library: protocol, types, hash, error
+│   ├── misogi-core/            # Core library: protocol, types, hash, error, audit log
+│   ├── misogi-cdr/             # CDR engine: PDF, OOXML, ZIP, SVG, Image, JTD
+│   ├── misogi-auth/            # Auth: JWT RS256, LDAP/OIDC/SAML, RBAC
+│   ├── misogi-macros/          # Procedural macros: plugin trait code generation
 │   ├── misogi-sender/          # Sender node: upload, gRPC stream, file monitor
 │   ├── misogi-receiver/        # Receiver node: download, reassemble, storage
-│   ├── misogi-auth/            # Auth: JWT RS256, LDAP/OIDC/SAML, RBAC
-│   ├── misogi-audit/           # Audit: immutable logs, SHA-256, CEF/Syslog
-│   ├── misogi-cdr/             # CDR engine: PDF, OOXML, ZIP, SVG, Image, JTD
 │   ├── misogi-wasm/            # WASM Edge: browser-side sanitization
-│   └── misogi-smtp/            # SMTP notification service
+│   ├── misogi-smtp/            # SMTP notification service
+│   ├── misogi-rest-api/        # RESTful admin API for system management
+│   ├── misogi-nocode/          # No-code integration: YAML declarative configuration
+│   ├── misogi-bootstrap/       # Application bootstrap: config loading, service init
+│   ├── misogi-config/          # Configuration management: TOML parsing, validation
+│   ├── misogi-health/          # Health check: service status monitoring
+│   └── korea-fss-plugin/       # Korea FSS regulatory compliance plugin
 ├── proto-dist/                 # Protobuf definitions & generated stubs
 ├── docker/                     # Docker Compose configurations
 ├── helm/                       # Kubernetes Helm charts
