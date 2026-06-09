@@ -343,6 +343,8 @@ jobs:
     if: always()
     steps:
       - name: Check CI status
+        env:
+          NEEDS_CONTEXT: ${{ toJSON(needs) }}
         run: |
           echo "## WASM CI Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -350,7 +352,7 @@ jobs:
           echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
           
           for job in native-check wasm-build benchmarks browser-compat; do
-            status="${{ needs.${{ job }}.result }}"
+            status=$(echo "$NEEDS_CONTEXT" | jq -r ".${job}.result")
             case "$status" in
               success) emoji="✅" ;;
               failure) emoji="❌" ;;

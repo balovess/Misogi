@@ -328,6 +328,8 @@ jobs:
     if: always()
     steps:
       - name: Check CI status
+        env:
+          NEEDS_CONTEXT: ${{ toJSON(needs) }}
         run: |
           echo "## CI Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -335,7 +337,7 @@ jobs:
           echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
           
           for job in lint check test doc security wasm-gate build; do
-            status="${{ needs.${{ job }}.result }}"
+            status=$(echo "$NEEDS_CONTEXT" | jq -r ".${job}.result")
             case "$status" in
               success) emoji="✅" ;;
               failure) emoji="❌" ;;
