@@ -10,21 +10,12 @@
 // | [`types`] | SecrecyLevelDef, ClassificationRule, Condition, etc. |
 // | [`classifier`] | SecrecyClassifier (configurable classification engine) |
 
-pub mod types;
 pub mod classifier;
+pub mod types;
 
 pub use types::{
-    Condition,
-    ControlRequirement,
-    FallbackPolicy,
-    RuleResult,
-    SecrecyClassificationResult,
-    SecrecyLevelDef,
-    ClassificationRule,
+    ClassificationRule, Condition, ControlRequirement, FallbackPolicy, RuleResult,
+    SecrecyClassificationResult, SecrecyLevelDef,
 };
 
-pub use classifier::{
-    SecrecyClassifier,
-    SecrecySchemeBuilder,
-    SecrecySchemeConfig,
-};
+pub use classifier::{SecrecyClassifier, SecrecySchemeBuilder, SecrecySchemeConfig};

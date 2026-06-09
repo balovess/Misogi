@@ -22,24 +22,17 @@
 //! use across async Tokio tasks without additional synchronization.
 
 pub mod calendar;
-pub mod vendor;
 pub mod encoding;
 pub mod external_adapter;
+pub mod vendor;
 
 // Re-export commonly used types at the jp module level for ergonomic imports
 pub use calendar::{
-    detect_wareki_in_filename,
-    load_calendar_toml,
-    EraDefinition,
-    JapaneseCalendarProvider,
+    EraDefinition, JapaneseCalendarProvider, detect_wareki_in_filename, load_calendar_toml,
 };
-pub use vendor::{VendorAccount, VendorIsolationManager};
 pub use encoding::{JapaneseEncodingHandler, PdfFontAction};
 pub use external_adapter::{
-    ExternalFailureAction,
-    ExternalSanitizerAdapter,
-    ExternalSanitizerConfig,
-    ExternalSanitizeResult,
-    ExternalSuccessAction,
-    render_args,
+    ExternalFailureAction, ExternalSanitizeResult, ExternalSanitizerAdapter,
+    ExternalSanitizerConfig, ExternalSuccessAction, render_args,
 };
+pub use vendor::{VendorAccount, VendorIsolationManager};

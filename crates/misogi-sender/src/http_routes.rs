@@ -1,11 +1,11 @@
+use crate::state::SharedState;
 use axum::{
+    Json,
     extract::{Multipart, Path, Query, State},
     http::StatusCode,
-    Json,
 };
+use misogi_cdr::SanitizationReport;
 use serde::{Deserialize, Serialize};
-use crate::state::SharedState;
-use misogi_cdr::{SanitizationReport};
 
 #[derive(Serialize)]
 pub struct UploadResponse {
@@ -63,7 +63,11 @@ impl From<SanitizationReport> for SanitizeResponse {
             original_hash: report.original_hash,
             sanitized_hash: report.sanitized_hash,
             policy: format!("{:?}", report.policy),
-            actions_taken: report.actions_taken.iter().map(|a| format!("{:?}", a)).collect(),
+            actions_taken: report
+                .actions_taken
+                .iter()
+                .map(|a| format!("{:?}", a))
+                .collect(),
             warnings: report.warnings,
             processing_time_ms: report.processing_time_ms,
         }
@@ -87,11 +91,10 @@ pub async fn upload(
         Err(e) => return Err((StatusCode::BAD_REQUEST, e.to_string())),
     };
 
-    let filename = field.file_name()
-        .unwrap_or("unknown")
-        .to_string();
+    let filename = field.file_name().unwrap_or("unknown").to_string();
 
-    let (file_id, _) = state.uploader
+    let (file_id, _) = state
+        .uploader
         .create_session(filename.clone(), &state)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -99,11 +102,14 @@ pub async fn upload(
     let mut chunk_index = 0u32;
     let mut total_size = 0u64;
 
-    while let Some(chunk) = field.chunk().await
+    while let Some(chunk) = field
+        .chunk()
+        .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
     {
         if !chunk.is_empty() {
-            state.uploader
+            state
+                .uploader
                 .write_chunk(&file_id, chunk_index, &chunk)
                 .await
                 .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -113,7 +119,8 @@ pub async fn upload(
         }
     }
 
-    let manifest = state.uploader
+    let manifest = state
+        .uploader
         .complete_upload(&file_id, &state)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -133,26 +140,43 @@ pub async fn upload(
         // Reassemble chunks into the target file path if not already present
         if !assembled_path.exists() {
             // Read all chunks and write them sequentially
-            let mut assembled_file = tokio::fs::File::create(&assembled_path).await
-                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create assembled file: {e}")))?;
+            let mut assembled_file =
+                tokio::fs::File::create(&assembled_path)
+                    .await
+                    .map_err(|e| {
+                        (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            format!("Failed to create assembled file: {e}"),
+                        )
+                    })?;
             use tokio::io::AsyncWriteExt;
             for i in 0..manifest.chunk_count {
                 let chunk_path = file_dir.join(format!("chunk_{}.bin", i));
                 if chunk_path.exists() {
-                    let chunk_data = tokio::fs::read(&chunk_path).await
-                        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to read chunk {i}: {e}")))?;
-                    assembled_file.write_all(&chunk_data).await
-                        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to write chunk {i}: {e}")))?;
+                    let chunk_data = tokio::fs::read(&chunk_path).await.map_err(|e| {
+                        (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            format!("Failed to read chunk {i}: {e}"),
+                        )
+                    })?;
+                    assembled_file.write_all(&chunk_data).await.map_err(|e| {
+                        (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            format!("Failed to write chunk {i}: {e}"),
+                        )
+                    })?;
                 }
             }
-            assembled_file.flush().await
-                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to flush assembled file: {e}")))?;
+            assembled_file.flush().await.map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Failed to flush assembled file: {e}"),
+                )
+            })?;
         }
 
-        let jtd_result = crate::jtd_handler::handle_jtd_upload(
-            &assembled_path,
-            &state.config,
-        ).await;
+        let jtd_result =
+            crate::jtd_handler::handle_jtd_upload(&assembled_path, &state.config).await;
 
         match jtd_result {
             crate::jtd_handler::JtdHandleResult::NotJtd { .. } => {
@@ -198,13 +222,17 @@ pub async fn upload(
             // Use legacy sanitizer (backward compatible)
             // Task 5.14 Note: PII detection and CDR strategy chain integration
             // is pending API alignment work. Currently delegates to direct sanitizers.
-            match sanitize_state.uploader.sanitize_file(
-                &sanitize_file_id,
-                &sanitize_state.sanitization_policy,
-                &sanitize_state.pdf_sanitizer,
-                &sanitize_state.office_sanitizer,
-                &sanitize_state.zip_scanner,
-            ).await {
+            match sanitize_state
+                .uploader
+                .sanitize_file(
+                    &sanitize_file_id,
+                    &sanitize_state.sanitization_policy,
+                    &sanitize_state.pdf_sanitizer,
+                    &sanitize_state.office_sanitizer,
+                    &sanitize_state.zip_scanner,
+                )
+                .await
+            {
                 Ok(report) => {
                     tracing::info!(
                         file_id = %sanitize_file_id,
@@ -240,7 +268,8 @@ pub async fn get_file(
     Path(file_id): Path<String>,
     State(state): State<SharedState>,
 ) -> Result<(StatusCode, Json<misogi_core::FileInfo>), (StatusCode, String)> {
-    let info = state.uploader
+    let info = state
+        .uploader
         .get_file_info(&file_id)
         .await
         .map_err(|e| (StatusCode::NOT_FOUND, e.to_string()))?;
@@ -252,7 +281,8 @@ pub async fn list_files(
     State(state): State<SharedState>,
     Query(query): Query<ListFilesQuery>,
 ) -> Result<(StatusCode, Json<ListFilesResponse>), (StatusCode, String)> {
-    let all_files = state.uploader
+    let all_files = state
+        .uploader
         .list_files()
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -295,17 +325,25 @@ pub async fn trigger_transfer(
     State(state): State<SharedState>,
 ) -> Result<(StatusCode, Json<TransferResponse>), (StatusCode, String)> {
     let exists = state.get_file(&file_id).await.ok_or_else(|| {
-        (StatusCode::NOT_FOUND, format!("File not found: {}", file_id))
+        (
+            StatusCode::NOT_FOUND,
+            format!("File not found: {}", file_id),
+        )
     })?;
 
     if exists.status != misogi_core::FileStatus::Ready {
         return Err((
             StatusCode::CONFLICT,
-            format!("File is not ready for transfer. Current status: {:?}", exists.status),
+            format!(
+                "File is not ready for transfer. Current status: {:?}",
+                exists.status
+            ),
         ));
     }
 
-    state.update_file_status(&file_id, misogi_core::FileStatus::Transferring).await;
+    state
+        .update_file_status(&file_id, misogi_core::FileStatus::Transferring)
+        .await;
 
     tracing::info!(file_id = %file_id, "Transfer triggered");
 
@@ -315,12 +353,7 @@ pub async fn trigger_transfer(
         let task_file_id = file_id.clone();
 
         tokio::spawn(async move {
-            if let Err(e) = crate::tunnel_task::execute_transfer(
-                task_state,
-                task_file_id,
-            )
-            .await
-            {
+            if let Err(e) = crate::tunnel_task::execute_transfer(task_state, task_file_id).await {
                 tracing::error!(error = %e, "Transfer task failed");
             }
         });
@@ -347,17 +380,24 @@ pub async fn sanitize_file(
     State(state): State<SharedState>,
 ) -> Result<(StatusCode, Json<SanitizeResponse>), (StatusCode, String)> {
     let exists = state.get_file(&file_id).await.ok_or_else(|| {
-        (StatusCode::NOT_FOUND, format!("File not found: {}", file_id))
+        (
+            StatusCode::NOT_FOUND,
+            format!("File not found: {}", file_id),
+        )
     })?;
 
     if exists.status != misogi_core::FileStatus::Ready {
         return Err((
             StatusCode::CONFLICT,
-            format!("File is not ready for sanitization. Current status: {:?}", exists.status),
+            format!(
+                "File is not ready for sanitization. Current status: {:?}",
+                exists.status
+            ),
         ));
     }
 
-    let report = state.uploader
+    let report = state
+        .uploader
         .sanitize_file(
             &file_id,
             &state.sanitization_policy,
@@ -470,7 +510,10 @@ pub async fn ppap_detect(
     };
 
     // Write to temp file and run detection (detector works on file paths)
-    let tmp_path = state.config.upload_dir.join(format!("ppap_scan_{}", uuid::Uuid::new_v4()));
+    let tmp_path = state
+        .config
+        .upload_dir
+        .join(format!("ppap_scan_{}", uuid::Uuid::new_v4()));
     if let Err(e) = tokio::fs::write(&tmp_path, &data).await {
         return Err((
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -508,9 +551,7 @@ pub async fn ppap_detect(
 ///
 /// Returns aggregated metrics about PPAP detection and handling activity.
 /// Used by admin dashboards to track PPAP elimination progress.
-pub async fn ppap_statistics(
-    State(_state): State<SharedState>,
-) -> Json<PpapStatisticsResponse> {
+pub async fn ppap_statistics(State(_state): State<SharedState>) -> Json<PpapStatisticsResponse> {
     // TODO: Replace with actual statistics from in-memory counter / database
     Json(PpapStatisticsResponse {
         total_scanned: 0,

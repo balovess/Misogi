@@ -19,17 +19,14 @@
 ///
 /// The [`TransferDriver`](crate::traits::TransferDriver) trait implementation
 /// resides in [`driver_impl`](super::driver_impl) to respect the 500-line limit.
-
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use tokio::sync::RwLock;
 
+use super::types::{PullBufferEntry, PullConfig, PullEntryStatus};
 use crate::error::{MisogiError, Result};
-use super::types::{
-    PullConfig, PullBufferEntry, PullEntryStatus,
-};
 
 // =============================================================================
 // PullDriver — Main Driver Implementation
@@ -207,10 +204,7 @@ impl PullDriver {
         let mut buf = self.buffer.write().await;
 
         let entry = buf.get_mut(entry_id).ok_or_else(|| {
-            MisogiError::NotFound(format!(
-                "Entry '{}' not found in pull buffer",
-                entry_id
-            ))
+            MisogiError::NotFound(format!("Entry '{}' not found in pull buffer", entry_id))
         })?;
 
         if entry.status != PullEntryStatus::Pulling {
@@ -228,9 +222,12 @@ impl PullDriver {
             .as_millis() as u64;
 
         // Update atomic counters
-        self.ack_count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        self.buffer_bytes
-            .fetch_sub(entry.payload_size() as u64, std::sync::atomic::Ordering::SeqCst);
+        self.ack_count
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        self.buffer_bytes.fetch_sub(
+            entry.payload_size() as u64,
+            std::sync::atomic::Ordering::SeqCst,
+        );
 
         tracing::info!(
             entry_id = %entry_id,
@@ -271,8 +268,10 @@ impl PullDriver {
                 _ => now_ms.saturating_sub(entry.created_at) <= retention_ms,
             };
             if !should_keep {
-                self.buffer_bytes
-                    .fetch_sub(entry.payload_size() as u64, std::sync::atomic::Ordering::SeqCst);
+                self.buffer_bytes.fetch_sub(
+                    entry.payload_size() as u64,
+                    std::sync::atomic::Ordering::SeqCst,
+                );
             }
             should_keep
         });
@@ -291,5 +290,11 @@ impl PullDriver {
             .filter(|e| e.status != PullEntryStatus::Acknowledged)
             .map(|e| e.payload_size() as u64)
             .sum()
+    }
+}
+
+impl Default for PullDriver {
+    fn default() -> Self {
+        Self::new()
     }
 }

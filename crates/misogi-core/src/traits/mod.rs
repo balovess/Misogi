@@ -17,7 +17,7 @@
 // equivalent synchronization primitives internally.
 // =============================================================================
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -36,9 +36,7 @@ use crate::types::ChunkMeta;
 /// [`TransferDriver`] (`send_chunk_integrity`, `repair_chunks`) and
 /// provide cryptographic verification, repair tracking, and session
 /// management for tamper-detected transport operations.
-pub use crate::integrity::{
-    IntegrityAck as IntegrityChunkAck, IntegrityEnvelope, RepairProgress,
-};
+pub use crate::integrity::{IntegrityAck as IntegrityChunkAck, IntegrityEnvelope, RepairProgress};
 
 // =============================================================================
 // StateMachine Trait (implemented in engine::state_machine module)
@@ -245,12 +243,7 @@ pub trait TransferDriver: Send + Sync {
     /// # Errors
     /// - [`MisogiError::Io`] if the transport layer fails mid-transmission.
     /// - [`MisogiError::Protocol`] if the remote rejects the chunk format.
-    async fn send_chunk(
-        &self,
-        file_id: &str,
-        chunk_index: u32,
-        data: Bytes,
-    ) -> Result<ChunkAck>;
+    async fn send_chunk(&self, file_id: &str, chunk_index: u32, data: Bytes) -> Result<ChunkAck>;
 
     /// Signal that all chunks for a file have been transmitted.
     ///
@@ -453,6 +446,7 @@ pub trait TransferDriver: Send + Sync {
 /// preventing malicious payloads from traversing network boundaries. Each strategy
 /// produces one of these decisions to guide the pipeline's next action.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[allow(clippy::large_enum_variant)]
 pub enum StrategyDecision {
     /// The file requires sanitization (disarm and reconstruct).
     /// The pipeline SHALL invoke [`CDRStrategy::apply()`] with this decision.
@@ -695,10 +689,7 @@ impl FileDetectionResult {
     }
 
     /// Create a detection result indicating the file type is blocked.
-    pub fn blocked(
-        detected_type: impl Into<String>,
-        reason: impl Into<String>,
-    ) -> Self {
+    pub fn blocked(detected_type: impl Into<String>, reason: impl Into<String>) -> Self {
         Self {
             detected_type: detected_type.into(),
             confidence: 1.0,
@@ -772,7 +763,7 @@ pub trait FileTypeDetector: Send + Sync {
     /// - [`MisogiError::Io`] if the file cannot be read (permissions, etc.).
     async fn detect(
         &self,
-        file_path: &PathBuf,
+        file_path: &Path,
         declared_extension: &str,
     ) -> Result<FileDetectionResult>;
 
@@ -950,12 +941,7 @@ pub trait PIIDetector: Send + Sync {
     /// # Performance
     /// Scanning SHOULD be proportional to content size. For files larger than
     /// 100MB, consider streaming/chunked scanning to avoid memory pressure.
-    async fn scan(
-        &self,
-        content: &str,
-        file_id: &str,
-        filename: &str,
-    ) -> Result<PIIScanResult>;
+    async fn scan(&self, content: &str, file_id: &str, filename: &str) -> Result<PIIScanResult>;
 }
 
 // =============================================================================
@@ -1198,10 +1184,7 @@ pub trait CalendarProvider: Send + Sync {
     ///
     /// # Errors
     /// - [`MisogiError::Protocol`] if the date predates the earliest supported era.
-    async fn gregorian_to_regional(
-        &self,
-        date: NaiveDate,
-    ) -> Result<(String, u32, u32, u32)>;
+    async fn gregorian_to_regional(&self, date: NaiveDate) -> Result<(String, u32, u32, u32)>;
 
     /// Determine whether a given date is a business day (working day).
     ///
@@ -1382,12 +1365,7 @@ pub trait EncodingHandler: Send + Sync {
     /// to handle multibyte characters split across chunk boundaries.
     /// Callers MUST pass `is_final = true` on the last chunk to flush
     /// any remaining buffered partial sequences.
-    async fn stream_decode(
-        &self,
-        data: &[u8],
-        encoding: &str,
-        is_final: bool,
-    ) -> Result<String>;
+    async fn stream_decode(&self, data: &[u8], encoding: &str, is_final: bool) -> Result<String>;
 }
 
 // =============================================================================
@@ -1488,9 +1466,9 @@ pub trait PluginMetadata: Send + Sync {
 // root level with `pub` visibility.
 // =============================================================================
 
-pub mod storage;
 pub mod jtd_converter;
 pub mod jtd_dummy;
+pub mod storage;
 
 // JTD pipeline and converter backends depend on external process execution (tokio::process)
 #[cfg(feature = "runtime")]
@@ -1502,7 +1480,7 @@ pub mod jtd_libreoffice;
 #[cfg(feature = "runtime")]
 pub mod jtd_ichitaro;
 
-pub use jtd_converter::{JtdConverter, JtdConversionResult, JtdConversionError};
+pub use jtd_converter::{JtdConversionError, JtdConversionResult, JtdConverter};
 
 // Self-healing integrity layer tests for TransferDriver trait.
 #[cfg(test)]

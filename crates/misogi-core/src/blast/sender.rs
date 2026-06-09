@@ -28,37 +28,43 @@ use serde::{Deserialize, Serialize};
 use tokio::net::UdpSocket;
 use uuid::Uuid;
 
+use super::frame::{BlastManifest, BlastPacket, FecConfigInfo};
 use crate::error::{MisogiError, Result};
-use crate::fec::{
-    FecConfig,
-    reed_solomon::ReedSolomonCodec,
-    interleaver::Interleaver,
-};
-use super::frame::{
-    BlastPacket, BlastManifest, FecConfigInfo,
-};
+use crate::fec::{FecConfig, interleaver::Interleaver, reed_solomon::ReedSolomonCodec};
 
 /// Default number of times each shard is repeated.
-fn default_repeat_count() -> u32 { 3 }
+fn default_repeat_count() -> u32 {
+    3
+}
 
 /// Microseconds between repeated transmissions of the same shard.
-fn default_repeat_interval_us() -> u64 { 1000 }
+fn default_repeat_interval_us() -> u64 {
+    1000
+}
 
 /// Number of times the manifest packet is sent (redundancy).
-fn default_manifest_repeats() -> u32 { 5 }
+fn default_manifest_repeats() -> u32 {
+    5
+}
 
 /// Maximum datagram payload size in bytes.
 ///
 /// Must fit within path MTU after accounting for IP+UDP headers (28 bytes)
 /// and Blast header+trailer (59 bytes). For standard Ethernet MTU (1500),
 /// use ≤ 1413 bytes. Default 1400 provides safety margin.
-fn default_max_datagram_size() -> usize { 1400 }
+fn default_max_datagram_size() -> usize {
+    1400
+}
 
 /// Whether adaptive rate control is enabled.
-fn default_adaptive_rate() -> bool { true }
+fn default_adaptive_rate() -> bool {
+    true
+}
 
 /// Number of times EOF marker is repeated.
-fn default_eof_repeats() -> u32 { 5 }
+fn default_eof_repeats() -> u32 {
+    5
+}
 
 /// Configuration parameters for the [`UdpBlastSender`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -204,15 +210,15 @@ impl UdpBlastSender {
     /// - [`MisogiError::Io`] if UDP socket binding fails.
     /// - [`MisogiError::Configuration`] if FEC config is invalid.
     pub async fn new(target: &str, config: BlastSenderConfig) -> Result<Self> {
-        let target_addr: std::net::SocketAddr = target
-            .parse()
-            .map_err(|e| MisogiError::Configuration(format!("Invalid target address '{}': {}", target, e)))?;
+        let target_addr: std::net::SocketAddr = target.parse().map_err(|e| {
+            MisogiError::Configuration(format!("Invalid target address '{}': {}", target, e))
+        })?;
 
         let socket = UdpSocket::bind("0.0.0.0:0").await.map_err(|e| {
-            MisogiError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Failed to bind UDP socket: {}", e),
-            ))
+            MisogiError::Io(std::io::Error::other(format!(
+                "Failed to bind UDP socket: {}",
+                e
+            )))
         })?;
 
         let fec_config = FecConfig {
@@ -242,10 +248,10 @@ impl UdpBlastSender {
         })?;
 
         let socket = UdpSocket::bind("0.0.0.0:0").await.map_err(|e| {
-            MisogiError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Failed to bind UDP socket: {}", e),
-            ))
+            MisogiError::Io(std::io::Error::other(format!(
+                "Failed to bind UDP socket: {}",
+                e
+            )))
         })?;
 
         let fec_codec = ReedSolomonCodec::with_config(fec_config.clone())?;
@@ -282,7 +288,11 @@ impl UdpBlastSender {
     ///
     /// - [`MisogiError::Io`] if file read fails.
     /// - [`MisogiError::Protocol`] if FEC encoding fails.
-    pub async fn blast_file(&self, file_path: &Path, file_id: Option<&str>) -> Result<BlastSendReport> {
+    pub async fn blast_file(
+        &self,
+        file_path: &Path,
+        file_id: Option<&str>,
+    ) -> Result<BlastSendReport> {
         let session_id = Uuid::new_v4().to_string();
         let fid = file_id.unwrap_or(&Uuid::new_v4().to_string()).to_string();
         let filename = file_path
@@ -294,10 +304,11 @@ impl UdpBlastSender {
         // Phase 1: Read file
         let start_encode = Instant::now();
         let file_data = tokio::fs::read(file_path).await.map_err(|e| {
-            MisogiError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Failed to read file {}: {}", file_path.display(), e),
-            ))
+            MisogiError::Io(std::io::Error::other(format!(
+                "Failed to read file {}: {}",
+                file_path.display(),
+                e
+            )))
         })?;
         let original_size = file_data.len() as u64;
         let original_md5 = format!("{:x}", md5::Md5::digest(&file_data));
@@ -312,7 +323,8 @@ impl UdpBlastSender {
 
         // Phase 3: Interleave + Transmit
         let start_transmit = Instant::now();
-        let interleaver = Interleaver::with_width(total_unique_shards as usize, self.interleave_width);
+        let interleaver =
+            Interleaver::with_width(total_unique_shards as usize, self.interleave_width);
         let transmit_order = interleaver.compute_transmit_order();
 
         let mut total_sent: u64 = 0;
@@ -325,14 +337,16 @@ impl UdpBlastSender {
             let pkt = if is_parity {
                 let pidx = logical_idx - block.data_shards.len();
                 BlastPacket::parity_shard(
-                    &session_id, &fid,
+                    &session_id,
+                    &fid,
                     pidx as u32,
                     total_unique_shards as u32,
                     shard_data,
                 )
             } else {
                 BlastPacket::data_shard(
-                    &session_id, &fid,
+                    &session_id,
+                    &fid,
                     logical_idx as u32,
                     total_unique_shards as u32,
                     shard_data,
@@ -359,7 +373,8 @@ impl UdpBlastSender {
                         if self.config.adaptive_rate {
                             tokio::time::sleep(tokio::time::Duration::from_micros(
                                 self.config.repeat_interval_us * 2,
-                            )).await;
+                            ))
+                            .await;
                         }
                     }
                 }
@@ -368,7 +383,8 @@ impl UdpBlastSender {
                     let jitter = rand::random::<u64>() % 500;
                     tokio::time::sleep(tokio::time::Duration::from_micros(
                         self.config.repeat_interval_us + jitter,
-                    )).await;
+                    ))
+                    .await;
                 }
             }
 
@@ -393,7 +409,12 @@ impl UdpBlastSender {
         for _ in 0..self.config.manifest_repeats {
             if let Ok(manifest_pkt) = BlastPacket::manifest(&session_id, &fid, &manifest) {
                 let encoded = manifest_pkt.encode();
-                if self.socket.send_to(&encoded, self.target_addr).await.is_ok() {
+                if self
+                    .socket
+                    .send_to(&encoded, self.target_addr)
+                    .await
+                    .is_ok()
+                {
                     total_sent += 1;
                     total_bytes += manifest_pkt.wire_size() as u64;
                 }
@@ -405,7 +426,12 @@ impl UdpBlastSender {
         for _ in 0..self.config.eof_repeats {
             let eof_pkt = BlastPacket::eof_marker(&session_id);
             let encoded = eof_pkt.encode();
-            if self.socket.send_to(&encoded, self.target_addr).await.is_ok() {
+            if self
+                .socket
+                .send_to(&encoded, self.target_addr)
+                .await
+                .is_ok()
+            {
                 total_sent += 1;
                 total_bytes += eof_pkt.wire_size() as u64;
             }
@@ -476,15 +502,22 @@ mod tests {
         let tmp_dir = tempfile::tempdir().expect("Failed to create temp dir");
         let file_path = tmp_dir.path().join("test_blast.bin");
         let test_data: Vec<u8> = (0..1000).map(|i| i as u8).collect();
-        tokio::fs::write(&file_path, &test_data).await.expect("Failed to write test file");
+        tokio::fs::write(&file_path, &test_data)
+            .await
+            .expect("Failed to write test file");
 
         let config = BlastSenderConfig {
             repeat_count: 1,
             ..Default::default()
         };
 
-        let sender = UdpBlastSender::new("127.0.0.1:0", config).await.expect("Sender creation");
-        let report = sender.blast_file(&file_path, None).await.expect("Blast should succeed");
+        let sender = UdpBlastSender::new("127.0.0.1:0", config)
+            .await
+            .expect("Sender creation");
+        let report = sender
+            .blast_file(&file_path, None)
+            .await
+            .expect("Blast should succeed");
 
         assert_eq!(report.original_size, 1000);
         assert!(report.total_datagrams > 0);

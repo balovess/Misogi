@@ -16,9 +16,7 @@
 use std::time::Instant;
 
 use super::field_classifier::FieldClassifier;
-use super::types::{
-    FieldAction, FieldScanResult, StructuredFormat, StructuredScanResult,
-};
+use super::types::{FieldAction, FieldScanResult, StructuredFormat, StructuredScanResult};
 
 /// Configuration for JSON scanning behavior.
 #[derive(Debug, Clone)]
@@ -81,10 +79,8 @@ impl JsonPiiScanner {
             )));
         }
 
-        let value: serde_json::Value =
-            serde_json::from_str(content).map_err(|e| {
-                crate::error::MisogiError::Protocol(format!("Invalid JSON: {}", e))
-            })?;
+        let value: serde_json::Value = serde_json::from_str(content)
+            .map_err(|e| crate::error::MisogiError::Protocol(format!("Invalid JSON: {}", e)))?;
 
         let mut pii_fields: Vec<FieldScanResult> = Vec::new();
         self.traverse_json(&value, "", 0, &mut pii_fields);
@@ -124,7 +120,10 @@ impl JsonPiiScanner {
                     let classification = self.classifier.classify(key);
 
                     if let serde_json::Value::String(s) = val {
-                        if classification.matched && !s.is_empty() && classification.confidence >= 0.3 {
+                        if classification.matched
+                            && !s.is_empty()
+                            && classification.confidence >= 0.3
+                        {
                             results.push(FieldScanResult {
                                 field_path: child_path.clone(),
                                 field_name: key.clone(),
@@ -142,17 +141,15 @@ impl JsonPiiScanner {
                     }
                 }
             }
-            serde_json::Value::Array(arr) => {
-                match self.config.array_handling {
-                    ArrayHandling::ScanEach => {
-                        for (idx, item) in arr.iter().enumerate() {
-                            let child_path = format!("{}[{}]", path, idx);
-                            self.traverse_json(item, &child_path, depth + 1, results);
-                        }
+            serde_json::Value::Array(arr) => match self.config.array_handling {
+                ArrayHandling::ScanEach => {
+                    for (idx, item) in arr.iter().enumerate() {
+                        let child_path = format!("{}[{}]", path, idx);
+                        self.traverse_json(item, &child_path, depth + 1, results);
                     }
-                    ArrayHandling::Skip => {}
                 }
-            }
+                ArrayHandling::Skip => {}
+            },
             _ => {}
         }
     }

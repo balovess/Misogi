@@ -8,8 +8,8 @@
 //! 5. ZipScanner configuration and archive extension handling
 //! 6. Registry completeness (count verification)
 
-use misogi_core::file_types::MagicNumberRegistry;
 use misogi_cdr::StegoTechnique;
+use misogi_core::file_types::MagicNumberRegistry;
 
 // =============================================================================
 // Section 1: Magic Number Detection Tests for New Formats
@@ -285,7 +285,7 @@ fn test_image_sanitizer_auto_detect_dispatch() {
     ];
     let result = sanitizer.sanitize(&jpeg_data, "jpg").unwrap();
     assert!(
-        result.output.len() > 0,
+        !result.output.is_empty(),
         "JPEG dispatch should produce output"
     );
 }
@@ -526,9 +526,7 @@ fn test_stego_detect_clean_image_is_safe() {
     let appended: Vec<_> = result
         .findings
         .iter()
-        .filter(|f| {
-            f.technique == StegoTechnique::AppendedData
-        })
+        .filter(|f| f.technique == StegoTechnique::AppendedData)
         .collect();
     assert!(
         appended.is_empty(),

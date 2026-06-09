@@ -192,7 +192,10 @@ mod tests {
     #[test]
     fn test_fec_packet_to_bytes_roundtrip() {
         let original = FecPacket::new(
-            42, 100, 7, 16,
+            42,
+            100,
+            7,
+            16,
             Bytes::from_static(b"shard payload data here"),
         );
         let bytes = original.to_bytes();

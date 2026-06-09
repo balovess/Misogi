@@ -23,7 +23,6 @@
 //! device information, text annotations, XMP packets, and JPEG comments —
 //! matching JIS/CWE guidelines for document sanitization.
 
-
 use tracing::{debug, info, warn};
 
 use misogi_core::MisogiError;
@@ -827,10 +826,8 @@ impl ImageMetadataSanitizer {
             return self.sanitize_png(data);
         }
 
-        if data.len() >= 4 {
-            if &data[0..2] == b"II" || &data[0..2] == b"MM" {
-                return self.sanitize_tiff(data);
-            }
+        if data.len() >= 4 && (&data[0..2] == b"II" || &data[0..2] == b"MM") {
+            return self.sanitize_tiff(data);
         }
 
         if data.len() >= 12 && &data[0..4] == b"RIFF" {
@@ -1087,7 +1084,7 @@ mod tests {
         png.extend_from_slice(&0xAE426082u32.to_be_bytes()); // CRC
 
         let result = sanitizer.sanitize_png(&png).unwrap();
-        assert!(result.output.len() > 0);
+        assert!(!result.output.is_empty());
         // No text chunks to remove, so should have same size
         assert!(!result.has_changes());
     }
@@ -1099,13 +1096,13 @@ mod tests {
         // JPEG auto-detect
         let jpeg = minimal_jpeg();
         let result = sanitizer.sanitize(&jpeg, "jpg").unwrap();
-        assert!(result.output.len() > 0);
+        assert!(!result.output.is_empty());
 
         // PNG auto-detect
         let png_sig: Vec<u8> = vec![0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
         let result = sanitizer.sanitize(&png_sig, "png");
         // Will fail because it's just a signature, but should try PNG path
-        assert!(result.is_err() || result.unwrap().output.len() > 0);
+        assert!(result.is_err() || !result.unwrap().output.is_empty());
     }
 
     #[test]

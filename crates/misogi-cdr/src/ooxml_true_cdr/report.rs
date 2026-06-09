@@ -1,7 +1,7 @@
 //! Report structures for OOXML True CDR processing results.
 
 /// Detailed report of OOXML True CDR processing actions.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct OoxmlCdrReport {
     /// Whether VBA macro project was found and removed.
     pub vba_removed: bool,
@@ -40,30 +40,6 @@ pub struct OoxmlCdrReport {
     /// Each entry provides an auditable record of what was detected and
     /// what remediation action was applied, suitable for compliance reporting.
     pub actions_taken: Vec<OoxmlCdrAction>,
-}
-
-impl Default for OoxmlCdrReport {
-    fn default() -> Self {
-        Self {
-            vba_removed: false,
-            activex_removed: 0,
-            ole_removed: 0,
-            data_connections_removed: 0,
-            custom_xml_removed: 0,
-            smart_tags_removed: 0,
-            xml_elements_filtered: 0,
-            content_types_modified: false,
-            relationships_modified: false,
-            warnings: Vec::new(),
-            entries_processed: 0,
-            entries_skipped: 0,
-            dde_attacks_detected: 0,
-            excel_threats_neutralized: 0,
-            word_threats_neutralized: 0,
-            powerpoint_threats_neutralized: 0,
-            actions_taken: Vec::new(),
-        }
-    }
 }
 
 impl OoxmlCdrReport {

@@ -50,7 +50,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpListener;
-use tokio::sync::{broadcast, Notify};
+use tokio::sync::{Notify, broadcast};
 use tracing::{debug, error, info, warn};
 
 /// Default maximum message size: 50 MiB.
@@ -174,7 +174,7 @@ pub enum SmtpMode {
 ///     force_pii_scan_on_external: true,
 /// };
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ZonePolicy {
     /// Domain suffixes considered internal.
     ///
@@ -197,16 +197,6 @@ pub struct ZonePolicy {
     /// checked for accidental data leakage even if no active threats
     /// (macros, scripts) were detected.
     pub force_pii_scan_on_external: bool,
-}
-
-impl Default for ZonePolicy {
-    fn default() -> Self {
-        Self {
-            internal_domains: Vec::new(),
-            external_policy_override: None,
-            force_pii_scan_on_external: false,
-        }
-    }
 }
 
 /// Classification of an email's zone crossing based on sender and recipient domains.
@@ -310,10 +300,13 @@ impl SmtpServer {
 
         // Validate pickup directory in Pickup mode
         if config.mode == SmtpMode::Pickup {
-            let dir = config.pickup_dir.as_deref().ok_or_else(|| SmtpError::Configuration {
-                field: "pickup_dir".to_string(),
-                reason: "pickup_dir is required in Pickup mode".to_string(),
-            })?;
+            let dir = config
+                .pickup_dir
+                .as_deref()
+                .ok_or_else(|| SmtpError::Configuration {
+                    field: "pickup_dir".to_string(),
+                    reason: "pickup_dir is required in Pickup mode".to_string(),
+                })?;
 
             let path = std::path::Path::new(dir);
             if !path.is_dir() {
@@ -383,12 +376,12 @@ impl SmtpServer {
 
     /// Run in TransparentProxy mode: bind TCP listener and accept connections.
     async fn run_proxy(&self) -> Result<()> {
-        let listener = TcpListener::bind(&self.config.listen_addr).await.map_err(|e| {
-            SmtpError::Configuration {
+        let listener = TcpListener::bind(&self.config.listen_addr)
+            .await
+            .map_err(|e| SmtpError::Configuration {
                 field: "listen_addr".to_string(),
                 reason: format!("failed to bind: {e}"),
-            }
-        })?;
+            })?;
 
         info!(addr = %self.config.listen_addr, "SMTP listener bound");
 
@@ -434,21 +427,23 @@ impl SmtpServer {
         // Use polling-based file watching (cross-platform compatible).
         // A notify-based implementation can replace this for Linux-specific deployments.
         let mut interval = tokio::time::interval(std::time::Duration::from_secs(2));
-        let mut known_files: std::collections::HashSet<String> =
-            std::collections::HashSet::new();
+        let mut known_files: std::collections::HashSet<String> = std::collections::HashSet::new();
 
         // Initial scan: discover existing files but don't process them
         // (they are assumed to be from before startup)
         if let Ok(entries) = std::fs::read_dir(pickup_dir) {
             for entry in entries.flatten() {
-                if let Some(name) = entry.file_name().to_str() {
-                    if name.ends_with(".eml") {
-                        known_files.insert(name.to_string());
-                    }
+                if let Some(name) = entry.file_name().to_str()
+                    && name.ends_with(".eml")
+                {
+                    known_files.insert(name.to_string());
                 }
             }
         }
-        info!(count = known_files.len(), "Initial scan complete (existing files skipped)");
+        info!(
+            count = known_files.len(),
+            "Initial scan complete (existing files skipped)"
+        );
 
         loop {
             let mut shutdown_rx = self.shutdown_rx();
@@ -534,7 +529,9 @@ impl SmtpServer {
 
         // Send greeting banner
         writer
-            .write_all(format!("220 {} Misogi SMTP Gateway ready\r\n", self.config.hostname).as_bytes())
+            .write_all(
+                format!("220 {} Misogi SMTP Gateway ready\r\n", self.config.hostname).as_bytes(),
+            )
             .await?;
         writer.flush().await?;
 
@@ -633,7 +630,9 @@ impl SmtpServer {
                     _ => {
                         // Unrecognized or unsupported command
                         writer
-                            .write_all(format!("502 Command not recognized: {}\r\n", cmd).as_bytes())
+                            .write_all(
+                                format!("502 Command not recognized: {}\r\n", cmd).as_bytes(),
+                            )
                             .await?;
                         writer.flush().await?;
                     }
@@ -642,7 +641,7 @@ impl SmtpServer {
                 // Data accumulation phase: collect message content
                 // Dot-unstufng: leading ".." → "."
                 if cmd.starts_with("..") {
-                    raw_message.extend_from_slice(cmd[1..].as_bytes());
+                    raw_message.extend_from_slice(&cmd.as_bytes()[1..]);
                 } else {
                     raw_message.extend_from_slice(cmd.as_bytes());
                 }
@@ -680,23 +679,25 @@ impl SmtpServer {
         );
 
         // Process the message through the pipeline
-        let result = self
-            .process_message(&raw_message, &from, &recipients)
-            .await;
+        let result = self.process_message(&raw_message, &from, &recipients).await;
 
         match &result {
             Ok(session_result) => {
                 if session_result.delivered {
                     writer.write_all(b"250 OK queued for delivery\r\n").await?;
                 } else {
-                    writer.write_all(b"451 Processing completed but delivery deferred\r\n").await?;
+                    writer
+                        .write_all(b"451 Processing completed but delivery deferred\r\n")
+                        .await?;
                 }
             }
             Err(e) => {
                 error!(error = %e, "Message processing failed");
                 if self.config.fail_open {
                     warn!("Fail-open: delivering original message due to processing error");
-                    writer.write_all(b"250 OK (fail-open: original delivered)\r\n").await?;
+                    writer
+                        .write_all(b"250 OK (fail-open: original delivered)\r\n")
+                        .await?;
                 } else {
                     writer
                         .write_all(format!("451 Processing failed: {}\r\n", e).as_bytes())
@@ -779,16 +780,12 @@ impl SmtpServer {
             .await;
 
         // Count threats found
-        let threats_found: usize = sanitize_results
-            .iter()
-            .map(|r| r.threat_count)
-            .sum();
+        let threats_found: usize = sanitize_results.iter().map(|r| r.threat_count).sum();
 
         let attachments_processed = sanitize_results.len();
 
         // Step 4: Reassemble sanitized email
-        let reassembled =
-            EmailSanitizer::reassemble_email(&parsed_email, &sanitize_results)?;
+        let reassembled = EmailSanitizer::reassemble_email(&parsed_email, &sanitize_results)?;
 
         // Step 5: Deliver via queue
         let mut actions_taken: Vec<String> = Vec::new();
@@ -859,10 +856,10 @@ impl SmtpServer {
     /// Handles formats like `<user@example.com>` and bare addresses.
     fn extract_bracketed_address(cmd: &str) -> String {
         // Find angle brackets
-        if let Some(start) = cmd.find('<') {
-            if let Some(end) = cmd.find('>') {
-                return cmd[start + 1..end].trim().to_string();
-            }
+        if let Some(start) = cmd.find('<')
+            && let Some(end) = cmd.find('>')
+        {
+            return cmd[start + 1..end].trim().to_string();
         }
         // Fallback: take everything after the colon and trim
         cmd.split(':')

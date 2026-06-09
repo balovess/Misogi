@@ -36,12 +36,33 @@ pub const DANGEROUS_CONTENT_TYPES: &[&str] = &[
 
 /// Dangerous XML attribute names to strip from all elements.
 pub const DANGEROUS_ATTRIBUTES: &[&str] = &[
-    "onload", "onclick", "onmouseover", "onmouseout", "onfocus", "onblur",
-    "onchange", "onsubmit", "onreset", "onkeydown", "onkeyup", "onkeypress",
-    "onerror", "onabort", "ondrag", "ondrop", "onscroll", "onresize",
-    "w:macro", "w:macroName", "w:macroEnabled",
-    "o:cmd", "o:ole", "o:object",
-    "javascript:", "vbscript:", "data:",
+    "onload",
+    "onclick",
+    "onmouseover",
+    "onmouseout",
+    "onfocus",
+    "onblur",
+    "onchange",
+    "onsubmit",
+    "onreset",
+    "onkeydown",
+    "onkeyup",
+    "onkeypress",
+    "onerror",
+    "onabort",
+    "ondrag",
+    "ondrop",
+    "onscroll",
+    "onresize",
+    "w:macro",
+    "w:macroName",
+    "w:macroEnabled",
+    "o:cmd",
+    "o:ole",
+    "o:object",
+    "javascript:",
+    "vbscript:",
+    "data:",
 ];
 
 // =============================================================================
@@ -60,9 +81,9 @@ pub const DANGEROUS_ATTRIBUTES: &[&str] = &[
 /// - CVE-2017-0199 / CVE-2017-11882 — DDE-based code execution
 /// - MITRE ATT&CK T1059 (Command and Scripting Interpreter)
 pub const DDE_PATTERNS: &[&str] = &[
-    r"(?i)=CMD\|",       // DDE command execution via CMD pipe
-    r"(?i)=EXEC\(",      // DDE EXEC function call (parenthesis escaped for regex)
-    r"(?i)=MSQUERY",     // MSQUERY external data query (code exec vector)
+    r"(?i)=CMD\|",   // DDE command execution via CMD pipe
+    r"(?i)=EXEC\(",  // DDE EXEC function call (parenthesis escaped for regex)
+    r"(?i)=MSQUERY", // MSQUERY external data query (code exec vector)
 ];
 
 /// Blocked URL protocols for hyperlink/external reference validation.
@@ -70,12 +91,7 @@ pub const DDE_PATTERNS: &[&str] = &[
 /// These protocols are known to enable script execution or local file access
 /// when used as hyperlink targets or external reference URLs within OOXML
 /// documents. Any reference using these protocols is stripped.
-pub const BLOCKED_URL_PROTOCOLS: &[&str] = &[
-    "file://",
-    "javascript:",
-    "vbscript:",
-    "data:",
-];
+pub const BLOCKED_URL_PROTOCOLS: &[&str] = &["file://", "javascript:", "vbscript:", "data:"];
 
 /// Script injection patterns for deep-scanning text content fields.
 ///
@@ -109,35 +125,151 @@ pub const SCRIPT_INJECTION_PATTERNS: &[&str] = &[
 /// - `o:*` namespace elements (Office OLE embeddings)
 pub const DOCX_BODY_WHITELIST: &[&str] = &[
     // Document root and body structure (both prefixed and unprefixed for compatibility)
-    "w:document", "document",
-    "w:body", "body",
+    "w:document",
+    "document",
+    "w:body",
+    "body",
     // Paragraph and run structure
-    "w:p", "p", "w:r", "r", "w:t", "t", "w:br", "br", "w:tab", "tab", "w:cr", "cr",
+    "w:p",
+    "p",
+    "w:r",
+    "r",
+    "w:t",
+    "t",
+    "w:br",
+    "br",
+    "w:tab",
+    "tab",
+    "w:cr",
+    "cr",
     // Properties
-    "w:pPr", "pPr", "w:rPr", "rPr", "w:rStyle", "rStyle", "w:pStyle", "pStyle",
+    "w:pPr",
+    "pPr",
+    "w:rPr",
+    "rPr",
+    "w:rStyle",
+    "rStyle",
+    "w:pStyle",
+    "pStyle",
     // Character formatting
-    "w:b", "b", "w:i", "i", "w:u", "u", "w:strike", "strike", "w:vertAlign", "vertAlign",
-    "w:ins", "ins", "w:del", "del", "w:sz", "sz", "w:szCs", "szCs", "w:color", "color",
-    "w:highlight", "highlight", "w:lang", "lang", "w:rFonts", "rFonts",
+    "w:b",
+    "b",
+    "w:i",
+    "i",
+    "w:u",
+    "u",
+    "w:strike",
+    "strike",
+    "w:vertAlign",
+    "vertAlign",
+    "w:ins",
+    "ins",
+    "w:del",
+    "del",
+    "w:sz",
+    "sz",
+    "w:szCs",
+    "szCs",
+    "w:color",
+    "color",
+    "w:highlight",
+    "highlight",
+    "w:lang",
+    "lang",
+    "w:rFonts",
+    "rFonts",
     // Drawings and images (safe subset)
-    "w:drawing", "drawing", "wp:inline", "inline", "wp:anchor", "anchor",
-    "a:blip", "blip", "pic:pic", "pic", "a:xfrm", "xfrm", "a:off", "off", "a:ext", "ext", "a:prstGeom", "prstGeom",
+    "w:drawing",
+    "drawing",
+    "wp:inline",
+    "inline",
+    "wp:anchor",
+    "anchor",
+    "a:blip",
+    "blip",
+    "pic:pic",
+    "pic",
+    "a:xfrm",
+    "xfrm",
+    "a:off",
+    "off",
+    "a:ext",
+    "ext",
+    "a:prstGeom",
+    "prstGeom",
     // Tables
-    "w:tbl", "tbl", "w:tr", "tr", "w:tc", "tc", "w:tblGrid", "tblGrid", "w:gridCol", "gridCol",
-    "w:tblPr", "tblPr", "w:tblCellMar", "tblCellMar", "w:tcPr", "tcPr",
+    "w:tbl",
+    "tbl",
+    "w:tr",
+    "tr",
+    "w:tc",
+    "tc",
+    "w:tblGrid",
+    "tblGrid",
+    "w:gridCol",
+    "gridCol",
+    "w:tblPr",
+    "tblPr",
+    "w:tblCellMar",
+    "tblCellMar",
+    "w:tcPr",
+    "tcPr",
     // Hyperlinks (kept but target validated separately)
-    "w:hyperlink", "hyperlink",
+    "w:hyperlink",
+    "hyperlink",
     // Section properties
-    "w:sectPr", "sectPr", "w:pgSz", "pgSz", "w:pgMar", "pgMar",
-    "w:headerReference", "headerReference", "w:footerReference", "footerReference",
+    "w:sectPr",
+    "sectPr",
+    "w:pgSz",
+    "pgSz",
+    "w:pgMar",
+    "pgMar",
+    "w:headerReference",
+    "headerReference",
+    "w:footerReference",
+    "footerReference",
     // Numbering and lists
-    "w:numPr", "numPr", "w:ilvl", "ilvl", "w:numId", "numId", "w:spacing", "spacing",
+    "w:numPr",
+    "numPr",
+    "w:ilvl",
+    "ilvl",
+    "w:numId",
+    "numId",
+    "w:spacing",
+    "spacing",
     // Fields (simple fields only, no macros)
-    "w:fldChar", "fldChar", "w:instrText", "instrText", "w:fldData", "fldData",
+    "w:fldChar",
+    "fldChar",
+    "w:instrText",
+    "instrText",
+    "w:fldData",
+    "fldData",
     // Breaks and spacing
-    "w:jc", "jc", "w:ind", "ind", "w:pBdr", "pBdr", "w:shd", "shd",
+    "w:jc",
+    "jc",
+    "w:ind",
+    "ind",
+    "w:pBdr",
+    "pBdr",
+    "w:shd",
+    "shd",
     // Math (OfficeMath ML — safe subset)
-    "m:oMath", "oMath", "m:oMathPara", "oMathPara", "m:f", "f", "m:num", "num", "m:den", "den", "m:rad", "rad", "m:sSup", "sSup", "m:sSub", "sSub",
+    "m:oMath",
+    "oMath",
+    "m:oMathPara",
+    "oMathPara",
+    "m:f",
+    "f",
+    "m:num",
+    "num",
+    "m:den",
+    "den",
+    "m:rad",
+    "rad",
+    "m:sSup",
+    "sSup",
+    "m:sSub",
+    "sSub",
 ];
 
 /// Elements allowed in SpreadsheetML worksheet content.
@@ -151,31 +283,58 @@ pub const XLSX_SHEET_WHITELIST: &[&str] = &[
     // Root element
     "worksheet",
     // Core worksheet structure
-    "sheetData", "row", "c", "v", "f",
+    "sheetData",
+    "row",
+    "c",
+    "v",
+    "f",
     // Cell content types
-    "is", "t", "s", "r", "definedName",
+    "is",
+    "t",
+    "s",
+    "r",
+    "definedName",
     // Merged cells
-    "mergeCell", "mergeCells",
+    "mergeCell",
+    "mergeCells",
     // Column dimensions
-    "col", "cols",
+    "col",
+    "cols",
     // Sheet properties
-    "sheetFormatPr", "sheetViews", "sheetView",
-    "sheetPr", "tabColor", "outlinePr", "pageSetUpPr",
+    "sheetFormatPr",
+    "sheetViews",
+    "sheetView",
+    "sheetPr",
+    "tabColor",
+    "outlinePr",
+    "pageSetUpPr",
     // Data validation (safe — no code execution)
-    "dataValidations", "dataValidation",
+    "dataValidations",
+    "dataValidation",
     // Conditional formatting (safe)
-    "conditionalFormatting", "cfRule",
+    "conditionalFormatting",
+    "cfRule",
     // Sorting and filtering (safe)
-    "autoFilter", "sortState", "sortCondition", "filterColumn",
+    "autoFilter",
+    "sortState",
+    "sortCondition",
+    "filterColumn",
     // Print settings
-    "printOptions", "pageMargins", "pageSetup",
-    "headerFooter", "oddHeader", "oddFooter",
+    "printOptions",
+    "pageMargins",
+    "pageSetup",
+    "headerFooter",
+    "oddHeader",
+    "oddFooter",
     // Dimension
     "dimension",
     // Protection (view-only, not macro-related)
     "sheetProtection",
     // Sparklines (safe inline charts)
-    "sparklineGroups", "sparklineGroup", "sparklines", "sparkline",
+    "sparklineGroups",
+    "sparklineGroup",
+    "sparklines",
+    "sparkline",
 ];
 
 /// Elements allowed in PresentationML slide content.
@@ -187,30 +346,73 @@ pub const XLSX_SHEET_WHITELIST: &[&str] = &[
 /// - Any element capable of executing code
 pub const PPTX_SLIDE_WHITELIST: &[&str] = &[
     // Slide structure
-    "sld", "cSld", "spTree",
+    "sld",
+    "cSld",
+    "spTree",
     // Shapes
-    "sp", "nvSpPr", "spPr", "txBody",
-    "nvPr", "cNvPr", "cNvSpPr", "cNvPicPr",
+    "sp",
+    "nvSpPr",
+    "spPr",
+    "txBody",
+    "nvPr",
+    "cNvPr",
+    "cNvSpPr",
+    "cNvPicPr",
     // Shape geometry
-    "xfrm", "off", "ext", "prstGeom", "avLst", "gd",
+    "xfrm",
+    "off",
+    "ext",
+    "prstGeom",
+    "avLst",
+    "gd",
     // Text runs
-    "p", "r", "t", "rPr", "pPr", "endParaRPr",
+    "p",
+    "r",
+    "t",
+    "rPr",
+    "pPr",
+    "endParaRPr",
     // Pictures
-    "pic", "blipFill", "blip", "stretch", "fillRect",
+    "pic",
+    "blipFill",
+    "blip",
+    "stretch",
+    "fillRect",
     // Graphic frames (for charts/diagrams — safe subset)
-    "graphicFrame", "graphic", "chart", "c:chart",
+    "graphicFrame",
+    "graphic",
+    "chart",
+    "c:chart",
     // Groups
-    "grpSp", "grpSpPr",
+    "grpSp",
+    "grpSpPr",
     // Connections (for connectors between shapes)
-    "cxnSp", "cxnSpPr",
+    "cxnSp",
+    "cxnSpPr",
     // Color mappings
-    "clrMapOvr", "clrMap", "srgbClr", "schemeClr",
+    "clrMapOvr",
+    "clrMap",
+    "srgbClr",
+    "schemeClr",
     // Styles
-    "style", "lnRef", "fillRef", "effectRef", "fontRef",
-    "ln", "noFill", "solidFill", "gradFill",
+    "style",
+    "lnRef",
+    "fillRef",
+    "effectRef",
+    "fontRef",
+    "ln",
+    "noFill",
+    "solidFill",
+    "gradFill",
     // Transitions (basic animations only)
-    "transition", "snd",
+    "transition",
+    "snd",
     // Timing (basic animations — safe subset)
-    "timing", "tnLst", "par", "cTn", "anim",
-    "animEffect", "animMotion",
+    "timing",
+    "tnLst",
+    "par",
+    "cTn",
+    "anim",
+    "animEffect",
+    "animMotion",
 ];

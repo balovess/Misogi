@@ -28,7 +28,7 @@
 //! let custom_token = issuer.issue_with_ttl(&claims, 3600)?;  // Custom 1-hour TTL
 //! ```
 
-use jsonwebtoken::{encode, EncodingKey, Header, Algorithm};
+use jsonwebtoken::{Algorithm, EncodingKey, Header, encode};
 use tracing::{debug, info, instrument};
 
 use super::{JwtConfig, JwtError, unix_timestamp};
@@ -86,20 +86,16 @@ impl JwtIssuer {
     /// ```
     #[instrument(skip(config), fields(issuer = %config.issuer))]
     pub fn new(config: JwtConfig) -> Result<Self, JwtError> {
-        let private_pem =
-            std::fs::read_to_string(&config.rsa_pem_path).map_err(|e| {
-                JwtError::KeyLoadFailed(format!(
-                    "Failed to read private key from {}: {}",
-                    config.rsa_pem_path.display(), e
-                ))
-            })?;
+        let private_pem = std::fs::read_to_string(&config.rsa_pem_path).map_err(|e| {
+            JwtError::KeyLoadFailed(format!(
+                "Failed to read private key from {}: {}",
+                config.rsa_pem_path.display(),
+                e
+            ))
+        })?;
 
-        let encoding_key =
-            EncodingKey::from_rsa_pem(private_pem.as_bytes()).map_err(|e| {
-                JwtError::KeyLoadFailed(format!(
-                    "Invalid RSA private key: {e}"
-                ))
-            })?;
+        let encoding_key = EncodingKey::from_rsa_pem(private_pem.as_bytes())
+            .map_err(|e| JwtError::KeyLoadFailed(format!("Invalid RSA private key: {e}")))?;
 
         info!(
             issuer = %config.issuer,
@@ -201,10 +197,7 @@ impl JwtIssuer {
             })?;
 
         // --- Optional fields with sensible defaults ---
-        let ttl_hours = obj
-            .get("ttl_hours")
-            .and_then(|v| v.as_i64())
-            .unwrap_or(8);
+        let ttl_hours = obj.get("ttl_hours").and_then(|v| v.as_i64()).unwrap_or(8);
 
         let refresh_ttl_hours = obj
             .get("refresh_ttl_hours")
@@ -286,11 +279,7 @@ impl JwtIssuer {
     /// let token = issuer.issue_with_ttl(&claims, 3600)?;
     /// ```
     #[instrument(skip(self, claims), fields(applicant_id = %claims.applicant_id, ttl_secs))]
-    pub fn issue_with_ttl(
-        &self,
-        claims: &MisogiClaims,
-        ttl_secs: u64,
-    ) -> Result<String, JwtError> {
+    pub fn issue_with_ttl(&self, claims: &MisogiClaims, ttl_secs: u64) -> Result<String, JwtError> {
         if ttl_secs == 0 {
             return Err(JwtError::ClaimValidationFailed(
                 "TTL must be greater than 0 seconds".to_string(),
@@ -394,7 +383,10 @@ impl JwtIssuer {
     /// let token = issuer.issue_identity(&identity)?;
     /// ```
     #[instrument(skip(self, identity), fields(applicant_id = %identity.applicant_id))]
-    pub fn issue_identity(&self, identity: &crate::provider::MisogiIdentity) -> Result<String, JwtError> {
+    pub fn issue_identity(
+        &self,
+        identity: &crate::provider::MisogiIdentity,
+    ) -> Result<String, JwtError> {
         let claims: MisogiClaims = identity.clone().into();
         self.issue(&claims)
     }

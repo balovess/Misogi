@@ -40,8 +40,8 @@ use std::sync::{Arc, RwLock};
 use bytes::Bytes;
 use tracing::{debug, info, warn};
 
-use crate::traits::storage::{StorageBackend, StorageError, StorageInfo};
 use crate::storage::local::{LocalConfig, LocalStorage};
+use crate::traits::storage::{StorageBackend, StorageError, StorageInfo};
 
 #[cfg(feature = "storage-s3")]
 use crate::storage::s3::{S3Config, S3Storage};
@@ -99,25 +99,19 @@ impl StorageBackendInfo {
 /// Required fields: `account_name`, `credential`, `container`
 /// Optional fields: `endpoint` (String), `sas_url_ttl_secs` (integer, default 3600)
 #[cfg(feature = "storage-azure")]
-fn parse_azure_blob_config(
-    storage_table: &toml::Table,
-) -> Result<AzureBlobConfig, StorageError> {
+fn parse_azure_blob_config(storage_table: &toml::Table) -> Result<AzureBlobConfig, StorageError> {
     let az_table = storage_table
         .get("azure_blob")
         .and_then(|v| v.as_table())
         .ok_or_else(|| {
-            StorageError::ConfigurationError(
-                "missing or invalid [storage.azure_blob] table".into(),
-            )
+            StorageError::ConfigurationError("missing or invalid [storage.azure_blob] table".into())
         })?;
 
     let account_name = az_table
         .get("account_name")
         .and_then(|v| v.as_str())
         .ok_or_else(|| {
-            StorageError::ConfigurationError(
-                "[storage.azure_blob] requires 'account_name'".into(),
-            )
+            StorageError::ConfigurationError("[storage.azure_blob] requires 'account_name'".into())
         })?
         .to_string();
 
@@ -125,9 +119,7 @@ fn parse_azure_blob_config(
         .get("credential")
         .and_then(|v| v.as_str())
         .ok_or_else(|| {
-            StorageError::ConfigurationError(
-                "[storage.azure_blob] requires 'credential'".into(),
-            )
+            StorageError::ConfigurationError("[storage.azure_blob] requires 'credential'".into())
         })?
         .to_string();
 
@@ -135,9 +127,7 @@ fn parse_azure_blob_config(
         .get("container")
         .and_then(|v| v.as_str())
         .ok_or_else(|| {
-            StorageError::ConfigurationError(
-                "[storage.azure_blob] requires 'container'".into(),
-            )
+            StorageError::ConfigurationError("[storage.azure_blob] requires 'container'".into())
         })?
         .to_string();
 
@@ -165,26 +155,18 @@ fn parse_azure_blob_config(
 /// Required fields: `bucket`
 /// Optional fields: `service_account_json` (string), `service_account_key_path` (string), `base_url` (string)
 #[cfg(feature = "storage-gcs")]
-fn parse_gcs_config(
-    storage_table: &toml::Table,
-) -> Result<GcsConfig, StorageError> {
+fn parse_gcs_config(storage_table: &toml::Table) -> Result<GcsConfig, StorageError> {
     let gcs_table = storage_table
         .get("gcs")
         .and_then(|v| v.as_table())
         .ok_or_else(|| {
-            StorageError::ConfigurationError(
-                "missing or invalid [storage.gcs] table".into(),
-            )
+            StorageError::ConfigurationError("missing or invalid [storage.gcs] table".into())
         })?;
 
     let bucket = gcs_table
         .get("bucket")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| {
-            StorageError::ConfigurationError(
-                "[storage.gcs] requires 'bucket'".into(),
-            )
-        })?
+        .ok_or_else(|| StorageError::ConfigurationError("[storage.gcs] requires 'bucket'".into()))?
         .to_string();
 
     let service_account_json = gcs_table
@@ -226,25 +208,19 @@ fn parse_s3_config(storage_table: &toml::Table) -> Result<S3Config, StorageError
         .get("s3")
         .and_then(|v| v.as_table())
         .ok_or_else(|| {
-            StorageError::ConfigurationError(
-                "missing or invalid [storage.s3] table".into(),
-            )
+            StorageError::ConfigurationError("missing or invalid [storage.s3] table".into())
         })?;
 
     let bucket = s3_table
         .get("bucket")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| {
-            StorageError::ConfigurationError("[storage.s3] requires 'bucket'".into())
-        })?
+        .ok_or_else(|| StorageError::ConfigurationError("[storage.s3] requires 'bucket'".into()))?
         .to_string();
 
     let region = s3_table
         .get("region")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| {
-            StorageError::ConfigurationError("[storage.s3] requires 'region'".into())
-        })?
+        .ok_or_else(|| StorageError::ConfigurationError("[storage.s3] requires 'region'".into()))?
         .to_string();
 
     let access_key = s3_table
@@ -443,9 +419,7 @@ impl StorageRegistry {
                         guard.insert(name.to_string(), arc);
                         Err(StorageError::InternalError(format!(
                             "cannot remove backend '{name}': {} outstanding Arc reference(s) exist",
-                            Arc::strong_count(
-                                &guard.get(name).expect("just re-inserted")
-                            )
+                            Arc::strong_count(guard.get(name).expect("just re-inserted"))
                         )))
                     }
                 }
@@ -559,9 +533,9 @@ impl StorageRegistry {
         key: &str,
         data: Bytes,
     ) -> Result<StorageInfo, StorageError> {
-        let backend = self.get(name).ok_or_else(|| {
-            StorageError::NotFound(format!("backend '{name}' not found"))
-        })?;
+        let backend = self
+            .get(name)
+            .ok_or_else(|| StorageError::NotFound(format!("backend '{name}' not found")))?;
 
         backend.put(key, data).await
     }
@@ -581,9 +555,9 @@ impl StorageRegistry {
     /// - [`StorageError::NotFound`] if `key` does not exist in the backend.
     /// - Any error from the underlying `get()` operation.
     pub async fn get_from(&self, name: &str, key: &str) -> Result<Bytes, StorageError> {
-        let backend = self.get(name).ok_or_else(|| {
-            StorageError::NotFound(format!("backend '{name}' not found"))
-        })?;
+        let backend = self
+            .get(name)
+            .ok_or_else(|| StorageError::NotFound(format!("backend '{name}' not found")))?;
 
         backend.get(key).await
     }
@@ -622,13 +596,9 @@ impl StorageRegistry {
     pub fn from_config(config: &toml::Value) -> Result<Self, StorageError> {
         let storage_table = config
             .get("storage")
-            .ok_or_else(|| {
-                StorageError::ConfigurationError("missing [storage] table".into())
-            })?
+            .ok_or_else(|| StorageError::ConfigurationError("missing [storage] table".into()))?
             .as_table()
-            .ok_or_else(|| {
-                StorageError::ConfigurationError("[storage] must be a table".into())
-            })?;
+            .ok_or_else(|| StorageError::ConfigurationError("[storage] must be a table".into()))?;
 
         let backend_type = storage_table
             .get("type")
@@ -653,10 +623,8 @@ impl StorageRegistry {
                         )
                     })?;
 
-                let local_config: LocalConfig = local_config_value
-                    .clone()
-                    .try_into()
-                    .map_err(|e| {
+                let local_config: LocalConfig =
+                    local_config_value.clone().try_into().map_err(|e| {
                         StorageError::ConfigurationError(format!(
                             "failed to parse [storage.local]: {e}"
                         ))
@@ -679,7 +647,8 @@ impl StorageRegistry {
                     })?;
                 return Err(StorageError::ConfigurationError(
                     "S3 backend requires async initialization; \
-                     use StorageRegistry::from_config_async() instead".into(),
+                     use StorageRegistry::from_config_async() instead"
+                        .into(),
                 ));
             }
 
@@ -778,7 +747,8 @@ impl StorageRegistry {
                 let _config = parse_azure_blob_config(storage_table)?;
                 return Err(StorageError::ConfigurationError(
                     "Azure Blob backend requires async initialization; \
-                     use StorageRegistry::from_config_async() instead".into(),
+                     use StorageRegistry::from_config_async() instead"
+                        .into(),
                 ));
             }
 
@@ -794,7 +764,8 @@ impl StorageRegistry {
                 let _config = parse_gcs_config(storage_table)?;
                 return Err(StorageError::ConfigurationError(
                     "GCS backend requires async initialization; \
-                     use StorageRegistry::from_config_async() instead".into(),
+                     use StorageRegistry::from_config_async() instead"
+                        .into(),
                 ));
             }
 
@@ -840,13 +811,9 @@ impl StorageRegistry {
     pub async fn from_config_async(config: &toml::Value) -> Result<Self, StorageError> {
         let storage_table = config
             .get("storage")
-            .ok_or_else(|| {
-                StorageError::ConfigurationError("missing [storage] table".into())
-            })?
+            .ok_or_else(|| StorageError::ConfigurationError("missing [storage] table".into()))?
             .as_table()
-            .ok_or_else(|| {
-                StorageError::ConfigurationError("[storage] must be a table".into())
-            })?;
+            .ok_or_else(|| StorageError::ConfigurationError("[storage] must be a table".into()))?;
 
         let backend_type = storage_table
             .get("type")
@@ -859,9 +826,7 @@ impl StorageRegistry {
             .unwrap_or(false);
 
         match backend_type {
-            "local" | "api_forward" => {
-                Self::from_config(config)
-            }
+            "local" | "api_forward" => Self::from_config(config),
 
             #[cfg(feature = "storage-s3")]
             "s3" => {
@@ -874,11 +839,9 @@ impl StorageRegistry {
             }
 
             #[cfg(not(feature = "storage-s3"))]
-            "s3" => {
-                Err(StorageError::ConfigurationError(
-                    "S3 backend requires 'storage-s3' feature flag".into(),
-                ))
-            }
+            "s3" => Err(StorageError::ConfigurationError(
+                "S3 backend requires 'storage-s3' feature flag".into(),
+            )),
 
             #[cfg(feature = "storage-azure")]
             "azure_blob" => {
@@ -891,11 +854,9 @@ impl StorageRegistry {
             }
 
             #[cfg(not(feature = "storage-azure"))]
-            "azure_blob" => {
-                Err(StorageError::ConfigurationError(
-                    "Azure Blob backend requires 'storage-azure' feature flag".into(),
-                ))
-            }
+            "azure_blob" => Err(StorageError::ConfigurationError(
+                "Azure Blob backend requires 'storage-azure' feature flag".into(),
+            )),
 
             #[cfg(feature = "storage-gcs")]
             "gcs" => {
@@ -908,11 +869,9 @@ impl StorageRegistry {
             }
 
             #[cfg(not(feature = "storage-gcs"))]
-            "gcs" => {
-                Err(StorageError::ConfigurationError(
-                    "GCS backend requires 'storage-gcs' feature flag".into(),
-                ))
-            }
+            "gcs" => Err(StorageError::ConfigurationError(
+                "GCS backend requires 'storage-gcs' feature flag".into(),
+            )),
 
             other => Err(StorageError::ConfigurationError(format!(
                 "unknown storage backend type: '{other}' \
@@ -991,14 +950,21 @@ mod tests {
 
         // Register should succeed
         let result = registry.register("primary", Box::new(backend));
-        assert!(result.is_ok(), "registration should succeed: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "registration should succeed: {:?}",
+            result.err()
+        );
 
         assert!(!registry.is_empty());
         assert_eq!(registry.len(), 1);
 
         // Get should return Some
         let retrieved = registry.get("primary");
-        assert!(retrieved.is_some(), "registered backend should be retrievable");
+        assert!(
+            retrieved.is_some(),
+            "registered backend should be retrievable"
+        );
 
         // Get non-existent should return None
         assert!(registry.get("nonexistent").is_none());
@@ -1076,7 +1042,10 @@ mod tests {
 
         // Verify backend_type is populated correctly
         for info in &list {
-            assert_eq!(info.backend_type, "local", "all test backends should report type='local'");
+            assert_eq!(
+                info.backend_type, "local",
+                "all test backends should report type='local'"
+            );
             assert!(!info.name.is_empty());
         }
     }
@@ -1163,7 +1132,10 @@ mod tests {
 
         match remove_result.unwrap_err() {
             StorageError::InternalError(msg) => {
-                assert!(msg.contains("outstanding"), "should mention outstanding refs: {msg}");
+                assert!(
+                    msg.contains("outstanding"),
+                    "should mention outstanding refs: {msg}"
+                );
             }
             other => panic!("expected InternalError, got: {:?}", other),
         }
@@ -1266,12 +1238,19 @@ mod tests {
         let value: toml::Value = toml_str.parse().expect("valid TOML");
         let registry = StorageRegistry::from_config(&value);
 
-        assert!(registry.is_ok(), "from_config should succeed: {:?}", registry.err());
+        assert!(
+            registry.is_ok(),
+            "from_config should succeed: {:?}",
+            registry.err()
+        );
         let registry = registry.unwrap();
 
         assert!(!registry.is_empty());
         assert_eq!(registry.len(), 1);
-        assert!(registry.get_default().is_some(), "default backend should be registered");
+        assert!(
+            registry.get_default().is_some(),
+            "default backend should be registered"
+        );
 
         let list = registry.list();
         assert_eq!(list.len(), 1);
@@ -1337,9 +1316,18 @@ mod tests {
             .expect("register");
 
         let debug_str = format!("{registry:?}");
-        assert!(debug_str.contains("StorageRegistry"), "debug should show struct name");
-        assert!(debug_str.contains("backend_count"), "debug should show count field");
-        assert!(debug_str.contains("debug_test"), "debug should show registered name");
+        assert!(
+            debug_str.contains("StorageRegistry"),
+            "debug should show struct name"
+        );
+        assert!(
+            debug_str.contains("backend_count"),
+            "debug should show count field"
+        );
+        assert!(
+            debug_str.contains("debug_test"),
+            "debug should show registered name"
+        );
     }
 
     // ---------------------------------------------------------------------------

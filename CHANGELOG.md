@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+#### CI/CD — Multi-Platform Automated Testing
+- **Platform matrix**: Linux (ubuntu-latest), Windows (windows-latest), macOS (macos-latest) for all CI jobs
+- **Rust version matrix**: Stable Rust on all platforms + MSRV (1.75.0) check on Linux
+- **Browser testing matrix**: Chromium (all platforms), Firefox (Linux/macOS), WebKit/Safari (macOS)
+- **Cross-platform build artifacts**: Release binaries for x86_64-linux, x86_64-windows, aarch64-macos
+- **WASM multi-platform build**: WASM compilation and optimization on Linux/macOS/Windows
+- **CI summary job**: Aggregated status report with emoji indicators for all CI jobs
+- **Manual workflow dispatch**: `workflow_dispatch` trigger for on-demand CI runs
+- **Test failure artifacts**: Automatic upload of test failure logs and stderr files
+- **API documentation artifacts**: Automatic upload of generated `cargo doc` output
+
 #### New Crates
 
 - **misogi-rest-api** — Comprehensive RESTful admin API for system management with OpenAPI 3.0 support

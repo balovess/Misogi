@@ -49,19 +49,19 @@
 //!     .layer(VersionExtractorMiddleware::new(config));
 //! ```
 
-use std::sync::Arc;
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::Arc;
 use std::task::{Context, Poll};
 
 #[allow(unused_imports)]
 use axum::{
+    Json,
     extract::{Request, State},
-    http::{header, request::Parts, StatusCode, Uri},
+    http::{StatusCode, Uri, header, request::Parts},
     middleware::Next,
     response::{IntoResponse, Response},
     routing::Router as AxumRouter,
-    Json,
 };
 use misogi_core::versioning::{ApiVersion, ProtocolAdapter};
 use tower::{Layer, Service};
@@ -268,7 +268,10 @@ impl IntoResponse for VersionExtractionError {
             ),
             Self::InvalidFormat(v) => (
                 StatusCode::BAD_REQUEST,
-                format!("Invalid version format: '{}'. Expected MAJOR.MINOR.PATCH", v),
+                format!(
+                    "Invalid version format: '{}'. Expected MAJOR.MINOR.PATCH",
+                    v
+                ),
             ),
         };
 
@@ -340,7 +343,10 @@ impl VersionExtractorMiddleware {
     ///
     /// # Returns
     /// `Ok((version, stripped_uri))` on success, `Err(VersionExtractionError)` on failure.
-    pub fn extract_version(&self, request: &Request) -> Result<(ApiVersion, String), VersionExtractionError> {
+    pub fn extract_version(
+        &self,
+        request: &Request,
+    ) -> Result<(ApiVersion, String), VersionExtractionError> {
         let uri = request.uri().path().to_string();
 
         // Tier 1: Extract from URL prefix (/api/vN/...)
@@ -414,21 +420,19 @@ impl VersionExtractorMiddleware {
     #[inline]
     fn extract_from_header(&self, request: &Request) -> Option<ApiVersion> {
         // Check Accept-Version header first
-        if let Some(value) = request.headers().get("Accept-Version") {
-            if let Ok(value_str) = value.to_str() {
-                if let Ok(version) = ApiVersion::parse(value_str.trim()) {
-                    return Some(version);
-                }
-            }
+        if let Some(value) = request.headers().get("Accept-Version")
+            && let Ok(value_str) = value.to_str()
+            && let Ok(version) = ApiVersion::parse(value_str.trim())
+        {
+            return Some(version);
         }
 
         // Fall back to X-API-Version header
-        if let Some(value) = request.headers().get("X-API-Version") {
-            if let Ok(value_str) = value.to_str() {
-                if let Ok(version) = ApiVersion::parse(value_str.trim()) {
-                    return Some(version);
-                }
-            }
+        if let Some(value) = request.headers().get("X-API-Version")
+            && let Ok(value_str) = value.to_str()
+            && let Ok(version) = ApiVersion::parse(value_str.trim())
+        {
+            return Some(version);
         }
 
         None
@@ -472,7 +476,9 @@ where
         let mut inner = self.inner.clone();
 
         Box::pin(async move {
-            let extractor = VersionExtractorMiddleware { config: config.clone() };
+            let extractor = VersionExtractorMiddleware {
+                config: config.clone(),
+            };
 
             let (parts, body) = request.into_parts();
             let version_request = Request::from_parts(parts.clone(), axum::body::Body::empty());
@@ -482,7 +488,8 @@ where
                     let mut request = Request::from_parts(parts, body);
 
                     #[allow(unused_mut)]
-                    let mut state = VersionAwareState::new(version, request.uri().path().to_string());
+                    let mut state =
+                        VersionAwareState::new(version, request.uri().path().to_string());
 
                     // TODO: Select appropriate ProtocolAdapter based on version mismatch
                     // This would integrate with DowngradeAdapter when client version > server version
@@ -615,7 +622,6 @@ impl VersionRouter {
     ///
     /// # Returns
     /// A fully-wired `AxumRouter` ready to be nested in the main application router.
-    #[must_use]
     pub fn into_router(self) -> AxumRouter {
         let mut app = AxumRouter::new();
 
@@ -706,20 +712,21 @@ pub fn try_get_version_state(request: &Request) -> Option<VersionAwareState> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::http::{Request as HttpRequest, StatusCode};
     use axum::body::{Body, to_bytes};
+    use axum::http::{Request as HttpRequest, StatusCode};
 
     /// Create a test request with optional version headers.
     fn create_test_request(uri: &str, accept_version: Option<&str>) -> Request {
-        let mut builder = HttpRequest::builder()
-            .method("GET")
-            .uri(uri);
+        let mut builder = HttpRequest::builder().method("GET").uri(uri);
 
         if let Some(ver) = accept_version {
             builder = builder.header("Accept-Version", ver);
         }
 
-        let (parts, ()) = builder.body(()).expect("Failed to build test request").into_parts();
+        let (parts, ()) = builder
+            .body(())
+            .expect("Failed to build test request")
+            .into_parts();
         Request::from_parts(parts, Body::empty())
     }
 
@@ -866,9 +873,7 @@ mod tests {
 
     #[test]
     fn test_unknown_version_strict_mode() {
-        let config = VersionConfig::builder()
-            .strict_mode(true)
-            .build();
+        let config = VersionConfig::builder().strict_mode(true).build();
         let middleware = VersionExtractorMiddleware::new(config);
         let request = create_test_request("/api/v99/invalid", None);
 
@@ -901,10 +906,7 @@ mod tests {
 
     #[test]
     fn test_state_creation() {
-        let state = VersionAwareState::new(
-            ApiVersion::new(2, 0, 0),
-            "/api/v2/scan".to_string(),
-        );
+        let state = VersionAwareState::new(ApiVersion::new(2, 0, 0), "/api/v2/scan".to_string());
 
         assert_eq!(state.version, ApiVersion::new(2, 0, 0));
         assert_eq!(state.original_uri, "/api/v2/scan");
@@ -915,10 +917,7 @@ mod tests {
     #[test]
     fn test_state_with_adapter() {
         // We can't easily create a real adapter here without mocking, so just test the API
-        let state = VersionAwareState::new(
-            ApiVersion::new(1, 0, 0),
-            "/api/v1/upload".to_string(),
-        );
+        let state = VersionAwareState::new(ApiVersion::new(1, 0, 0), "/api/v1/upload".to_string());
 
         // Verify initial state
         assert!(!state.needs_adaptation());

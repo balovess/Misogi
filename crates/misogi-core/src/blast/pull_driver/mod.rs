@@ -39,6 +39,4 @@ mod tests;
 
 // Re-export primary public API surface at module root for ergonomic imports.
 pub use driver::PullDriver;
-pub use types::{
-    PullConfig, PullBufferEntry, PullEntryStatus,
-};
+pub use types::{PullBufferEntry, PullConfig, PullEntryStatus};

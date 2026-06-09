@@ -166,7 +166,10 @@ impl LocalStorage {
         let candidate = self.base_path.join(key);
 
         // Reject path traversal components
-        if candidate.components().any(|c| matches!(c, Component::ParentDir)) {
+        if candidate
+            .components()
+            .any(|c| matches!(c, Component::ParentDir))
+        {
             warn!(key = %key, "rejected path traversal attempt");
             return Err(StorageError::ConfigurationError(format!(
                 "key '{}' contains path traversal ('..')",
@@ -197,10 +200,7 @@ impl LocalStorage {
     // --- Internal: Path Validation ---
 
     /// Async base path validator; creates directory if `auto_create` is true.
-    async fn validate_base_path(
-        path: &Path,
-        auto_create: bool,
-    ) -> Result<(), StorageError> {
+    async fn validate_base_path(path: &Path, auto_create: bool) -> Result<(), StorageError> {
         if !path.exists() {
             if auto_create {
                 debug!(path = %path.display(), "creating storage base directory");
@@ -257,13 +257,12 @@ impl StorageBackend for LocalStorage {
     async fn put(&self, key: &str, data: Bytes) -> Result<StorageInfo, StorageError> {
         let filepath = self.resolve_key(key)?;
 
-        if self.create_dir_if_missing {
-            if let Some(parent) = filepath.parent() {
-                if !parent.exists() {
-                    debug!(dir = %parent.display(), "creating parent directory");
-                    tokio::fs::create_dir_all(parent).await?;
-                }
-            }
+        if self.create_dir_if_missing
+            && let Some(parent) = filepath.parent()
+            && !parent.exists()
+        {
+            debug!(dir = %parent.display(), "creating parent directory");
+            tokio::fs::create_dir_all(parent).await?;
         }
 
         tokio::fs::write(&filepath, &data).await?;
@@ -342,14 +341,13 @@ impl StorageBackend for LocalStorage {
     /// Target latency: <50ms on local filesystem.
     #[instrument(skip(self))]
     async fn health_check(&self) -> Result<(), StorageError> {
-        let meta =
-            tokio::fs::metadata(&self.base_path).await.map_err(|e| {
-                StorageError::InternalError(format!(
-                    "health_check: cannot stat '{}': {}",
-                    self.base_path.display(),
-                    e
-                ))
-            })?;
+        let meta = tokio::fs::metadata(&self.base_path).await.map_err(|e| {
+            StorageError::InternalError(format!(
+                "health_check: cannot stat '{}': {}",
+                self.base_path.display(),
+                e
+            ))
+        })?;
 
         if !meta.is_dir() {
             return Err(StorageError::InternalError(format!(

@@ -42,8 +42,8 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
 use super::{
-    ExternalScanner, Result as ScannerResult, ScanResult, ScannerError,
-    ScannerMetadata, ThreatSeverity,
+    ExternalScanner, Result as ScannerResult, ScanResult, ScannerError, ScannerMetadata,
+    ThreatSeverity,
 };
 
 // =============================================================================
@@ -218,7 +218,7 @@ impl HttpApiAdapter {
             )));
         }
 
-        let adapter_id = format!("http-api-{}", &config.endpoint);
+        let adapter_id = format!("http-api-{}", config.endpoint);
 
         tracing::info!(
             adapter_id = %adapter_id,
@@ -232,9 +232,7 @@ impl HttpApiAdapter {
         let http_client = Client::builder()
             .timeout(client_timeout)
             .build()
-            .map_err(|e| {
-                ScannerError::Internal(format!("Failed to create HTTP client: {}", e))
-            })?;
+            .map_err(|e| ScannerError::Internal(format!("Failed to create HTTP client: {}", e)))?;
 
         Ok(Self {
             config,
@@ -299,10 +297,7 @@ impl HttpApiAdapter {
                         "HTTP scan API returned error status"
                     );
                     return Ok(ScanResult::Error {
-                        message: format!(
-                            "HTTP {}: {}",
-                            status, error_body
-                        ),
+                        message: format!("HTTP {}: {}", status, error_body),
                         transient: status.is_server_error(), // 5xx might be retryable
                     });
                 }
@@ -345,10 +340,8 @@ impl HttpApiAdapter {
     fn parse_json_response(&self, json_text: &str) -> ScannerResult<ScanResult> {
         tracing::trace!(response = json_text, "Parsing JSON response");
 
-        let json_value: serde_json::Value =
-            serde_json::from_str(json_text).map_err(|e| {
-                ScannerError::Protocol(format!("Invalid JSON response: {}", e))
-            })?;
+        let json_value: serde_json::Value = serde_json::from_str(json_text)
+            .map_err(|e| ScannerError::Protocol(format!("Invalid JSON response: {}", e)))?;
 
         // Determine which parsing mode to use
         if self.config.result_path.is_some()
@@ -366,8 +359,8 @@ impl HttpApiAdapter {
     /// Parse response using standard (non-path) format.
     fn parse_standard_response(&self, value: &serde_json::Value) -> ScannerResult<ScanResult> {
         // Try to deserialize as standard response
-        let response: StandardScanResponse = serde_json::from_value(value.clone())
-            .unwrap_or_else(|_| StandardScanResponse {
+        let response: StandardScanResponse =
+            serde_json::from_value(value.clone()).unwrap_or_else(|_| StandardScanResponse {
                 status: None,
                 threat_name: None,
                 severity: None,
@@ -385,7 +378,12 @@ impl HttpApiAdapter {
         }
 
         // Map status string to ScanResult
-        match response.status.as_deref().map(|s| s.to_lowercase()).as_deref() {
+        match response
+            .status
+            .as_deref()
+            .map(|s| s.to_lowercase())
+            .as_deref()
+        {
             Some("clean") | Some("ok") | Some("safe") | Some("pass") | Some("no_threat") => {
                 tracing::info!("HTTP API reports: CLEAN");
                 Ok(ScanResult::Clean)
@@ -395,9 +393,7 @@ impl HttpApiAdapter {
                 let threat_name = response
                     .threat_name
                     .unwrap_or_else(|| "Unknown Threat".to_string());
-                let severity = Self::map_severity_string(
-                    response.severity.as_deref(),
-                );
+                let severity = Self::map_severity_string(response.severity.as_deref());
 
                 tracing::warn!(
                     threat_name = %threat_name,
@@ -457,9 +453,7 @@ impl HttpApiAdapter {
 
         // Map status to ScanResult
         match status_str.as_deref().map(|s| s.to_lowercase()).as_deref() {
-            Some("clean") | Some("ok") | Some("safe") | Some("pass") => {
-                Ok(ScanResult::Clean)
-            }
+            Some("clean") | Some("ok") | Some("safe") | Some("pass") => Ok(ScanResult::Clean),
             Some("infected") | Some("malicious") | Some("threat") | Some("blocked") => {
                 Ok(ScanResult::Infected {
                     threat_name: threat_name.unwrap_or_else(|| "Unknown Threat".to_string()),
@@ -467,10 +461,7 @@ impl HttpApiAdapter {
                 })
             }
             _ => Ok(ScanResult::Error {
-                message: format!(
-                    "Unexpected or missing status: {:?}",
-                    status_str
-                ),
+                message: format!("Unexpected or missing status: {:?}", status_str),
                 transient: false,
             }),
         }

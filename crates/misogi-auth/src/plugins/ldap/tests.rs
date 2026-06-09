@@ -1,4 +1,4 @@
-﻿//! Unit tests for [`LdapIdentityProvider`](super::LdapIdentityProvider).
+//! Unit tests for [`LdapIdentityProvider`](super::LdapIdentityProvider).
 //!
 //! Test categories:
 //! - Configuration construction and defaults
@@ -8,9 +8,7 @@
 //! - Provider identity methods
 //! - Error mapping correctness
 
-use super::{
-    LdapAttributeMappings, LdapIdentityProvider, LdapPluginConfig,
-};
+use super::{LdapAttributeMappings, LdapIdentityProvider, LdapPluginConfig};
 use crate::provider::{AuthRequest, IdentityError, IdentityProvider};
 
 /// Create a minimal valid LdapPluginConfig for testing.
@@ -225,23 +223,33 @@ fn test_next_url_empty_falls_back() {
 #[tokio::test]
 async fn test_reject_api_key() {
     let p = LdapIdentityProvider::new(minimal_config());
-    let r = p.authenticate(AuthRequest::ApiKey { key: "k".into() }).await;
+    let r = p
+        .authenticate(AuthRequest::ApiKey { key: "k".into() })
+        .await;
     assert!(matches!(r, Err(IdentityError::AuthenticationFailed(_))));
 }
 
 #[tokio::test]
 async fn test_reject_saml() {
     let p = LdapIdentityProvider::new(minimal_config());
-    let r = p.authenticate(AuthRequest::SamlResponse { response: "x".into() }).await;
+    let r = p
+        .authenticate(AuthRequest::SamlResponse {
+            response: "x".into(),
+        })
+        .await;
     assert!(matches!(r, Err(IdentityError::AuthenticationFailed(_))));
 }
 
 #[tokio::test]
 async fn test_reject_authz_code() {
     let p = LdapIdentityProvider::new(minimal_config());
-    let r = p.authenticate(AuthRequest::AuthorizationCode {
-        code: "c".into(), redirect_uri: "u".into(), code_verifier: None,
-    }).await;
+    let r = p
+        .authenticate(AuthRequest::AuthorizationCode {
+            code: "c".into(),
+            redirect_uri: "u".into(),
+            code_verifier: None,
+        })
+        .await;
     assert!(matches!(r, Err(IdentityError::AuthenticationFailed(_))));
 }
 
@@ -252,7 +260,10 @@ async fn test_health_check_empty_urls() {
     let mut c = minimal_config();
     c.urls.clear();
     let p = LdapIdentityProvider::new(c);
-    assert!(matches!(p.health_check().await, Err(IdentityError::ConfigurationError(_))));
+    assert!(matches!(
+        p.health_check().await,
+        Err(IdentityError::ConfigurationError(_))
+    ));
 }
 
 // ---- Test Group 9: Connection Error Handling ----
@@ -263,9 +274,12 @@ async fn test_auth_unreachable_returns_unavailable() {
     c.urls = vec!["ldap://127.0.0.1:53899".into()];
     c.connection_timeout_secs = 2;
     let p = LdapIdentityProvider::new(c);
-    let r = p.authenticate(AuthRequest::Credentials {
-        username: "u".into(), password: "p".into(),
-    }).await;
+    let r = p
+        .authenticate(AuthRequest::Credentials {
+            username: "u".into(),
+            password: "p".into(),
+        })
+        .await;
     assert!(matches!(r, Err(IdentityError::ProviderUnavailable(_))));
 }
 
@@ -275,6 +289,8 @@ async fn test_health_check_unreachable_returns_unavailable() {
     c.urls = vec!["ldap://127.0.0.1:53900".into()];
     c.connection_timeout_secs = 2;
     let p = LdapIdentityProvider::new(c);
-    assert!(matches!(p.health_check().await, Err(IdentityError::ProviderUnavailable(_))));
+    assert!(matches!(
+        p.health_check().await,
+        Err(IdentityError::ProviderUnavailable(_))
+    ));
 }
-

@@ -28,24 +28,29 @@ pub fn scan_excel_element_threats(
 ) -> bool {
     let mut force_drop = false;
 
-    let attr_vec: Vec<(String, String)> = attrs.flatten()
-        .map(|a| (
-            String::from_utf8_lossy(a.key.as_ref()).to_string(),
-            String::from_utf8_lossy(&a.value).to_string(),
-        ))
+    let attr_vec: Vec<(String, String)> = attrs
+        .flatten()
+        .map(|a| {
+            (
+                String::from_utf8_lossy(a.key.as_ref()).to_string(),
+                String::from_utf8_lossy(&a.value).to_string(),
+            )
+        })
         .collect();
 
     match elem_name {
         "sheetProtection" => {
-            let has_password = attr_vec.iter().any(|(k, v)| {
-                k == "password" && !v.is_empty()
-            });
+            let has_password = attr_vec
+                .iter()
+                .any(|(k, v)| k == "password" && !v.is_empty());
 
             if has_password {
                 report.excel_threats_neutralized += 1;
-                report.actions_taken.push(OoxmlCdrAction::SheetProtectionStripped {
-                    location: "worksheet".to_string(),
-                });
+                report
+                    .actions_taken
+                    .push(OoxmlCdrAction::SheetProtectionStripped {
+                        location: "worksheet".to_string(),
+                    });
 
                 tracing::warn!(
                     "sheetProtection with password hash detected — potential brute-force vector, stripping element"
@@ -62,15 +67,18 @@ pub fn scan_excel_element_threats(
             });
 
             if has_external_ref {
-                let cache_id = attr_vec.iter()
+                let cache_id = attr_vec
+                    .iter()
                     .find(|(k, _)| k == "id" || k == "cacheId")
                     .map(|(_, v)| v.clone())
                     .unwrap_or_default();
 
                 report.excel_threats_neutralized += 1;
-                report.actions_taken.push(OoxmlCdrAction::PivotCacheExternalRefStripped {
-                    cache_id: cache_id.clone(),
-                });
+                report
+                    .actions_taken
+                    .push(OoxmlCdrAction::PivotCacheExternalRefStripped {
+                        cache_id: cache_id.clone(),
+                    });
                 removed_targets.push(cache_id.clone());
 
                 tracing::warn!(
@@ -82,21 +90,25 @@ pub fn scan_excel_element_threats(
         }
 
         "Map" => {
-            let map_id = attr_vec.iter()
+            let map_id = attr_vec
+                .iter()
                 .find(|(k, _)| k == "id")
                 .map(|(_, v)| v.clone())
                 .unwrap_or_default();
 
-            let has_injection = attr_vec.iter().any(|(_, v)| {
-                contains_script_injection(v) || has_blocked_url_protocol(v)
-            });
+            let has_injection = attr_vec
+                .iter()
+                .any(|(_, v)| contains_script_injection(v) || has_blocked_url_protocol(v));
 
             if has_injection {
                 report.excel_threats_neutralized += 1;
-                report.actions_taken.push(OoxmlCdrAction::CustomXmlMappingStripped {
-                    map_id: map_id.clone(),
-                    reason: "script injection pattern detected in mapping attributes".to_string(),
-                });
+                report
+                    .actions_taken
+                    .push(OoxmlCdrAction::CustomXmlMappingStripped {
+                        map_id: map_id.clone(),
+                        reason: "script injection pattern detected in mapping attributes"
+                            .to_string(),
+                    });
 
                 tracing::warn!(
                     map_id = %map_id,
@@ -107,21 +119,24 @@ pub fn scan_excel_element_threats(
         }
 
         "dataValidation" => {
-            let has_malicious_url = attr_vec.iter().any(|(k, v)| {
-                (k == "formula1" || k == "formula2") && has_blocked_url_protocol(v)
-            });
+            let has_malicious_url = attr_vec
+                .iter()
+                .any(|(k, v)| (k == "formula1" || k == "formula2") && has_blocked_url_protocol(v));
 
             if has_malicious_url {
-                let url = attr_vec.iter()
+                let url = attr_vec
+                    .iter()
                     .find(|(k, _)| k == "formula1" || k == "formula2")
                     .map(|(_, v)| v.clone())
                     .unwrap_or_default();
 
                 report.excel_threats_neutralized += 1;
-                report.actions_taken.push(OoxmlCdrAction::MaliciousDataValidationStripped {
-                    location: "dataValidation".to_string(),
-                    url: url.clone(),
-                });
+                report
+                    .actions_taken
+                    .push(OoxmlCdrAction::MaliciousDataValidationStripped {
+                        location: "dataValidation".to_string(),
+                        url: url.clone(),
+                    });
 
                 tracing::warn!(
                     url = %url,

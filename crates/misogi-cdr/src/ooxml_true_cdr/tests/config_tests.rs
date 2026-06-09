@@ -1,9 +1,6 @@
 //! Configuration, whitelist, and type detection tests.
 
-use super::super::{
-    config::*,
-    types::*,
-};
+use super::super::{config::*, types::*};
 
 #[test]
 fn test_jp_defaults_config() {
@@ -30,10 +27,22 @@ fn test_minimal_config() {
 
 #[test]
 fn test_document_type_detection_from_filename() {
-    assert_eq!(OoxmlDocumentType::from_filename("document.docx"), OoxmlDocumentType::Word);
-    assert_eq!(OoxmlDocumentType::from_filename("spreadsheet.xlsx"), OoxmlDocumentType::Excel);
-    assert_eq!(OoxmlDocumentType::from_filename("presentation.pptx"), OoxmlDocumentType::PowerPoint);
-    assert_eq!(OoxmlDocumentType::from_filename("unknown.dat"), OoxmlDocumentType::Unknown);
+    assert_eq!(
+        OoxmlDocumentType::from_filename("document.docx"),
+        OoxmlDocumentType::Word
+    );
+    assert_eq!(
+        OoxmlDocumentType::from_filename("spreadsheet.xlsx"),
+        OoxmlDocumentType::Excel
+    );
+    assert_eq!(
+        OoxmlDocumentType::from_filename("presentation.pptx"),
+        OoxmlDocumentType::PowerPoint
+    );
+    assert_eq!(
+        OoxmlDocumentType::from_filename("unknown.dat"),
+        OoxmlDocumentType::Unknown
+    );
 }
 
 #[test]

@@ -1,6 +1,6 @@
 #[cfg(test)]
-mod tests {
-    use crate::abac::attribute::{AbacValue, TimeWindow, DayMask, AbacAttribute};
+mod test_cases {
+    use crate::abac::attribute::{AbacAttribute, AbacValue, DayMask, TimeWindow};
     // ===================================================================
     // AbacValue Conversion Tests
     // ===================================================================

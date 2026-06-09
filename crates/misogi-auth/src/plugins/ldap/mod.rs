@@ -35,9 +35,7 @@ use std::time::Duration;
 use async_trait::async_trait;
 use tracing::{debug, error, info, instrument, warn};
 
-use crate::provider::{
-    AuthRequest, IdentityError, IdentityProvider, MisogiIdentity,
-};
+use crate::provider::{AuthRequest, IdentityError, IdentityProvider, MisogiIdentity};
 
 // ---------------------------------------------------------------------------
 // Provider Implementation
@@ -73,7 +71,10 @@ impl LdapIdentityProvider {
             shift_jis = config.shift_jis_fallback,
             "LdapIdentityProvider initialized"
         );
-        Self { config, url_index: AtomicUsize::new(0) }
+        Self {
+            config,
+            url_index: AtomicUsize::new(0),
+        }
     }
 
     /// Get a read-only reference to the provider configuration.
@@ -87,8 +88,7 @@ impl LdapIdentityProvider {
         if self.config.urls.is_empty() {
             return "ldap://localhost:389";
         }
-        let idx = self.url_index.fetch_add(1, Ordering::Relaxed)
-            % self.config.urls.len();
+        let idx = self.url_index.fetch_add(1, Ordering::Relaxed) % self.config.urls.len();
         &self.config.urls[idx]
     }
 
@@ -119,13 +119,10 @@ impl LdapIdentityProvider {
         }
     }
 
-    fn extract_attribute(
-        &self,
-        entry: &ldap3::SearchEntry,
-        attr_name: &str,
-    ) -> Option<String> {
+    fn extract_attribute(&self, entry: &ldap3::SearchEntry, attr_name: &str) -> Option<String> {
         entry.attrs.get(attr_name).and_then(|v| {
-            v.first().map(|raw| self.decode_attribute_value(raw.as_bytes()))
+            v.first()
+                .map(|raw| self.decode_attribute_value(raw.as_bytes()))
         })
     }
 
@@ -143,21 +140,25 @@ impl LdapIdentityProvider {
         // Step 1: Connect to LDAP server
         debug!(url = %url, "Establishing LDAP connection");
         let (conn, mut ldap) = tokio::time::timeout(timeout, LdapConnAsync::new(url))
-            .await.map_err(|_| IdentityError::ProviderUnavailable(
-                "LDAP connection timed out".into()))?
-            .map_err(|e| IdentityError::ProviderUnavailable(
-                format!("Failed to connect to {url}: {e}")))?;
+            .await
+            .map_err(|_| IdentityError::ProviderUnavailable("LDAP connection timed out".into()))?
+            .map_err(|e| {
+                IdentityError::ProviderUnavailable(format!("Failed to connect to {url}: {e}"))
+            })?;
 
         // Step 2: Bind as service account
         let bind_result = tokio::time::timeout(
             timeout,
             ldap.simple_bind(&self.config.bind_dn, &self.config.bind_password),
-        ).await.map_err(|_| IdentityError::ProviderUnavailable(
-            "Service account bind timed out".into()))?;
+        )
+        .await
+        .map_err(|_| IdentityError::ProviderUnavailable("Service account bind timed out".into()))?;
 
         if let Err(e) = bind_result {
             error!(bind_dn = %self.config.bind_dn, error = %e, "Service bind rejected");
-            return Err(IdentityError::ConfigurationError(format!("Bind failed: {e}")));
+            return Err(IdentityError::ConfigurationError(format!(
+                "Bind failed: {e}"
+            )));
         }
 
         // Step 3: Search for user entry
@@ -171,11 +172,19 @@ impl LdapIdentityProvider {
 
         let search_result = tokio::time::timeout(
             timeout,
-            ldap.search(&self.config.user_search_base, Scope::Subtree, &filter, attrs),
-        ).await.map_err(|_| IdentityError::ProviderUnavailable("User search timed out".into()))?
-         .map_err(|e| IdentityError::ProviderUnavailable(format!("Search failed: {e}")))?;
+            ldap.search(
+                &self.config.user_search_base,
+                Scope::Subtree,
+                &filter,
+                attrs,
+            ),
+        )
+        .await
+        .map_err(|_| IdentityError::ProviderUnavailable("User search timed out".into()))?
+        .map_err(|e| IdentityError::ProviderUnavailable(format!("Search failed: {e}")))?;
 
-        let (entries, _result) = search_result.success()
+        let (entries, _result) = search_result
+            .success()
             .map_err(|e| IdentityError::InternalError(format!("Search result error: {e}")))?;
 
         if entries.is_empty() {
@@ -189,8 +198,8 @@ impl LdapIdentityProvider {
 
         // Step 4: Verify credentials via user DN bind on new connection
         let (_uc, mut ul) = tokio::time::timeout(timeout, LdapConnAsync::new(url))
-            .await.map_err(|_| IdentityError::ProviderUnavailable(
-                "Credential connect timed out".into()))?
+            .await
+            .map_err(|_| IdentityError::ProviderUnavailable("Credential connect timed out".into()))?
             .map_err(|e| IdentityError::ProviderUnavailable(format!("Connect failed: {e}")))?;
 
         match tokio::time::timeout(timeout, ul.simple_bind(&user_dn, password)).await {
@@ -199,30 +208,47 @@ impl LdapIdentityProvider {
                 warn!(error = %e, "Credential bind rejected");
                 return Err(IdentityError::InvalidCredentials);
             }
-            Err(_) => return Err(IdentityError::ProviderUnavailable(
-                "Credential bind timed out".into())),
+            Err(_) => {
+                return Err(IdentityError::ProviderUnavailable(
+                    "Credential bind timed out".into(),
+                ));
+            }
         };
-        drop(ul); drop(_uc);
+        drop(ul);
+        drop(_uc);
 
         // Step 5: Resolve group memberships
         let roles = self.resolve_groups(&mut ldap, &user_dn).await?;
-        drop(ldap); drop(conn);
+        drop(ldap);
+        drop(conn);
 
         // Step 6: Build MisogiIdentity
-        let applicant_id = self.extract_attribute(&entry, &self.config.attribute_mappings.uid_attribute)
+        let applicant_id = self
+            .extract_attribute(&entry, &self.config.attribute_mappings.uid_attribute)
             .unwrap_or_else(|| username.to_string());
-        let display_name = self.extract_attribute(&entry, &self.config.attribute_mappings.display_name_attribute);
+        let display_name = self.extract_attribute(
+            &entry,
+            &self.config.attribute_mappings.display_name_attribute,
+        );
         let email = self.extract_attribute(&entry, &self.config.attribute_mappings.email_attribute);
 
         let mut extra = HashMap::new();
-        extra.insert("ldap_dn".to_string(), serde_json::Value::String(user_dn.clone()));
+        extra.insert(
+            "ldap_dn".to_string(),
+            serde_json::Value::String(user_dn.clone()),
+        );
         if let Some(ref mail) = email {
-            extra.insert("ldap_mail".to_string(), serde_json::Value::String(mail.clone()));
+            extra.insert(
+                "ldap_mail".to_string(),
+                serde_json::Value::String(mail.clone()),
+            );
         }
 
         info!(applicant_id = %applicant_id, roles = roles.len(), "LDAP auth success");
         Ok(MisogiIdentity {
-            applicant_id, display_name, roles,
+            applicant_id,
+            display_name,
+            roles,
             idp_source: "ldap".to_string(),
             original_subject: Some(user_dn),
             extra,
@@ -242,19 +268,25 @@ impl LdapIdentityProvider {
         let filter = self.build_group_filter(user_dn);
         let gattrs = vec![&self.config.attribute_mappings.group_name_attribute];
 
-        let sr = tokio::time::timeout(
-            timeout, ldap.search(base, Scope::Subtree, &filter, gattrs),
-        ).await.map_err(|_| IdentityError::ProviderUnavailable("Group query timed out".into()))?
-         .map_err(|e| IdentityError::ProviderUnavailable(format!("Group query failed: {e}")))?;
+        let sr = tokio::time::timeout(timeout, ldap.search(base, Scope::Subtree, &filter, gattrs))
+            .await
+            .map_err(|_| IdentityError::ProviderUnavailable("Group query timed out".into()))?
+            .map_err(|e| IdentityError::ProviderUnavailable(format!("Group query failed: {e}")))?;
 
-        let (entries, _r) = sr.success()
+        let (entries, _r) = sr
+            .success()
             .map_err(|e| IdentityError::InternalError(format!("Group result error: {e}")))?;
 
-        let roles: Vec<String> = entries.into_iter().flat_map(|e| {
-            let se = ldap3::SearchEntry::construct(e);
-            se.attrs.get(&self.config.attribute_mappings.group_name_attribute)
-                .cloned().unwrap_or_default()
-        }).collect();
+        let roles: Vec<String> = entries
+            .into_iter()
+            .flat_map(|e| {
+                let se = ldap3::SearchEntry::construct(e);
+                se.attrs
+                    .get(&self.config.attribute_mappings.group_name_attribute)
+                    .cloned()
+                    .unwrap_or_default()
+            })
+            .collect();
 
         debug!(roles = ?roles, "Resolved groups");
         Ok(roles)
@@ -264,11 +296,16 @@ impl LdapIdentityProvider {
         use ldap3::LdapConnAsync;
         let timeout = Duration::from_secs(self.config.connection_timeout_secs);
         let (_c, mut l) = tokio::time::timeout(timeout, LdapConnAsync::new(url))
-            .await.map_err(|_| IdentityError::ProviderUnavailable(format!("{url}: connect timed out")))?
+            .await
+            .map_err(|_| IdentityError::ProviderUnavailable(format!("{url}: connect timed out")))?
             .map_err(|e| IdentityError::ProviderUnavailable(format!("{url}: {e}")))?;
-        tokio::time::timeout(timeout, l.simple_bind(&self.config.bind_dn, &self.config.bind_password))
-            .await.map_err(|_| IdentityError::ProviderUnavailable(format!("{url}: bind timed out")))?
-            .map_err(|e| IdentityError::ConfigurationError(format!("{url}: {e}")))?;
+        tokio::time::timeout(
+            timeout,
+            l.simple_bind(&self.config.bind_dn, &self.config.bind_password),
+        )
+        .await
+        .map_err(|_| IdentityError::ProviderUnavailable(format!("{url}: bind timed out")))?
+        .map_err(|e| IdentityError::ConfigurationError(format!("{url}: {e}")))?;
         info!(url = %url, "LDAP health check passed");
         Ok(())
     }
@@ -280,30 +317,42 @@ impl LdapIdentityProvider {
 
 #[async_trait]
 impl IdentityProvider for LdapIdentityProvider {
-    fn provider_id(&self) -> &str { "ldap" }
+    fn provider_id(&self) -> &str {
+        "ldap"
+    }
 
-    fn provider_name(&self) -> &str { "LDAP / Active Directory Identity Provider" }
+    fn provider_name(&self) -> &str {
+        "LDAP / Active Directory Identity Provider"
+    }
 
     #[instrument(skip(self, input))]
     async fn authenticate(&self, input: AuthRequest) -> Result<MisogiIdentity, IdentityError> {
         let (username, password) = match input {
             AuthRequest::Credentials { username, password } => (username, password),
-            _ => return Err(IdentityError::AuthenticationFailed(
-                "LDAP provider only supports Credentials auth request".into())),
+            _ => {
+                return Err(IdentityError::AuthenticationFailed(
+                    "LDAP provider only supports Credentials auth request".into(),
+                ));
+            }
         };
-        self.do_authenticate(self.next_url(), &username, &password).await
+        self.do_authenticate(self.next_url(), &username, &password)
+            .await
     }
 
     #[instrument(skip(self))]
     async fn health_check(&self) -> Result<(), IdentityError> {
         if self.config.urls.is_empty() {
-            return Err(IdentityError::ConfigurationError("No LDAP URLs configured".into()));
+            return Err(IdentityError::ConfigurationError(
+                "No LDAP URLs configured".into(),
+            ));
         }
         let mut last = None;
         for url in &self.config.urls {
             match self.do_health_check(url).await {
                 Ok(()) => return Ok(()),
-                Err(e) => { last = Some(e); }
+                Err(e) => {
+                    last = Some(e);
+                }
             }
         }
         Err(last.unwrap_or_else(|| IdentityError::InternalError("No servers available".into())))

@@ -215,7 +215,7 @@ impl std::fmt::Display for PpapIndicator {
 /// | `WarnAndSanitize` | Organizations transitioning away from PPAP | High | Yes (recommended default) |
 /// | `Quarantine` | Orgs needing manual review before disposition | Medium-High | Partial |
 /// | `ConvertToSecure` | Full PPAP replacement mode ("手刃PPAP") | High | Yes (full automation) |
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum PpapPolicy {
     /// Block the transfer entirely. Generate audit event explaining PPAP risk.
@@ -232,6 +232,7 @@ pub enum PpapPolicy {
     /// Ideal for migration periods where some senders still use PPAP out of habit.
     /// Only ZipCrypto-encrypted archives with detectable weak passwords are stripped;
     /// AES-256 encrypted files are blocked even under this policy.
+    #[default]
     WarnAndSanitize,
 
     /// Quarantine the file for manual security review before any processing.
@@ -255,12 +256,6 @@ pub enum PpapPolicy {
     ConvertToSecure,
 }
 
-impl Default for PpapPolicy {
-    fn default() -> Self {
-        Self::WarnAndSanitize
-    }
-}
-
 impl std::fmt::Display for PpapPolicy {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -272,18 +267,21 @@ impl std::fmt::Display for PpapPolicy {
     }
 }
 
-impl PpapPolicy {
-    /// Parse a policy from a case-insensitive string (for CLI/TOML config).
-    pub fn from_str(s: &str) -> Option<Self> {
+impl std::str::FromStr for PpapPolicy {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
-            "block" => Some(Self::Block),
-            "warn_and_sanitize" | "warn-and-sanitize" | "warn" => Some(Self::WarnAndSanitize),
-            "quarantine" => Some(Self::Quarantine),
-            "convert_to_secure" | "convert-to-secure" | "convert" => Some(Self::ConvertToSecure),
-            _ => None,
+            "block" => Ok(Self::Block),
+            "warn_and_sanitize" | "warn-and-sanitize" | "warn" => Ok(Self::WarnAndSanitize),
+            "quarantine" => Ok(Self::Quarantine),
+            "convert_to_secure" | "convert-to-secure" | "convert" => Ok(Self::ConvertToSecure),
+            _ => Err(()),
         }
     }
+}
 
+impl PpapPolicy {
     /// Returns whether this policy allows the file to proceed after handling
     /// (as opposed to blocking it entirely).
     pub fn allows_transfer(&self) -> bool {

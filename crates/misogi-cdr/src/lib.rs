@@ -128,7 +128,9 @@ pub use ooxml_true_cdr::{
 pub use office_sanitizer::OfficeSanitizer;
 
 #[cfg(feature = "runtime")]
-pub use parser_trait::{ContentParser, ParseError, SanitizeAction, SanitizePolicy, SanitizedOutput};
+pub use parser_trait::{
+    ContentParser, ParseError, SanitizeAction, SanitizePolicy, SanitizedOutput,
+};
 
 #[cfg(feature = "runtime")]
 pub use parsers::{OoxmlStreamParser, PdfStreamParser, ZipStreamParser};

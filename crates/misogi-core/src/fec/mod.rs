@@ -33,8 +33,8 @@
 //! | 64 | 16 | 20% |
 //! | 32 | 24 | 42.9% (extreme mode) |
 
-pub mod reed_solomon;
 pub mod interleaver;
+pub mod reed_solomon;
 
 use serde::{Deserialize, Serialize};
 
@@ -98,9 +98,15 @@ impl FecConfig {
     }
 }
 
-fn default_data_shards() -> usize { 16 }
-fn default_parity_shards() -> usize { 4 }
-fn default_shard_size() -> usize { 1400 }
+fn default_data_shards() -> usize {
+    16
+}
+fn default_parity_shards() -> usize {
+    4
+}
+fn default_shard_size() -> usize {
+    1400
+}
 
 /// Result of FEC encoding operation.
 ///

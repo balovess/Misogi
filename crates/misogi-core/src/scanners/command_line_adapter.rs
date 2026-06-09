@@ -54,8 +54,8 @@ use serde::{Deserialize, Serialize};
 use tokio::process::Command;
 
 use super::{
-    ExternalScanner, Result as ScannerResult, ScanResult, ScannerError,
-    ScannerMetadata, ThreatSeverity,
+    ExternalScanner, Result as ScannerResult, ScanResult, ScannerError, ScannerMetadata,
+    ThreatSeverity,
 };
 
 // =============================================================================
@@ -267,14 +267,12 @@ impl CommandLineAdapter {
 
         // Step 1: Create temporary file with scan data
         let mut temp_file = tempfile::NamedTempFile::new_in(&self.temp_dir)
-            .map_err(|e| {
-                ScannerError::Internal(format!("Failed to create temp file: {}", e))
-            })?;
+            .map_err(|e| ScannerError::Internal(format!("Failed to create temp file: {}", e)))?;
 
         use std::io::Write;
-        temp_file.write_all(data).map_err(|e| {
-            ScannerError::Internal(format!("Failed to write to temp file: {}", e))
-        })?;
+        temp_file
+            .write_all(data)
+            .map_err(|e| ScannerError::Internal(format!("Failed to write to temp file: {}", e)))?;
 
         let temp_path = temp_file.path().to_path_buf();
         tracing::debug!(temp_path = %temp_path.display(), "Created temp file");
@@ -346,8 +344,7 @@ impl CommandLineAdapter {
             ScannerError::Internal(format!("Failed to spawn command '{}': {}", program, e))
         })?;
 
-        let timeout_result =
-            tokio::time::timeout(timeout_duration, child.wait_with_output()).await;
+        let timeout_result = tokio::time::timeout(timeout_duration, child.wait_with_output()).await;
 
         match timeout_result {
             Ok(Ok(output)) => {
@@ -371,10 +368,7 @@ impl CommandLineAdapter {
             Err(_) => {
                 // Timeout: child handle was consumed by wait_with_output().
                 // The process will be reaped when the Child is dropped.
-                tracing::warn!(
-                    timeout = self.config.timeout_secs,
-                    "Command timed out"
-                );
+                tracing::warn!(timeout = self.config.timeout_secs, "Command timed out");
 
                 // Return sentinel exit code; caller's parse_command_output will
                 // treat unknown exit codes as errors (fail-safe).
@@ -388,10 +382,7 @@ impl CommandLineAdapter {
     /// On Windows, we need to handle `.exe` detection and `cmd.exe /c`
     /// for complex commands with pipes/redirections.
     #[cfg(target_family = "windows")]
-    fn split_windows_command(
-        &self,
-        command_str: &str,
-    ) -> (String, Vec<String>) {
+    fn split_windows_command(&self, command_str: &str) -> (String, Vec<String>) {
         // Simple splitting: first token is program, rest are args
         let tokens: Vec<&str> = command_str.split_whitespace().collect();
 
@@ -407,10 +398,7 @@ impl CommandLineAdapter {
 
     /// Split Unix command into program + arguments.
     #[cfg(not(target_family = "windows"))]
-    fn split_unix_command(
-        &self,
-        command_str: &str,
-    ) -> (String, Vec<String>) {
+    fn split_unix_command(&self, command_str: &str) -> (String, Vec<String>) {
         // Simple splitting: first token is program, rest are args
         let tokens: Vec<&str> = command_str.split_whitespace().collect();
 
@@ -472,8 +460,16 @@ impl CommandLineAdapter {
             let error_msg = format!(
                 "Command exited with error code {}: stdout={}, stderr={}",
                 exit_code,
-                if stdout.len() > 500 { &stdout[..500] } else { stdout },
-                if stderr.len() > 500 { &stderr[..500] } else { stderr },
+                if stdout.len() > 500 {
+                    &stdout[..500]
+                } else {
+                    stdout
+                },
+                if stderr.len() > 500 {
+                    &stderr[..500]
+                } else {
+                    stderr
+                },
             );
 
             tracing::error!(
@@ -523,12 +519,12 @@ impl CommandLineAdapter {
 
         let combined_output = format!("{}\n{}", stdout, stderr);
 
-        if let Some(captures) = regex.captures(&combined_output) {
-            if let Some(matched) = captures.get(1) {
-                let threat = matched.as_str().trim().to_string();
-                tracing::debug!(threat = %threat, "Extracted threat name");
-                return Some(threat);
-            }
+        if let Some(captures) = regex.captures(&combined_output)
+            && let Some(matched) = captures.get(1)
+        {
+            let threat = matched.as_str().trim().to_string();
+            tracing::debug!(threat = %threat, "Extracted threat name");
+            return Some(threat);
         }
 
         tracing::trace!("No threat name matched in output");
@@ -759,7 +755,9 @@ mod tests {
     fn test_parse_error_exit_code() {
         let adapter = create_test_adapter_with_codes(vec![2], vec![1]);
 
-        let result = adapter.parse_command_output(1, "", "Permission denied").unwrap();
+        let result = adapter
+            .parse_command_output(1, "", "Permission denied")
+            .unwrap();
         assert!(result.is_error());
     }
 
@@ -779,10 +777,8 @@ mod tests {
     fn test_extract_threat_name_from_stdout() {
         let adapter = create_test_adapter_with_regex(r"(?i)found:\s*(.+)");
 
-        let threat = adapter.extract_threat_name(
-            "Scanning... complete\nFound: Eicar-Test-Signature",
-            "",
-        );
+        let threat =
+            adapter.extract_threat_name("Scanning... complete\nFound: Eicar-Test-Signature", "");
         assert_eq!(threat, Some("Eicar-Test-Signature".to_string()));
     }
 
@@ -790,10 +786,7 @@ mod tests {
     fn test_extract_threat_name_from_stderr() {
         let adapter = create_test_adapter_with_regex(r"ERROR:\s*(.+?)\s*detected");
 
-        let threat = adapter.extract_threat_name(
-            "",
-            "ERROR: Virus.Win32.Generic detected",
-        );
+        let threat = adapter.extract_threat_name("", "ERROR: Virus.Win32.Generic detected");
         assert_eq!(threat, Some("Virus.Win32.Generic".to_string()));
     }
 
@@ -863,10 +856,7 @@ mod tests {
     }
 
     /// Create test adapter with custom exit codes.
-    fn create_test_adapter_with_codes(
-        infected: Vec<i32>,
-        error: Vec<i32>,
-    ) -> CommandLineAdapter {
+    fn create_test_adapter_with_codes(infected: Vec<i32>, error: Vec<i32>) -> CommandLineAdapter {
         CommandLineAdapter::new(CommandLineConfig {
             command_template: "test-scanner {file}".to_string(),
             infected_exit_codes: infected,

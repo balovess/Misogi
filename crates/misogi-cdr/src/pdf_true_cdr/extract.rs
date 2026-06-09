@@ -34,16 +34,13 @@ use std::fmt::Write as FmtWrite;
 use std::mem;
 
 #[cfg(feature = "pdf-cdr")]
-use lopdf::{content::Content, Document, Object};
+use lopdf::{Document, Object, content::Content};
 
 #[cfg(feature = "pdf-cdr")]
 use super::analyze::ObjectClassification;
 use super::constants::{
-    DANGEROUS_OBFUSCATED_OPERATORS,
-    decode_hex_encoded_name,
-    is_blocked_inline_image_encoding,
-    is_safe_inline_image_encoding,
-    is_safe_operator,
+    DANGEROUS_OBFUSCATED_OPERATORS, decode_hex_encoded_name, is_blocked_inline_image_encoding,
+    is_safe_inline_image_encoding, is_safe_operator,
 };
 use super::parse::PdfIntermediate;
 use super::types::PdfCdrError;
@@ -256,7 +253,10 @@ fn extract_metadata(intermediates: &PdfIntermediate) -> HashMap<String, String> 
                     for (key, value) in info_dict.iter() {
                         let key_str = String::from_utf8_lossy(key);
                         if let Ok(val_str) = value.as_str() {
-                            meta.insert(key_str.to_string(), String::from_utf8_lossy(val_str).to_string());
+                            meta.insert(
+                                key_str.to_string(),
+                                String::from_utf8_lossy(val_str).to_string(),
+                            );
                         }
                     }
                 }
@@ -306,8 +306,7 @@ fn extract_page_content(
         if let Ok(content_id) = content_ref.as_reference() {
             match classification.get(&content_id.0) {
                 Some(ObjectClassification::Keep) | None => {
-                    let content_bytes =
-                        get_content_bytes(&intermediates.document, content_id);
+                    let content_bytes = get_content_bytes(&intermediates.document, content_id);
 
                     let filtered = filter_content_stream(&content_bytes)?;
                     filtered_operations.extend(filtered);
@@ -321,8 +320,7 @@ fn extract_page_content(
                         reason = %msg,
                         "Content stream has warning"
                     );
-                    let content_bytes =
-                        get_content_bytes(&intermediates.document, content_id);
+                    let content_bytes = get_content_bytes(&intermediates.document, content_id);
                     let filtered = filter_content_stream(&content_bytes)?;
                     filtered_operations.extend(filtered);
                 }

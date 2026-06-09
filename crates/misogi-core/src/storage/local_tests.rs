@@ -175,7 +175,7 @@ async fn test_path_traversal_rejection() {
     ];
 
     for key in &traversal_keys {
-        let result = storage.put(*key, Bytes::from_static(b"bad")).await;
+        let result = storage.put(key, Bytes::from_static(b"bad")).await;
         assert!(
             result.is_err(),
             "key '{}' must be rejected (path traversal)",

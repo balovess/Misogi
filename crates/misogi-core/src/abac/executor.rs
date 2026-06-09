@@ -34,9 +34,7 @@ mod tests;
 mod types;
 
 // Re-export public types from submodule for external consumers.
-pub use types::{
-    ApprovalRequest, AbacApprovalStatus, ExecutorError,
-};
+pub use types::{AbacApprovalStatus, ApprovalRequest, ExecutorError};
 
 use std::collections::HashMap;
 use std::future::Future;
@@ -46,9 +44,9 @@ use std::sync::RwLock;
 use chrono::Utc;
 use uuid::Uuid;
 
+use self::types::ApproverDecisionTracker;
 use super::attribute::AbacValue;
 use super::policy::{ApprovalTemplate, ApproverPool};
-use self::types::ApproverDecisionTracker;
 
 // ===========================================================================
 // ApprovalExecutor
@@ -92,8 +90,10 @@ pub struct ApprovalExecutor {
     approver_tracking: RwLock<HashMap<String, ApproverDecisionTracker>>,
 
     /// Optional async callback invoked when a new approval request is created.
-    trigger_callback:
-        Option<Box<dyn Fn(ApprovalRequest) -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync>>,
+    #[allow(clippy::type_complexity)]
+    trigger_callback: Option<
+        Box<dyn Fn(ApprovalRequest) -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync>,
+    >,
 }
 
 impl ApprovalExecutor {
@@ -122,10 +122,7 @@ impl ApprovalExecutor {
     /// handle notification delivery asynchronously.
     pub fn with_trigger<F>(templates: Vec<ApprovalTemplate>, callback: F) -> Self
     where
-        F: Fn(ApprovalRequest) -> Pin<Box<dyn Future<Output = ()> + Send>>
-            + Send
-            + Sync
-            + 'static,
+        F: Fn(ApprovalRequest) -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync + 'static,
     {
         let mut exec = Self::new(templates);
         exec.trigger_callback = Some(Box::new(callback));
@@ -148,12 +145,13 @@ impl ApprovalExecutor {
         resource_description: &str,
         attribute_map: &HashMap<String, AbacValue>,
     ) -> Result<ApprovalRequest, ExecutorError> {
-        let templates = self.templates.read().map_err(|_| {
-            ExecutorError::TemplateNotFound(template_id.to_string())
-        })?;
-        let template = templates.get(template_id).ok_or_else(|| {
-            ExecutorError::TemplateNotFound(template_id.to_string())
-        })?;
+        let templates = self
+            .templates
+            .read()
+            .map_err(|_| ExecutorError::TemplateNotFound(template_id.to_string()))?;
+        let template = templates
+            .get(template_id)
+            .ok_or_else(|| ExecutorError::TemplateNotFound(template_id.to_string()))?;
 
         let selected_approvers = self.select_approvers(template, attribute_map);
         if selected_approvers.is_empty() {
@@ -172,7 +170,7 @@ impl ApprovalExecutor {
             let req_clone = request.clone();
             let future = (cb)(req_clone);
             #[cfg(feature = "runtime")]
-            tokio::spawn(async move { future.await });
+            tokio::spawn(future);
             #[cfg(not(feature = "runtime"))]
             drop(future);
         }
@@ -218,10 +216,7 @@ impl ApprovalExecutor {
     }
 
     /// Resolves the department head approver from the attribute map.
-    fn resolve_department_head(
-        &self,
-        attribute_map: &HashMap<String, AbacValue>,
-    ) -> Vec<String> {
+    fn resolve_department_head(&self, attribute_map: &HashMap<String, AbacValue>) -> Vec<String> {
         match attribute_map.get("department_head") {
             Some(AbacValue::String(head_id)) if !head_id.is_empty() => vec![head_id.clone()],
             _ => vec![],
@@ -272,16 +267,20 @@ impl ApprovalExecutor {
     // -------------------------------------------------------------------
 
     /// Handles timeout for a pending approval request.
-    pub async fn handle_timeout(&self, request_id: &str) -> Result<AbacApprovalStatus, ExecutorError> {
+    pub async fn handle_timeout(
+        &self,
+        request_id: &str,
+    ) -> Result<AbacApprovalStatus, ExecutorError> {
         use types::AbacApprovalStatus;
 
-        let mut requests = self.active_requests.write().map_err(|_| {
-            ExecutorError::RequestNotFound(request_id.to_string())
-        })?;
+        let mut requests = self
+            .active_requests
+            .write()
+            .map_err(|_| ExecutorError::RequestNotFound(request_id.to_string()))?;
 
-        let request = requests.get_mut(request_id).ok_or_else(|| {
-            ExecutorError::RequestNotFound(request_id.to_string())
-        })?;
+        let request = requests
+            .get_mut(request_id)
+            .ok_or_else(|| ExecutorError::RequestNotFound(request_id.to_string()))?;
 
         if request.status != AbacApprovalStatus::Pending {
             return Err(ExecutorError::InvalidStateTransition {
@@ -316,12 +315,13 @@ impl ApprovalExecutor {
     ) -> Result<AbacApprovalStatus, ExecutorError> {
         use types::AbacApprovalStatus;
 
-        let mut requests = self.active_requests.write().map_err(|_| {
-            ExecutorError::RequestNotFound(request_id.to_string())
-        })?;
-        let request = requests.get_mut(request_id).ok_or_else(|| {
-            ExecutorError::RequestNotFound(request_id.to_string())
-        })?;
+        let mut requests = self
+            .active_requests
+            .write()
+            .map_err(|_| ExecutorError::RequestNotFound(request_id.to_string()))?;
+        let request = requests
+            .get_mut(request_id)
+            .ok_or_else(|| ExecutorError::RequestNotFound(request_id.to_string()))?;
 
         if request.status != AbacApprovalStatus::Pending {
             return Err(ExecutorError::InvalidStateTransition {
@@ -330,12 +330,13 @@ impl ApprovalExecutor {
             });
         }
 
-        let mut tracking = self.approver_tracking.write().map_err(|_| {
-            ExecutorError::RequestNotFound(request_id.to_string())
-        })?;
-        let tracker = tracking.get_mut(request_id).ok_or_else(|| {
-            ExecutorError::RequestNotFound(request_id.to_string())
-        })?;
+        let mut tracking = self
+            .approver_tracking
+            .write()
+            .map_err(|_| ExecutorError::RequestNotFound(request_id.to_string()))?;
+        let tracker = tracking
+            .get_mut(request_id)
+            .ok_or_else(|| ExecutorError::RequestNotFound(request_id.to_string()))?;
 
         if !tracker.responded.insert(approver_id.to_string()) {
             return Err(ExecutorError::DuplicateApproval(approver_id.to_string()));
@@ -380,8 +381,7 @@ impl ApprovalExecutor {
             .map(|r| {
                 r.values()
                     .filter(|req| {
-                        req.is_pending()
-                            && req.selected_approvers.iter().any(|a| a == approver_id)
+                        req.is_pending() && req.selected_approvers.iter().any(|a| a == approver_id)
                     })
                     .cloned()
                     .collect()
@@ -408,12 +408,13 @@ impl ApprovalExecutor {
     pub fn cancel_request(&self, request_id: &str) -> Result<(), ExecutorError> {
         use types::AbacApprovalStatus;
 
-        let mut requests = self.active_requests.write().map_err(|_| {
-            ExecutorError::RequestNotFound(request_id.to_string())
-        })?;
-        let request = requests.get_mut(request_id).ok_or_else(|| {
-            ExecutorError::RequestNotFound(request_id.to_string())
-        })?;
+        let mut requests = self
+            .active_requests
+            .write()
+            .map_err(|_| ExecutorError::RequestNotFound(request_id.to_string()))?;
+        let request = requests
+            .get_mut(request_id)
+            .ok_or_else(|| ExecutorError::RequestNotFound(request_id.to_string()))?;
 
         if request.status != AbacApprovalStatus::Pending {
             return Err(ExecutorError::InvalidStateTransition {

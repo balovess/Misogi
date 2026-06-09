@@ -79,13 +79,12 @@ impl FieldClassifier {
             ))
         })?;
 
-        let config_data: StructuredScannerConfig =
-            serde_yaml::from_str(&content).map_err(|e| {
-                crate::error::MisogiError::Protocol(format!(
-                    "Invalid YAML in field mappings '{}': {}",
-                    path, e
-                ))
-            })?;
+        let config_data: StructuredScannerConfig = serde_yaml::from_str(&content).map_err(|e| {
+            crate::error::MisogiError::Protocol(format!(
+                "Invalid YAML in field mappings '{}': {}",
+                path, e
+            ))
+        })?;
 
         Ok(Self {
             mappings: Arc::new(RwLock::new(config_data.field_mappings)),
@@ -111,7 +110,8 @@ impl FieldClassifier {
             if mapping.matches_field(field_name) {
                 match &best_match {
                     Some(current) => {
-                        if config.select_highest_confidence && mapping.confidence > current.confidence
+                        if config.select_highest_confidence
+                            && mapping.confidence > current.confidence
                         {
                             best_match = Some(mapping);
                         }
@@ -215,7 +215,8 @@ impl FieldClassifierBuilder {
         confidence: f64,
         action: FieldAction,
     ) -> Self {
-        self.mappings.push(FieldMapping::literal(field, pii_type, confidence, action));
+        self.mappings
+            .push(FieldMapping::literal(field, pii_type, confidence, action));
         self
     }
 
@@ -226,7 +227,9 @@ impl FieldClassifierBuilder {
         confidence: f64,
         action: FieldAction,
     ) -> Self {
-        self.mappings.push(FieldMapping::wildcard(pattern, pii_type, confidence, action));
+        self.mappings.push(FieldMapping::wildcard(
+            pattern, pii_type, confidence, action,
+        ));
         self
     }
 

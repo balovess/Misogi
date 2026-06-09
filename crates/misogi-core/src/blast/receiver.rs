@@ -34,22 +34,25 @@ use tokio::net::UdpSocket;
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
-use md5::Digest;
+use super::frame::{BlastManifest, BlastPacket};
 use crate::error::{MisogiError, Result};
-use crate::fec::{
-    FecConfig,
-    reed_solomon::ReedSolomonCodec,
-};
-use super::frame::{BlastPacket, BlastManifest};
+use crate::fec::{FecConfig, reed_solomon::ReedSolomonCodec};
+use md5::Digest;
 
 /// Default UDP port for incoming blast traffic.
-fn default_blast_port() -> u16 { 9002 }
+fn default_blast_port() -> u16 {
+    9002
+}
 
 /// Maximum seconds to wait for shards before attempting decode.
-fn default_session_timeout_secs() -> u64 { 300 }
+fn default_session_timeout_secs() -> u64 {
+    300
+}
 
 /// Minimum unique shard count before attempting early decode.
-fn default_min_shards_for_decode() -> usize { 16 }
+fn default_min_shards_for_decode() -> usize {
+    16
+}
 
 /// Default output directory for reconstructed files.
 fn default_output_dir() -> PathBuf {
@@ -57,7 +60,9 @@ fn default_output_dir() -> PathBuf {
 }
 
 /// Whether to auto-clean incomplete sessions after timeout.
-fn default_auto_cleanup() -> bool { true }
+fn default_auto_cleanup() -> bool {
+    true
+}
 
 /// Configuration parameters for the [`UdpBlastReceiver`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -250,10 +255,10 @@ impl UdpBlastReceiver {
         })?;
 
         let socket = UdpSocket::bind(&addr).await.map_err(|e| {
-            MisogiError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Failed to bind UDP socket to {}: {}", bind_addr, e),
-            ))
+            MisogiError::Io(std::io::Error::other(format!(
+                "Failed to bind UDP socket to {}: {}",
+                bind_addr, e
+            )))
         })?;
 
         let fec_codec = ReedSolomonCodec::new()?;
@@ -328,24 +333,22 @@ impl UdpBlastReceiver {
             tracing::debug!(session_id = %session_id, "EOF marker received");
         }
 
-        if pkt.is_manifest() {
-            if let Ok(manifest) = serde_json::from_slice::<BlastManifest>(&pkt.payload) {
-                session.manifest = Some(manifest);
-                tracing::debug!(
-                    session_id = %session_id,
-                    filename = session.manifest.as_ref().map(|m| m.filename.as_str()).unwrap_or("?"),
-                    "Manifest received"
-                );
-            }
+        if pkt.is_manifest()
+            && let Ok(manifest) = serde_json::from_slice::<BlastManifest>(&pkt.payload)
+        {
+            session.manifest = Some(manifest);
+            tracing::debug!(
+                session_id = %session_id,
+                filename = session.manifest.as_ref().map(|m| m.filename.as_str()).unwrap_or("?"),
+                "Manifest received"
+            );
         }
 
         if !pkt.is_manifest() && !pkt.is_eof() && !pkt.payload.is_empty() {
             let idx = pkt.header.shard_index;
             session.total_bytes_received += pkt.payload.len() as u64;
 
-            if !session.received_shards.contains_key(&idx) {
-                session.received_shards.insert(idx, pkt.payload);
-            }
+            session.received_shards.entry(idx).or_insert(pkt.payload);
 
             let total = pkt.header.total_shards;
             if total > 0 {
@@ -373,9 +376,7 @@ impl UdpBlastReceiver {
             let sid = session_id.clone();
 
             tokio::spawn(async move {
-                let _ = try_decode_session(
-                    &sessions_arc, &sid, &fec_config, &output_dir,
-                ).await;
+                let _ = try_decode_session(&sessions_arc, &sid, &fec_config, &output_dir).await;
             });
         }
 
@@ -389,9 +390,9 @@ impl UdpBlastReceiver {
     /// `Some(reconstructed_data)` if decoding succeeded, `None` if not yet possible.
     pub async fn try_decode(&self, session_id: &str) -> Result<Option<Vec<u8>>> {
         let sessions = self.sessions.read().await;
-        let session = sessions.get(session_id).ok_or_else(|| {
-            MisogiError::Protocol(format!("Session '{}' not found", session_id))
-        })?;
+        let session = sessions
+            .get(session_id)
+            .ok_or_else(|| MisogiError::Protocol(format!("Session '{}' not found", session_id)))?;
 
         if session.unique_shard_count() < self.fec_codec.config().data_shards {
             return Ok(None);
@@ -449,14 +450,19 @@ async fn try_decode_session(
             );
             (shards, expected, manifest, stats)
         } else {
-            return Err(MisogiError::Protocol("Session disappeared during decode".to_string()));
+            return Err(MisogiError::Protocol(
+                "Session disappeared during decode".to_string(),
+            ));
         }
     };
 
     let (sid, fid, shards_recv, shards_exp, pkts_recv, elapsed_ms) = stats;
 
     let codec = ReedSolomonCodec::with_config(fec_config.clone())?;
-    let orig_len = manifest_opt.as_ref().map(|m| m.original_size as usize).unwrap_or(0);
+    let orig_len = manifest_opt
+        .as_ref()
+        .map(|m| m.original_size as usize)
+        .unwrap_or(0);
 
     let decode_start = Instant::now();
     let result = codec.decode(&shards, orig_len);
@@ -538,7 +544,11 @@ async fn try_decode_session(
                 shards_expected: shards_exp,
                 packets_received: pkts_recv,
                 packets_lost_estimate: lost_estimate as f64,
-                loss_rate: if shards_exp > 0 { lost_estimate as f64 / shards_exp as f64 } else { 0.0 },
+                loss_rate: if shards_exp > 0 {
+                    lost_estimate as f64 / shards_exp as f64
+                } else {
+                    0.0
+                },
                 decode_time_ms: decode_ms,
                 total_session_time_ms: elapsed_ms,
                 output_path: None,
@@ -599,8 +609,8 @@ mod tests {
         };
         let json = serde_json::to_string(&report).expect("Serialize");
         let decoded: BlastReceiveReport = serde_json::from_str(&json).expect("Deserialize");
-        assert_eq!(decoded.success, true);
-        assert_eq!(decoded.md5_match, true);
+        assert!(decoded.success);
+        assert!(decoded.md5_match);
     }
 
     #[test]

@@ -45,10 +45,7 @@
 use encoding_rs::Encoding;
 
 use crate::error::Result;
-use crate::traits::{
-    DetectedEncoding,
-    EncodingHandler,
-};
+use crate::traits::{DetectedEncoding, EncodingHandler};
 
 fn is_encoding_unicode_compatible(encoding: &Encoding) -> bool {
     encoding == encoding_rs::UTF_8
@@ -154,10 +151,7 @@ impl Default for JapaneseEncodingHandler {
         Self {
             fallback_encoding: String::from("Shift_JIS"), // Conservative default for JP gov systems
             pdf_font_action: PdfFontAction::Preserve,
-            fallback_fonts: vec![
-                String::from("IPAexMincho"),
-                String::from("IPAGothic"),
-            ],
+            fallback_fonts: vec![String::from("IPAexMincho"), String::from("IPAGothic")],
         }
     }
 }
@@ -189,10 +183,7 @@ impl JapaneseEncodingHandler {
         Self {
             fallback_encoding: String::from("UTF-8"),
             pdf_font_action: PdfFontAction::Preserve,
-            fallback_fonts: vec![
-                String::from("IPAexMincho"),
-                String::from("IPAGothic"),
-            ],
+            fallback_fonts: vec![String::from("IPAexMincho"), String::from("IPAGothic")],
         }
     }
 
@@ -204,10 +195,7 @@ impl JapaneseEncodingHandler {
         Self {
             fallback_encoding: String::from("Windows-31J"),
             pdf_font_action: PdfFontAction::Preserve,
-            fallback_fonts: vec![
-                String::from("MS Mincho"),
-                String::from("MS Gothic"),
-            ],
+            fallback_fonts: vec![String::from("MS Mincho"), String::from("MS Gothic")],
         }
     }
 
@@ -248,7 +236,8 @@ impl JapaneseEncodingHandler {
                 }
 
                 if let Some(output_slice) = buffer.get_mut(..) {
-                    let (result, _, _) = decoder.decode_to_utf8_without_replacement(data, output_slice, true);
+                    let (result, _, _) =
+                        decoder.decode_to_utf8_without_replacement(data, output_slice, true);
                     last_result = result;
                     _total_read = data.len();
                 }
@@ -436,7 +425,8 @@ impl JapaneseEncodingHandler {
         };
 
         let eucjp_score = if eucjp_first_byte_count > 0 {
-            let violation_rate = eucjp_second_byte_violations as f64 / eucjp_first_byte_count as f64;
+            let violation_rate =
+                eucjp_second_byte_violations as f64 / eucjp_first_byte_count as f64;
             eucjp_first_byte_count as f64 * (1.0 - violation_rate)
         } else {
             0.0
@@ -495,10 +485,7 @@ impl EncodingHandler for JapaneseEncodingHandler {
 
         // Look up target encoding
         let dst_encoding = Encoding::for_label(to_encoding.as_bytes()).ok_or_else(|| {
-            crate::error::MisogiError::Protocol(format!(
-                "Unknown target encoding: {}",
-                to_encoding
-            ))
+            crate::error::MisogiError::Protocol(format!("Unknown target encoding: {}", to_encoding))
         })?;
 
         // Decode source bytes to UTF-8 string
@@ -519,12 +506,7 @@ impl EncodingHandler for JapaneseEncodingHandler {
         Ok(encoded.into_owned())
     }
 
-    async fn stream_decode(
-        &self,
-        data: &[u8],
-        encoding: &str,
-        _is_final: bool,
-    ) -> Result<String> {
+    async fn stream_decode(&self, data: &[u8], encoding: &str, _is_final: bool) -> Result<String> {
         // Look up encoding
         let enc = Encoding::for_label(encoding.as_bytes()).ok_or_else(|| {
             crate::error::MisogiError::Protocol(format!("Unknown encoding: {}", encoding))
@@ -653,8 +635,7 @@ mod tests {
         ]
         .to_vec();
 
-        let result = rt
-            .block_on(handler.convert(&shift_jis_input, "Shift_JIS", "UTF-8"));
+        let result = rt.block_on(handler.convert(&shift_jis_input, "Shift_JIS", "UTF-8"));
         assert!(result.is_ok());
 
         let utf8_output = result.unwrap();
@@ -682,14 +663,15 @@ mod tests {
         ]
         .to_vec();
 
-        let result = rt.block_on(
-            handler.convert(&halfwidth_katakana_sjis, "Shift_JIS", "UTF-8"),
-        );
+        let result = rt.block_on(handler.convert(&halfwidth_katakana_sjis, "Shift_JIS", "UTF-8"));
         assert!(result.is_ok());
 
         let utf8_output = String::from_utf8(result.unwrap()).unwrap();
         // Should preserve half-width katakana characters (U+FF76–U+FF85 range)
-        assert!(!utf8_output.is_empty(), "Half-width katakana should be preserved");
+        assert!(
+            !utf8_output.is_empty(),
+            "Half-width katakana should be preserved"
+        );
     }
 
     // =========================================================================
@@ -753,7 +735,12 @@ mod tests {
         let result = rt.block_on(handler.convert(&data, "NonExistent-Encoding", "UTF-8"));
 
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Unknown source encoding"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Unknown source encoding")
+        );
     }
 
     // =========================================================================

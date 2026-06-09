@@ -21,12 +21,13 @@ use serde::{Deserialize, Serialize};
 ///
 /// Each variant corresponds to a distinct set of proto packages,
 /// REST URL prefixes, and wire-format message schemas.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub enum ApiVersion {
     /// V1 — Current stable production release.
     ///
     /// Proto package: `misogi.file_transfer.v1`
     /// URL prefix: `/api/v1`
+    #[default]
     V1,
 
     /// V2 — Future release with AI-enhanced semantic sanitization.
@@ -70,13 +71,16 @@ impl ApiVersion {
     pub fn from_uri_path(path: &str) -> Option<Self> {
         let segments: Vec<&str> = path.split('/').collect();
         for (i, seg) in segments.iter().enumerate() {
-            if (*seg == "api" || *seg == "grpc") && i + 1 < segments.len() {
-                if let Some(ver) = Self::from_path_segment(segments[i + 1]) {
-                    return Some(ver);
-                }
+            if (*seg == "api" || *seg == "grpc")
+                && i + 1 < segments.len()
+                && let Some(ver) = Self::from_path_segment(segments[i + 1])
+            {
+                return Some(ver);
             }
-            if let Some(ver) = Self::from_path_segment(seg) {
-                if i == 1 { return Some(ver); }
+            if let Some(ver) = Self::from_path_segment(seg)
+                && i == 1
+            {
+                return Some(ver);
             }
         }
         None
@@ -147,12 +151,6 @@ impl std::fmt::Display for ApiVersion {
             Self::V1 => write!(f, "v1"),
             Self::V2 => write!(f, "v2"),
         }
-    }
-}
-
-impl Default for ApiVersion {
-    fn default() -> Self {
-        Self::V1
     }
 }
 

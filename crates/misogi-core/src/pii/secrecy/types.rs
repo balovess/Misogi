@@ -77,7 +77,10 @@ impl SecrecyLevelDef {
 
     /// Get mandatory controls only.
     pub fn mandatory_controls(&self) -> Vec<&ControlRequirement> {
-        self.required_controls.iter().filter(|c| c.required).collect()
+        self.required_controls
+            .iter()
+            .filter(|c| c.required)
+            .collect()
     }
 }
 
@@ -86,14 +89,10 @@ impl SecrecyLevelDef {
 #[serde(rename_all = "snake_case")]
 pub enum Condition {
     /// PII types must ALL be present (AND logic).
-    RequireAllOf {
-        pii_types: Vec<String>,
-    },
+    RequireAllOf { pii_types: Vec<String> },
 
     /// At least one PII type must be present (OR logic).
-    RequireAnyOf {
-        pii_types: Vec<String>,
-    },
+    RequireAnyOf { pii_types: Vec<String> },
 
     /// Exact set of PII types with minimum counts.
     PiiTypesPresent {
@@ -102,14 +101,10 @@ pub enum Condition {
     },
 
     /// All listed types must be absent (exclusion filter).
-    ExcludeAllOf {
-        pii_types: Vec<String>,
-    },
+    ExcludeAllOf { pii_types: Vec<String> },
 
     /// Any of listed types must be absent.
-    ExcludeAnyOf {
-        pii_types: Vec<String>,
-    },
+    ExcludeAnyOf { pii_types: Vec<String> },
 }
 
 /// Result produced when a classification rule matches.

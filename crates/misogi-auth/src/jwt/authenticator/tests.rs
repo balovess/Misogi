@@ -28,7 +28,7 @@ fn setup_auth(ttl_hours: i64) -> (tempfile::TempDir, JwtAuthenticator) {
 fn test_authenticator_initialization() {
     // Test that JwtAuthenticator initializes correctly with valid keys
     let (_dir, auth) = setup_auth(1);
-    
+
     // Should be able to access internal components
     assert!(auth.issuer().config().ttl_hours > 0);
     assert!(auth.validator().config().audience == "test-audience");
@@ -38,7 +38,7 @@ fn test_authenticator_initialization() {
 fn test_issue_token_returns_complete_jwt_token() {
     // Test legacy issue_token returns all expected fields
     let (_dir, auth) = setup_auth(1);
-    
+
     let user = User::staff("test-user", "Test User");
     let token: JwtToken = auth.issue_token(&user).expect("issue_token should succeed");
 

@@ -45,10 +45,8 @@ use chrono::{DateTime, Utc};
 use tracing::{info, instrument, warn};
 
 #[cfg(feature = "jwt")]
-use super::jwt::{JwtConfig, JwtValidator, JwtError};
-use super::provider::{
-    AuthRequest, MisogiIdentity,
-};
+use super::jwt::{JwtConfig, JwtError, JwtValidator};
+use super::provider::{AuthRequest, MisogiIdentity};
 use super::role::UserRole;
 use crate::registry::IdentityRegistry;
 
@@ -60,21 +58,16 @@ use crate::registry::IdentityRegistry;
 ///
 /// Controls behavior when multiple identity providers are configured.
 /// See [`middleware::AuthStrategy`](super::middleware::AuthStrategy) for full docs.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum AuthStrategy {
     /// Try all providers; merge claims from successful ones.
     Sequential,
     /// Return on first successful authentication (fastest).
+    #[default]
     FirstMatch,
     /// Require ALL providers to succeed (strictest).
     Required,
-}
-
-impl Default for AuthStrategy {
-    fn default() -> Self {
-        Self::FirstMatch
-    }
 }
 
 impl std::fmt::Display for AuthStrategy {
@@ -257,11 +250,7 @@ impl RoleMappingRule {
     /// * `pattern` - Regex string for matching group names
     /// * `target_role` - Internal role on match
     /// * `priority` - Evaluation priority (lower = first)
-    pub fn new(
-        pattern: &str,
-        target_role: UserRole,
-        priority: u32,
-    ) -> Result<Self, regex::Error> {
+    pub fn new(pattern: &str, target_role: UserRole, priority: u32) -> Result<Self, regex::Error> {
         Ok(Self {
             source_group_pattern: regex::Regex::new(pattern)?,
             target_role,
@@ -279,8 +268,12 @@ impl RoleMappingRule {
 fn default_role_mapping_rules() -> Vec<RoleMappingRule> {
     vec![
         // Admin groups (highest priority)
-        RoleMappingRule::new(r"(?i)(admin|administrator|domain.admins)", UserRole::Admin, 10)
-            .expect("hardcoded admin regex is valid"),
+        RoleMappingRule::new(
+            r"(?i)(admin|administrator|domain.admins)",
+            UserRole::Admin,
+            10,
+        )
+        .expect("hardcoded admin regex is valid"),
         // Approver groups
         RoleMappingRule::new(r"(?i)(approver|manager|supervisor)", UserRole::Approver, 20)
             .expect("hardcoded approver regex is valid"),
@@ -365,9 +358,10 @@ impl AuthEngine {
     #[cfg(feature = "jwt")]
     #[instrument(skip(config), fields(strategy = "first_match"))]
     pub fn new(config: JwtConfig) -> Result<Self, AuthError> {
-        let jwt_validator = Arc::new(JwtValidator::new(config).map_err(|e| {
-            AuthError::InternalError(format!("JWT validator init failed: {e}"))
-        })?);
+        let jwt_validator =
+            Arc::new(JwtValidator::new(config).map_err(|e| {
+                AuthError::InternalError(format!("JWT validator init failed: {e}"))
+            })?);
 
         info!(
             strategy = %AuthStrategy::FirstMatch,
@@ -433,16 +427,11 @@ impl AuthEngine {
         if let Ok(mut guard) = self.identity_registry.write() {
             *guard = Some(registry);
         }
-        info!(
-            provider_count,
-            "IdentityRegistry attached to AuthEngine"
-        );
-        self.record_audit_event(
-            AuditEvent::new(
-                AuditEventType::ConfigChange,
-                format!("IdentityRegistry attached ({provider_count} providers)"),
-            )
-        );
+        info!(provider_count, "IdentityRegistry attached to AuthEngine");
+        self.record_audit_event(AuditEvent::new(
+            AuditEventType::ConfigChange,
+            format!("IdentityRegistry attached ({provider_count} providers)"),
+        ));
         self
     }
 
@@ -454,18 +443,20 @@ impl AuthEngine {
     pub fn set_auth_strategy(&mut self, strategy: AuthStrategy) {
         info!(old = %self.auth_strategy, new = %strategy, "AuthStrategy updated");
         self.auth_strategy = strategy;
-        self.record_audit_event(
-            AuditEvent::new(AuditEventType::ConfigChange, format!("auth_strategy changed to {strategy}"))
-        );
+        self.record_audit_event(AuditEvent::new(
+            AuditEventType::ConfigChange,
+            format!("auth_strategy changed to {strategy}"),
+        ));
     }
 
     /// Set custom role mapping rules (replaces built-in defaults).
     pub fn set_role_mapping_rules(&mut self, rules: Vec<RoleMappingRule>) {
         info!(count = rules.len(), "Role mapping rules updated");
         self.role_mapping_rules = rules;
-        self.record_audit_event(
-            AuditEvent::new(AuditEventType::ConfigChange, "role_mapping_rules updated")
-        );
+        self.record_audit_event(AuditEvent::new(
+            AuditEventType::ConfigChange,
+            "role_mapping_rules updated",
+        ));
     }
 
     /// Set the maximum capacity of the audit log ring buffer.
@@ -509,17 +500,21 @@ impl AuthEngine {
 
         #[cfg(feature = "jwt")]
         {
-            self.jwt_validator.validate(token).map_err(|e: JwtError| match e {
-                JwtError::TokenExpired => AuthError::ExpiredToken,
-                JwtError::InvalidSignature => {
-                    AuthError::InvalidToken("Signature verification failed".to_string())
-                }
-                other => AuthError::InvalidToken(other.to_string()),
-            })
+            self.jwt_validator
+                .validate(token)
+                .map_err(|e: JwtError| match e {
+                    JwtError::TokenExpired => AuthError::ExpiredToken,
+                    JwtError::InvalidSignature => {
+                        AuthError::InvalidToken("Signature verification failed".to_string())
+                    }
+                    other => AuthError::InvalidToken(other.to_string()),
+                })
         }
 
         #[cfg(not(feature = "jwt"))]
-        Err(AuthError::InternalError("JWT feature not enabled".to_string()))
+        Err(AuthError::InternalError(
+            "JWT feature not enabled".to_string(),
+        ))
     }
 
     /// Validate an API key and return the associated service account.
@@ -553,8 +548,11 @@ impl AuthEngine {
         info!(key_id = %key_id, name = %name, "API key registered");
         self.api_keys.insert(key_id.clone(), account);
         self.record_audit_event(
-            AuditEvent::new(AuditEventType::ConfigChange, format!("API key registered: {name}"))
-                .with_user_id(&key_id)
+            AuditEvent::new(
+                AuditEventType::ConfigChange,
+                format!("API key registered: {name}"),
+            )
+            .with_user_id(&key_id),
         );
     }
 
@@ -578,14 +576,16 @@ impl AuthEngine {
     /// - [`AuthError::InternalError`] — no registry attached or provider not found
     /// - Wrapped [`IdentityError`] — provider-specific authentication failure
     #[instrument(skip(self, request), fields(provider_id))]
+    #[allow(clippy::await_holding_lock)]
     pub async fn authenticate_via_provider(
         &self,
         provider_id: &str,
         request: AuthRequest,
     ) -> Result<MisogiIdentity, AuthError> {
-        let registry = self.identity_registry.read().map_err(|e| {
-            AuthError::InternalError(format!("Registry lock poisoned: {e}"))
-        })?;
+        let registry = self
+            .identity_registry
+            .read()
+            .map_err(|e| AuthError::InternalError(format!("Registry lock poisoned: {e}")))?;
 
         let registry = registry.as_ref().ok_or_else(|| {
             AuthError::InternalError(format!(
@@ -643,15 +643,15 @@ impl AuthEngine {
 
         log.iter()
             .filter(|evt| {
-                if let Some(since_time) = since {
-                    if evt.timestamp < since_time {
-                        return false;
-                    }
+                if let Some(since_time) = since
+                    && evt.timestamp < since_time
+                {
+                    return false;
                 }
-                if let Some(ref filter_type) = filter {
-                    if evt.event_type != *filter_type {
-                        return false;
-                    }
+                if let Some(ref filter_type) = filter
+                    && evt.event_type != *filter_type
+                {
+                    return false;
                 }
                 true
             })

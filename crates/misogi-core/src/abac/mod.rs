@@ -87,9 +87,7 @@ pub mod resolver;
 // Re-export primary types at module level for ergonomic imports.
 
 // -- Core data types --
-pub use attribute::{
-    AbacAttribute, AbacValue, DayMask, TimeWindow,
-};
+pub use attribute::{AbacAttribute, AbacValue, DayMask, TimeWindow};
 
 // -- Configuration --
 pub use config::{AbacConfig, ConfigValidationError};
@@ -99,8 +97,8 @@ pub use decision::{AbacDecision, AbacDecisionError};
 
 // -- Policy definition --
 pub use policy::{
-    AbacPolicyRule, ApprovalTemplate, ApproverPool, ConditionOperator,
-    Obligation, PolicyCondition, PolicyEffect, PolicyTarget,
+    AbacPolicyRule, ApprovalTemplate, ApproverPool, ConditionOperator, Obligation, PolicyCondition,
+    PolicyEffect, PolicyTarget,
 };
 
 // -- Attribute resolution --
@@ -113,7 +111,7 @@ pub use evaluator::{ConditionEvaluator, EvalError};
 pub use engine::AbacEngine;
 
 // -- Approval execution --
-pub use executor::{ApprovalExecutor, ApprovalRequest, AbacApprovalStatus, ExecutorError};
+pub use executor::{AbacApprovalStatus, ApprovalExecutor, ApprovalRequest, ExecutorError};
 
 // -- Hot reload --
 pub use hot_reload::{AbacHotReload, ReloadError};

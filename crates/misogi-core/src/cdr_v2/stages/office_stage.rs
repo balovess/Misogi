@@ -1,4 +1,4 @@
-﻿// =============================================================================
+// =============================================================================
 // CDR Engine v2 — Office Document Sanitization Stages
 // =============================================================================
 // This module implements two pipeline stages for Microsoft Office document
@@ -30,9 +30,7 @@ use async_trait::async_trait;
 use crate::cdr_v2::ast::{AstNode, DocumentAst};
 use crate::cdr_v2::config::OfficeConfig;
 use crate::cdr_v2::pipeline::{CdrContext, CdrStage, SanitizationReport};
-use crate::cdr_v2::types::{
-    ActiveContentType, CdrError, DocumentFormat, SanitizeAction,
-};
+use crate::cdr_v2::types::{ActiveContentType, CdrError, DocumentFormat, SanitizeAction};
 
 /// Sanitization mode for OLE embedded objects.
 ///
@@ -228,7 +226,8 @@ impl OfficeOpenXmlStage {
                 }
             }
 
-            ast.active_contents.retain(|ac| ac.content_type != *conn_type);
+            ast.active_contents
+                .retain(|ac| ac.content_type != *conn_type);
             Self::remove_ac_nodes_by_type(ast, conn_type.clone());
             count += matching;
         }
@@ -417,7 +416,8 @@ impl OfficeLegacyStage {
                 }
             }
 
-            ast.active_contents.retain(|ac| ac.content_type != *macro_type);
+            ast.active_contents
+                .retain(|ac| ac.content_type != *macro_type);
             Self::remove_legacy_ac_nodes(ast, macro_type.clone());
             count += matching;
         }
@@ -555,11 +555,8 @@ mod tests {
     }
 
     fn add_ac(ast: &mut DocumentAst, ct: ActiveContentType, path: &str, sev: ThreatSeverity) {
-        ast.active_contents.push(ActiveContentRef::new(
-            ct,
-            ContentLocation::new(path),
-            sev,
-        ));
+        ast.active_contents
+            .push(ActiveContentRef::new(ct, ContentLocation::new(path), sev));
     }
 
     fn add_ac_node(ast: &mut DocumentAst, ct: ActiveContentType, path: &str, sev: ThreatSeverity) {
@@ -598,8 +595,18 @@ mod tests {
     #[tokio::test]
     async fn strip_vba_removes_macro_entries() {
         let mut ast = make_ooxml_ast(&DocumentFormat::Docx);
-        add_ac(&mut ast, ActiveContentType::VBMacro, "/vba/project", ThreatSeverity::High);
-        add_ac(&mut ast, ActiveContentType::VBMacro, "/vba/module[0]", ThreatSeverity::High);
+        add_ac(
+            &mut ast,
+            ActiveContentType::VBMacro,
+            "/vba/project",
+            ThreatSeverity::High,
+        );
+        add_ac(
+            &mut ast,
+            ActiveContentType::VBMacro,
+            "/vba/module[0]",
+            ThreatSeverity::High,
+        );
 
         let stage = OfficeOpenXmlStage::new(OfficeConfig::default());
         let count = stage.strip_vba_macros(&mut ast);
@@ -611,7 +618,12 @@ mod tests {
     #[tokio::test]
     async fn strip_vba_respects_disabled_config() {
         let mut ast = make_ooxml_ast(&DocumentFormat::Xlsx);
-        add_ac(&mut ast, ActiveContentType::VBMacro, "/vba", ThreatSeverity::Critical);
+        add_ac(
+            &mut ast,
+            ActiveContentType::VBMacro,
+            "/vba",
+            ThreatSeverity::Critical,
+        );
 
         let config = OfficeConfig {
             strip_macros: false,
@@ -648,9 +660,11 @@ mod tests {
         let count = stage.sanitize_ole_objects(&mut ast);
 
         assert_eq!(count, 1);
-        assert!(!ast.active_contents.iter().any(|ac| {
-            ac.content_type == ActiveContentType::OLEEmbeddedObject
-        }));
+        assert!(
+            !ast.active_contents
+                .iter()
+                .any(|ac| { ac.content_type == ActiveContentType::OLEEmbeddedObject })
+        );
     }
 
     #[tokio::test]
@@ -758,7 +772,12 @@ mod tests {
     #[tokio::test]
     async fn ooxml_stage_only_processes_ooxml_formats() {
         let mut doc_ast = make_ooxml_ast(&DocumentFormat::Doc); // Legacy format
-        add_ac(&mut doc_ast, ActiveContentType::VBMacro, "/vba", ThreatSeverity::High);
+        add_ac(
+            &mut doc_ast,
+            ActiveContentType::VBMacro,
+            "/vba",
+            ThreatSeverity::High,
+        );
 
         let stage = OfficeOpenXmlStage::new(OfficeConfig::default());
         let context = CdrContext::new("file-001", "user-001");
@@ -771,7 +790,12 @@ mod tests {
     #[tokio::test]
     async fn legacy_stage_only_processes_legacy_formats() {
         let mut docx_ast = make_ooxml_ast(&DocumentFormat::Docx); // Modern format
-        add_ac(&mut docx_ast, ActiveContentType::VBMacro, "/vba", ThreatSeverity::High);
+        add_ac(
+            &mut docx_ast,
+            ActiveContentType::VBMacro,
+            "/vba",
+            ThreatSeverity::High,
+        );
 
         let stage = OfficeLegacyStage::with_defaults();
         let context = CdrContext::new("file-002", "user-002");
@@ -853,7 +877,12 @@ mod tests {
     #[tokio::test]
     async fn whitelist_bypass_via_disabled_config() {
         let mut ast = make_ooxml_ast(&DocumentFormat::Pptx);
-        add_ac(&mut ast, ActiveContentType::VBMacro, "/vba", ThreatSeverity::Critical);
+        add_ac(
+            &mut ast,
+            ActiveContentType::VBMacro,
+            "/vba",
+            ThreatSeverity::Critical,
+        );
         add_ac(
             &mut ast,
             ActiveContentType::OLEEmbeddedObject,
@@ -889,6 +918,3 @@ mod tests {
         assert_eq!(format!("{}", OleSanitizeMode::Extract), "extract");
     }
 }
-
-
-

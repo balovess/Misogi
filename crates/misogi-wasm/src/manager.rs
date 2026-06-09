@@ -107,22 +107,22 @@ impl PluginConfig {
 /// integration with the Misogi CDR parser registry.
 ///
 /// ## Usage Pattern
-    ///
-    /// ```ignore
-    /// use misogi_wasm::WasmPluginManager;
-    /// use misogi_cdr::parser_trait::ParserRegistry;
-    ///
-    /// // Create manager with default settings
-    /// let manager = Arc::new(WasmPluginManager::new());
-    ///
-    /// // Load plugins from configuration
-    /// manager.load_from_config(&config).await?;
-    ///
-    /// // Register all loaded plugins with the CDR registry
-    /// manager.register_all(&mut registry).await?;
-    ///
-    /// // Plugins are now available for content routing alongside native parsers
-    /// ```
+///
+/// ```ignore
+/// use misogi_wasm::WasmPluginManager;
+/// use misogi_cdr::parser_trait::ParserRegistry;
+///
+/// // Create manager with default settings
+/// let manager = Arc::new(WasmPluginManager::new());
+///
+/// // Load plugins from configuration
+/// manager.load_from_config(&config).await?;
+///
+/// // Register all loaded plugins with the CDR registry
+/// manager.register_all(&mut registry).await?;
+///
+/// // Plugins are now available for content routing alongside native parsers
+/// ```
 ///
 /// ## Concurrency Model
 ///
@@ -204,7 +204,10 @@ impl WasmPluginManager {
     /// manager.load_plugin("parsers/custom.wasm").await?;
     /// println!("Loaded plugin: {:?}", manager.list_loaded());
     /// ```
-    pub async fn load_plugin<P: AsRef<Path>>(&self, wasm_path: P) -> WasmResult<Arc<WasmParserAdapter>> {
+    pub async fn load_plugin<P: AsRef<Path>>(
+        &self,
+        wasm_path: P,
+    ) -> WasmResult<Arc<WasmParserAdapter>> {
         let path = wasm_path.as_ref().to_path_buf();
         let config = self.default_config.clone();
 
@@ -442,10 +445,7 @@ impl WasmPluginManager {
         let count = plugins.len();
         plugins.clear();
 
-        tracing::info!(
-            unloaded = count,
-            "All WASM plugins unloaded"
-        );
+        tracing::info!(unloaded = count, "All WASM plugins unloaded");
     }
 }
 
@@ -596,15 +596,18 @@ mod tests {
         };
 
         let sandbox = config.to_sandbox_config();
-        assert_eq!(sandbox.max_memory_bytes, SandboxConfig::default().max_memory_bytes);
+        assert_eq!(
+            sandbox.max_memory_bytes,
+            SandboxConfig::default().max_memory_bytes
+        );
         assert_eq!(sandbox.timeout_secs, SandboxConfig::default().timeout_secs);
     }
 
     #[test]
     fn test_default_enabled_is_true() {
-        let config: PluginConfig = serde_json::from_value(
-            serde_json::json!({ "path": "/test.wasm" })
-        ).expect("should deserialize");
+        let config: PluginConfig =
+            serde_json::from_value(serde_json::json!({ "path": "/test.wasm" }))
+                .expect("should deserialize");
 
         assert!(config.enabled);
     }

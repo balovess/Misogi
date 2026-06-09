@@ -17,13 +17,13 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use base64::Engine;
-use flate2::write::ZlibEncoder;
+use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use flate2::Compression;
+use flate2::write::ZlibEncoder;
 use lru::LruCache;
-use quick_xml::events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event};
 use quick_xml::Writer;
+use quick_xml::events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event};
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info, instrument, warn};
 use uuid::Uuid;
@@ -50,9 +50,15 @@ pub struct SamlConfig {
     pub replay_cache_size: usize,
 }
 
-fn default_clock_skew() -> u64 { 300 }
-fn default_assertion_max_duration() -> u64 { 3600 }
-fn default_replay_cache_size() -> usize { 1000 }
+fn default_clock_skew() -> u64 {
+    300
+}
+fn default_assertion_max_duration() -> u64 {
+    3600
+}
+fn default_replay_cache_size() -> usize {
+    1000
+}
 
 impl Default for SamlConfig {
     fn default() -> Self {
@@ -185,12 +191,12 @@ impl SamlAuthProvider {
 
     /// Build the SSO redirect URL for initiating authentication.
     #[instrument(skip(self, relay_state))]
-    pub fn build_sso_redirect_url(
-        &self,
-        relay_state: &str,
-    ) -> Result<(String, String), SamlError> {
+    pub fn build_sso_redirect_url(&self, relay_state: &str) -> Result<(String, String), SamlError> {
         let base_url = if self.config.idp_sso_url.is_empty() {
-            format!("{}/sso/saml", self.config.idp_metadata_url.trim_end_matches('/'))
+            format!(
+                "{}/sso/saml",
+                self.config.idp_metadata_url.trim_end_matches('/')
+            )
         } else {
             self.config.idp_sso_url.clone()
         };
@@ -244,7 +250,10 @@ impl SamlAuthProvider {
 
         if let Some(ref conditions) = assertion.conditions {
             if !conditions.audiences.is_empty()
-                && !conditions.audiences.iter().any(|a| a == &self.config.sp_entity_id)
+                && !conditions
+                    .audiences
+                    .iter()
+                    .any(|a| a == &self.config.sp_entity_id)
             {
                 return Err(SamlError::AudienceMismatch {
                     expected: self.config.sp_entity_id.clone(),
@@ -270,7 +279,10 @@ impl SamlAuthProvider {
         name_id: &str,
     ) -> Result<(String, String), SamlError> {
         let base_url = if self.config.idp_slo_url.is_empty() {
-            format!("{}/slo/saml", self.config.idp_metadata_url.trim_end_matches('/'))
+            format!(
+                "{}/slo/saml",
+                self.config.idp_metadata_url.trim_end_matches('/')
+            )
         } else {
             self.config.idp_slo_url.clone()
         };
@@ -325,15 +337,30 @@ impl SamlAuthProvider {
         start.push_attribute(("Version", "2.0"));
         start.push_attribute(("IssueInstant", instant_str.as_str()));
         start.push_attribute(("Destination", dest));
-        start.push_attribute(("ProtocolBinding", "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"));
+        start.push_attribute((
+            "ProtocolBinding",
+            "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
+        ));
         start.push_attribute(("AssertionConsumerServiceURL", acs.as_str()));
 
         writer.write_event(Event::Start(start))?;
-        write_escaped_element(&mut writer, "saml:Issuer", &[("xmlns:saml", "urn:oasis:names:tc:SAML:2.0:assertion")], &issuer)?;
-        write_empty_element(&mut writer, "samlp:NameIDPolicy", &[
-            ("Format", "urn:oasis:names:tc:SAML:2.0:nameid-format:transient"),
-            ("AllowCreate", "true"),
-        ])?;
+        write_escaped_element(
+            &mut writer,
+            "saml:Issuer",
+            &[("xmlns:saml", "urn:oasis:names:tc:SAML:2.0:assertion")],
+            &issuer,
+        )?;
+        write_empty_element(
+            &mut writer,
+            "samlp:NameIDPolicy",
+            &[
+                (
+                    "Format",
+                    "urn:oasis:names:tc:SAML:2.0:nameid-format:transient",
+                ),
+                ("AllowCreate", "true"),
+            ],
+        )?;
         write_authn_context(&mut writer)?;
         writer.write_event(Event::End(BytesEnd::new(tag)))?;
 
@@ -366,7 +393,14 @@ impl SamlAuthProvider {
 
         writer.write_event(Event::Start(start))?;
         write_escaped_element(&mut writer, "saml:Issuer", &[], &self.config.sp_entity_id)?;
-        write_empty_element(&mut writer, "saml:NameID", &[("Format", "urn:oasis:names:tc:SAML:2.0:nameid-format:transient")])?;
+        write_empty_element(
+            &mut writer,
+            "saml:NameID",
+            &[(
+                "Format",
+                "urn:oasis:names:tc:SAML:2.0:nameid-format:transient",
+            )],
+        )?;
         write_escaped_element(&mut writer, "samlp:SessionIndex", &[], session_index)?;
         writer.write_event(Event::End(BytesEnd::new(tag)))?;
 
@@ -376,9 +410,9 @@ impl SamlAuthProvider {
     }
 
     fn parse_response(&self, saml_response: &str) -> Result<SamlAssertion, SamlError> {
-        let decoded = BASE64_STANDARD.decode(saml_response).map_err(|e| {
-            SamlError::InvalidResponse(format!("Base64 decode failed: {e}"))
-        })?;
+        let decoded = BASE64_STANDARD
+            .decode(saml_response)
+            .map_err(|e| SamlError::InvalidResponse(format!("Base64 decode failed: {e}")))?;
 
         let xml_str = if looks_like_deflated(&decoded) {
             inflate_decoded(&decoded)?
@@ -436,7 +470,9 @@ impl SamlAuthProvider {
                         b"Assertion" => {
                             for attr in e.attributes().flatten() {
                                 match attr.key.as_ref() {
-                                    b"ID" => { assertion.id = attr.unescape_value()?.into_owned(); }
+                                    b"ID" => {
+                                        assertion.id = attr.unescape_value()?.into_owned();
+                                    }
                                     b"IssueInstant" => {
                                         assertion.issue_instant =
                                             parse_saml_datetime(&attr.unescape_value()?);
@@ -472,8 +508,14 @@ impl SamlAuthProvider {
                             };
                             for attr in e.attributes().flatten() {
                                 match attr.key.as_ref() {
-                                    b"NotBefore" => cond.not_before = Some(parse_saml_datetime(&attr.unescape_value()?)),
-                                    b"NotOnOrAfter" => cond.not_on_or_after = Some(parse_saml_datetime(&attr.unescape_value()?)),
+                                    b"NotBefore" => {
+                                        cond.not_before =
+                                            Some(parse_saml_datetime(&attr.unescape_value()?))
+                                    }
+                                    b"NotOnOrAfter" => {
+                                        cond.not_on_or_after =
+                                            Some(parse_saml_datetime(&attr.unescape_value()?))
+                                    }
                                     _ => {}
                                 }
                             }
@@ -518,13 +560,19 @@ impl SamlAuthProvider {
                             }
                             loop {
                                 match reader.read_event() {
-                                    Ok(Event::Start(ref ev)) if ev.local_name().as_ref() == b"AttributeValue" => {
+                                    Ok(Event::Start(ref ev))
+                                        if ev.local_name().as_ref() == b"AttributeValue" =>
+                                    {
                                         if let Ok(Event::Text(text)) = reader.read_event() {
                                             attr_values.push(text.unescape()?.into_owned());
                                         }
                                         let _ = reader.read_event(); // consume end
                                     }
-                                    Ok(Event::End(ref ev)) if ev.local_name().as_ref() == b"Attribute" => break,
+                                    Ok(Event::End(ref ev))
+                                        if ev.local_name().as_ref() == b"Attribute" =>
+                                    {
+                                        break;
+                                    }
                                     Ok(Event::Eof) => break,
                                     _ => continue,
                                 }
@@ -544,7 +592,9 @@ impl SamlAuthProvider {
                     signature_data.push_str(&e.unescape()?);
                 }
                 Ok(Event::End(_)) => {
-                    if depth > 0 { depth -= 1; }
+                    if depth > 0 {
+                        depth -= 1;
+                    }
                     if in_signature && depth == 0 {
                         in_signature = false;
                         if !signature_data.is_empty() {
@@ -593,7 +643,9 @@ impl SamlAuthProvider {
                     )));
                 }
             }
-            if let (Some(noa), Some(ii)) = (conditions.not_on_or_after, Some(assertion.issue_instant)) {
+            if let (Some(noa), Some(ii)) =
+                (conditions.not_on_or_after, Some(assertion.issue_instant))
+            {
                 let duration = noa.saturating_sub(ii);
                 if duration > self.config.assertion_max_duration_secs {
                     return Err(SamlError::InvalidResponse(format!(
@@ -608,9 +660,10 @@ impl SamlAuthProvider {
     }
 
     fn replay_attack_check(&self, request_id: &str) -> Result<(), SamlError> {
-        let mut cache = self.replay_cache.lock().map_err(|e| {
-            SamlError::InternalError(format!("Replay cache lock poisoned: {e}"))
-        })?;
+        let mut cache = self
+            .replay_cache
+            .lock()
+            .map_err(|e| SamlError::InternalError(format!("Replay cache lock poisoned: {e}")))?;
         if cache.contains(request_id) {
             warn!(request_id = %request_id, "REPLAY ATTACK DETECTED");
             Err(SamlError::ReplayDetected)
@@ -633,7 +686,10 @@ impl SamlAuthProvider {
             display_name: None,
             email: None,
             organization: None,
-            session_index: assertion.authn_statement.as_ref().and_then(|s| s.session_index.clone()),
+            session_index: assertion
+                .authn_statement
+                .as_ref()
+                .and_then(|s| s.session_index.clone()),
             extra: HashMap::new(),
         };
 
@@ -643,7 +699,11 @@ impl SamlAuthProvider {
                     "urn:oid:2.5.4.42" | "givenName" | "givenname" => {
                         if let Some(first) = values.first() {
                             let existing = attributes.display_name.take();
-                            let surname = attributes.extra.get("surname").and_then(|v| v.first()).cloned();
+                            let surname = attributes
+                                .extra
+                                .get("surname")
+                                .and_then(|v| v.first())
+                                .cloned();
                             attributes.display_name = Some(match (existing, surname) {
                                 (Some(n), Some(s)) => format!("{s} {first}"),
                                 (_, Some(s)) => format!("{s} {first}"),
@@ -653,7 +713,9 @@ impl SamlAuthProvider {
                     }
                     "urn:oid:2.5.4.4" | "sn" | "surname" => {
                         if let Some(first) = values.first() {
-                            attributes.extra.insert("surname".to_string(), vec![first.clone()]);
+                            attributes
+                                .extra
+                                .insert("surname".to_string(), vec![first.clone()]);
                             if let Some(given) = attributes.display_name.take() {
                                 attributes.display_name = Some(format!("{first} {given}"));
                             } else {
@@ -667,7 +729,9 @@ impl SamlAuthProvider {
                     "urn:oid:2.5.4.11" | "ou" | "organization" | "Organization" => {
                         attributes.organization = values.first().cloned();
                     }
-                    other => { attributes.extra.insert(other.to_string(), values.clone()); }
+                    other => {
+                        attributes.extra.insert(other.to_string(), values.clone());
+                    }
                 }
             }
         }
@@ -683,11 +747,7 @@ impl SamlAuthProvider {
     // =======================================================================
 
     #[instrument(skip(signing_cert_pem))]
-    pub fn generate_sp_metadata(
-        entity_id: &str,
-        acs_url: &str,
-        signing_cert_pem: &[u8],
-    ) -> String {
+    pub fn generate_sp_metadata(entity_id: &str, acs_url: &str, signing_cert_pem: &[u8]) -> String {
         let _cert_der = extract_der_from_pem(signing_cert_pem);
         format!(
             r#"<?xml version="1.0" encoding="UTF-8"?>
@@ -746,8 +806,11 @@ impl SamlAuthProvider {
                                 _ => {}
                             }
                         }
-                        if binding.contains("HTTP-Redirect") { metadata.sso_redirect_url = Some(location); }
-                        else if binding.contains("HTTP-POST") { metadata.sso_post_url = Some(location); }
+                        if binding.contains("HTTP-Redirect") {
+                            metadata.sso_redirect_url = Some(location);
+                        } else if binding.contains("HTTP-POST") {
+                            metadata.sso_post_url = Some(location);
+                        }
                     }
                     b"SingleLogoutService" => {
                         let mut binding = String::new();
@@ -759,8 +822,11 @@ impl SamlAuthProvider {
                                 _ => {}
                             }
                         }
-                        if binding.contains("HTTP-Redirect") { metadata.slo_redirect_url = Some(location); }
-                        else if binding.contains("HTTP-POST") { metadata.slo_post_url = Some(location); }
+                        if binding.contains("HTTP-Redirect") {
+                            metadata.slo_redirect_url = Some(location);
+                        } else if binding.contains("HTTP-POST") {
+                            metadata.slo_post_url = Some(location);
+                        }
                     }
                     b"X509Certificate" => {
                         if let Ok(Event::Text(text)) = reader.read_event() {
@@ -770,22 +836,27 @@ impl SamlAuthProvider {
                     _ => {}
                 },
                 Ok(Event::Eof) => break,
-                Err(e) => return Err(SamlError::InvalidResponse(format!("Metadata parse error: {e}"))),
+                Err(e) => {
+                    return Err(SamlError::InvalidResponse(format!(
+                        "Metadata parse error: {e}"
+                    )));
+                }
                 _ => {}
             }
         }
 
         if metadata.entity_id.is_empty() {
-            return Err(SamlError::InvalidResponse("Missing EntityDescriptor/entityID in IdP metadata".to_string()));
+            return Err(SamlError::InvalidResponse(
+                "Missing EntityDescriptor/entityID in IdP metadata".to_string(),
+            ));
         }
         info!(entity_id = %metadata.entity_id, "Parsed IdP metadata successfully");
         Ok(metadata)
     }
 
     pub fn get_metadata_xml(&self) -> Result<String, SamlError> {
-        let cert_pem = std::fs::read(&self.config.certificate_path).map_err(|e| {
-            SamlError::IoError(format!("Failed to read certificate: {e}"))
-        })?;
+        let cert_pem = std::fs::read(&self.config.certificate_path)
+            .map_err(|e| SamlError::IoError(format!("Failed to read certificate: {e}")))?;
         Ok(Self::generate_sp_metadata(
             &self.config.sp_entity_id,
             &self.config.assertion_consumer_service_url,
@@ -823,7 +894,8 @@ fn inflate_decoded(data: &[u8]) -> Result<String, SamlError> {
     let mut decoder = ZlibDecoder::new(data);
     let mut decompressed = Vec::new();
     decoder.read_to_end(&mut decompressed)?;
-    String::from_utf8(decompressed).map_err(|e| SamlError::InvalidResponse(format!("Decompressed data is not UTF-8: {e}")))
+    String::from_utf8(decompressed)
+        .map_err(|e| SamlError::InvalidResponse(format!("Decompressed data is not UTF-8: {e}")))
 }
 
 fn format_saml_datetime(epoch_secs: u64) -> String {
@@ -885,7 +957,12 @@ fn write_authn_context<W: std::io::Write>(writer: &mut Writer<W>) -> Result<(), 
     let mut start = BytesStart::new(tag);
     start.push_attribute(("Comparison", "exact"));
     writer.write_event(Event::Start(start))?;
-    write_escaped_element(writer, "samlp:AuthnContextClassRef", &[], "urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport")?;
+    write_escaped_element(
+        writer,
+        "samlp:AuthnContextClassRef",
+        &[],
+        "urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport",
+    )?;
     writer.write_event(Event::End(BytesEnd::new(tag)))?;
     Ok(())
 }
@@ -929,11 +1006,15 @@ pub enum SamlError {
 }
 
 impl From<std::io::Error> for SamlError {
-    fn from(err: std::io::Error) -> Self { SamlError::IoError(format!("{err}")) }
+    fn from(err: std::io::Error) -> Self {
+        SamlError::IoError(format!("{err}"))
+    }
 }
 
 impl From<quick_xml::Error> for SamlError {
-    fn from(err: quick_xml::Error) -> Self { SamlError::InvalidResponse(format!("XML error: {err}")) }
+    fn from(err: quick_xml::Error) -> Self {
+        SamlError::InvalidResponse(format!("XML error: {err}"))
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -969,7 +1050,11 @@ mod tests {
 
     #[test]
     fn test_generate_sp_metadata() {
-        let m = SamlAuthProvider::generate_sp_metadata("https://sp.example.com", "https://sp.example.com/acs", b"CERT");
+        let m = SamlAuthProvider::generate_sp_metadata(
+            "https://sp.example.com",
+            "https://sp.example.com/acs",
+            b"CERT",
+        );
         assert!(m.contains("EntityDescriptor") && m.contains("AssertionConsumerService"));
     }
 

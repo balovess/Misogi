@@ -8,7 +8,10 @@ fn test_os_platform_display() {
     assert_eq!(OsPlatform::Windows.to_string(), "windows");
     assert_eq!(OsPlatform::MacOS.to_string(), "macos");
     assert_eq!(OsPlatform::Linux.to_string(), "linux");
-    assert_eq!(OsPlatform::Unknown("freebsd".to_string()).to_string(), "unknown(freebsd)");
+    assert_eq!(
+        OsPlatform::Unknown("freebsd".to_string()).to_string(),
+        "unknown(freebsd)"
+    );
 }
 
 #[test]
@@ -74,15 +77,13 @@ fn test_device_posture_serialization_roundtrip() {
         },
         posture_score: 95,
         assessed_at: Utc::now(),
-        checks: vec![
-            PostureCheckResult {
-                check_id: "os_supported".to_string(),
-                check_name: "OS Version Supported".to_string(),
-                passed: true,
-                severity: CheckSeverity::Critical,
-                details: "Windows 10 22H2 is supported".to_string(),
-            },
-        ],
+        checks: vec![PostureCheckResult {
+            check_id: "os_supported".to_string(),
+            check_name: "OS Version Supported".to_string(),
+            passed: true,
+            severity: CheckSeverity::Critical,
+            details: "Windows 10 22H2 is supported".to_string(),
+        }],
     };
 
     let json = serde_json::to_string(&posture).unwrap();

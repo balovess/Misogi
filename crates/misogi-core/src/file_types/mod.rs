@@ -29,16 +29,14 @@
 //   JPEG, PNG, GIF, ZIP, and more.
 // =============================================================================
 
-use std::path::PathBuf;
+use std::path::Path;
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
 use crate::error::{MisogiError, Result};
-use crate::traits::{
-    FileDetectionResult, FileTypeDetector,
-};
+use crate::traits::{FileDetectionResult, FileTypeDetector};
 
 // =============================================================================
 // A. Magic Number Registry
@@ -101,7 +99,7 @@ impl MagicNumberEntry {
         self.magic_hex.as_ref().and_then(|hex_str| {
             // Handle both plain hex and space-separated formats
             let cleaned: String = hex_str.chars().filter(|c| c.is_ascii_hexdigit()).collect();
-            if cleaned.len() % 2 != 0 {
+            if !cleaned.len().is_multiple_of(2) {
                 return None;
             }
             (0..cleaned.len())
@@ -130,7 +128,9 @@ pub struct MagicNumberRegistry {
 impl MagicNumberRegistry {
     /// Construct an empty registry.
     pub fn new() -> Self {
-        Self { entries: Vec::new() }
+        Self {
+            entries: Vec::new(),
+        }
     }
 
     /// Register a new file type entry into the registry.
@@ -175,42 +175,36 @@ impl MagicNumberRegistry {
     ///
     /// # Returns
     /// A [`FileDetectionResult`] with type classification and confidence.
-    pub fn detect_from_bytes(
-        &self,
-        data: &[u8],
-        filename: Option<&str>,
-    ) -> FileDetectionResult {
+    pub fn detect_from_bytes(&self, data: &[u8], filename: Option<&str>) -> FileDetectionResult {
         // Strategy 1: Try exact magic byte matches first (highest confidence)
         for entry in &self.entries {
-            if let Some(ref magic_hex) = entry.magic_hex {
-                if let Some(magic_bytes) = entry.magic_bytes() {
-                    if data.starts_with(&magic_bytes) {
-                        return FileDetectionResult::detected(
-                            self.mime_for_extension(&entry.extension),
-                            entry.extension.clone(),
-                            magic_hex.clone(),
-                            entry.sanitizer.as_deref().unwrap_or(""),
-                        );
-                    }
-                }
+            if let Some(ref magic_hex) = entry.magic_hex
+                && let Some(magic_bytes) = entry.magic_bytes()
+                && data.starts_with(&magic_bytes)
+            {
+                return FileDetectionResult::detected(
+                    self.mime_for_extension(&entry.extension),
+                    entry.extension.clone(),
+                    magic_hex.clone(),
+                    entry.sanitizer.as_deref().unwrap_or(""),
+                );
             }
         }
 
         // Strategy 2: Fallback to extension-based lookup (lower confidence)
-        if let Some(fname) = filename {
-            if let Some(ext) = Self::extract_extension(fname) {
-                if let Some(entry) = self.lookup(&ext) {
-                    return FileDetectionResult {
-                        detected_type: self.mime_for_extension(&entry.extension),
-                        confidence: 0.3, // Low confidence: extension only
-                        extension: entry.extension.clone(),
-                        magic_hex: String::new(),
-                        recommended_sanitizer: entry.sanitizer.as_deref().unwrap_or("").to_string(),
-                        is_blocked: false,
-                        block_reason: None,
-                    };
-                }
-            }
+        if let Some(fname) = filename
+            && let Some(ext) = Self::extract_extension(fname)
+            && let Some(entry) = self.lookup(&ext)
+        {
+            return FileDetectionResult {
+                detected_type: self.mime_for_extension(&entry.extension),
+                confidence: 0.3, // Low confidence: extension only
+                extension: entry.extension.clone(),
+                magic_hex: String::new(),
+                recommended_sanitizer: entry.sanitizer.as_deref().unwrap_or("").to_string(),
+                is_blocked: false,
+                block_reason: None,
+            };
         }
 
         // No match found
@@ -281,7 +275,7 @@ impl MagicNumberRegistry {
 
         // --- Japanese-Specific Formats ---
         registry.register(MagicNumberEntry::new(
-            "jtd", // Ichitaro document
+            "jtd",                        // Ichitaro document
             Some("D0CF11E0".to_string()), // OLE-based
             true,
             Some("jtd-sanitizer".to_string()),
@@ -289,7 +283,7 @@ impl MagicNumberRegistry {
         ));
 
         registry.register(MagicNumberEntry::new(
-            "dwg", // AutoCAD drawing
+            "dwg",                        // AutoCAD drawing
             Some("41433130".to_string()), // AC1.0 header variant
             false,
             None,
@@ -941,9 +935,13 @@ impl MagicNumberRegistry {
         match extension.to_lowercase().as_str() {
             // --- Documents ---
             "pdf" => "application/pdf".to_string(),
-            "docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document".to_string(),
-            "xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet".to_string(),
-            "pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation".to_string(),
+            "docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                .to_string(),
+            "xlsx" => {
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet".to_string()
+            }
+            "pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                .to_string(),
             "doc" => "application/msword".to_string(),
             "xls" => "application/vnd.ms-excel".to_string(),
             "jtd" => "application/x-ichitaro".to_string(),
@@ -1101,7 +1099,7 @@ impl FileTypeDetector for MagicNumberDetector {
     /// - [`MisogiError::Io`] if the file cannot be read.
     async fn detect(
         &self,
-        file_path: &PathBuf,
+        file_path: &Path,
         _declared_extension: &str,
     ) -> Result<FileDetectionResult> {
         // Read file header (up to 262 bytes covers all known magic numbers)
@@ -1117,10 +1115,7 @@ impl FileTypeDetector for MagicNumberDetector {
             )));
         }
 
-        let filename = file_path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("");
+        let filename = file_path.file_name().and_then(|n| n.to_str()).unwrap_or("");
 
         Ok(self.registry.detect_from_bytes(data, Some(filename)))
     }
@@ -1184,7 +1179,7 @@ impl FileTypeDetector for ExtensionFallbackDetector {
     /// - [`MisogiError::NotFound`] if the file does not exist (existence check only).
     async fn detect(
         &self,
-        file_path: &PathBuf,
+        file_path: &Path,
         declared_extension: &str,
     ) -> Result<FileDetectionResult> {
         // Verify file exists (basic sanity check)
@@ -1272,7 +1267,8 @@ impl CompositeDetector {
         let registry = Arc::new(MagicNumberRegistry::jp_government_defaults());
         Self {
             detectors: vec![
-                Arc::new(MagicNumberDetector::new(Arc::clone(&registry))) as Arc<dyn FileTypeDetector>,
+                Arc::new(MagicNumberDetector::new(Arc::clone(&registry)))
+                    as Arc<dyn FileTypeDetector>,
                 Arc::new(ExtensionFallbackDetector::new(Arc::clone(&registry)))
                     as Arc<dyn FileTypeDetector>,
             ],
@@ -1304,7 +1300,7 @@ impl FileTypeDetector for CompositeDetector {
     /// detectors are logged but do not prevent success results from being returned.
     async fn detect(
         &self,
-        file_path: &PathBuf,
+        file_path: &Path,
         declared_extension: &str,
     ) -> Result<FileDetectionResult> {
         let mut best_result: Option<FileDetectionResult> = None;
@@ -1312,18 +1308,16 @@ impl FileTypeDetector for CompositeDetector {
 
         for detector in &self.detectors {
             match detector.detect(file_path, declared_extension).await {
-                Ok(result) => {
-                    match &best_result {
-                        Some(best) => {
-                            if result.confidence > best.confidence {
-                                best_result = Some(result);
-                            }
-                        }
-                        None => {
+                Ok(result) => match &best_result {
+                    Some(best) => {
+                        if result.confidence > best.confidence {
                             best_result = Some(result);
                         }
                     }
-                }
+                    None => {
+                        best_result = Some(result);
+                    }
+                },
                 Err(e) => {
                     tracing::warn!(
                         detector = detector.name(),
@@ -1364,6 +1358,7 @@ impl FileTypeDetector for CompositeDetector {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
 
     // =========================================================================
     // MagicNumberRegistry Tests
@@ -1417,13 +1412,7 @@ mod tests {
 
     #[test]
     fn test_magic_entry_magic_bytes_parsing() {
-        let entry = MagicNumberEntry::new(
-            "pdf",
-            Some("25504446".to_string()),
-            true,
-            None,
-            None,
-        );
+        let entry = MagicNumberEntry::new("pdf", Some("25504446".to_string()), true, None, None);
 
         let bytes = entry.magic_bytes().expect("Should parse hex");
         assert_eq!(bytes, vec![0x25, 0x50, 0x44, 0x46]); // %PDF
@@ -1431,13 +1420,7 @@ mod tests {
 
     #[test]
     fn test_magic_entry_no_magic_hex() {
-        let entry = MagicNumberEntry::new(
-            "txt",
-            None,
-            false,
-            None,
-            None,
-        );
+        let entry = MagicNumberEntry::new("txt", None, false, None, None);
 
         assert!(entry.magic_bytes().is_none());
     }
@@ -1512,10 +1495,7 @@ mod tests {
             MagicNumberRegistry::extract_extension("archive.tar.gz"),
             Some("gz".to_string())
         );
-        assert_eq!(
-            MagicNumberRegistry::extract_extension("no_extension"),
-            None
-        );
+        assert_eq!(MagicNumberRegistry::extract_extension("no_extension"), None);
         assert_eq!(
             MagicNumberRegistry::extract_extension(".hiddenfile"),
             Some("hiddenfile".to_string())
@@ -1531,7 +1511,11 @@ mod tests {
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         );
         assert_eq!(registry.mime_for_extension("png"), "image/png");
-        assert!(registry.mime_for_extension("unknown").starts_with("application/x-"));
+        assert!(
+            registry
+                .mime_for_extension("unknown")
+                .starts_with("application/x-")
+        );
     }
 
     // =========================================================================
@@ -1555,10 +1539,7 @@ mod tests {
             .await
             .unwrap();
 
-        let result = detector
-            .detect(&pdf_path, "pdf")
-            .await
-            .unwrap();
+        let result = detector.detect(&pdf_path, "pdf").await.unwrap();
 
         assert_eq!(result.extension, "pdf");
         assert!(result.is_confident(0.9));
@@ -1577,10 +1558,7 @@ mod tests {
         ];
         tokio::fs::write(&png_path, &png_header).await.unwrap();
 
-        let result = detector
-            .detect(&png_path, "png")
-            .await
-            .unwrap();
+        let result = detector.detect(&png_path, "png").await.unwrap();
 
         assert_eq!(result.extension, "png");
         assert!(result.is_confident(0.9));
@@ -1612,7 +1590,9 @@ mod tests {
         let detector = ExtensionFallbackDetector::with_defaults();
 
         let txt_path = tmp_dir.path().join("data.csv");
-        tokio::fs::write(&txt_path, b"a,b,c\n1,2,3\n").await.unwrap();
+        tokio::fs::write(&txt_path, b"a,b,c\n1,2,3\n")
+            .await
+            .unwrap();
 
         let result = detector.detect(&txt_path, "csv").await.unwrap();
         assert_eq!(result.extension, "csv");
@@ -1627,10 +1607,7 @@ mod tests {
         let xyz_path = tmp_dir.path().join("data.xyz123");
         tokio::fs::write(&xyz_path, b"some data").await.unwrap();
 
-        let result = detector
-            .detect(&xyz_path, "xyz123")
-            .await
-            .unwrap();
+        let result = detector.detect(&xyz_path, "xyz123").await.unwrap();
 
         assert!(!result.is_confident(0.3)); // Very low or zero confidence
     }
@@ -1685,9 +1662,7 @@ mod tests {
     #[tokio::test]
     async fn test_composite_detector_all_fail_returns_error() {
         let detector = CompositeDetector::new(vec![]); // Empty — no detectors
-        let result = detector
-            .detect(&PathBuf::from("/nonexistent"), "")
-            .await;
+        let result = detector.detect(&PathBuf::from("/nonexistent"), "").await;
 
         assert!(result.is_err());
     }
@@ -1716,7 +1691,8 @@ mod tests {
 
     #[test]
     fn test_detection_result_blocked() {
-        let result = FileDetectionResult::blocked("application/exe", "Executable files are blocked");
+        let result =
+            FileDetectionResult::blocked("application/exe", "Executable files are blocked");
         assert!(result.is_blocked);
         assert!(result.block_reason.is_some());
     }

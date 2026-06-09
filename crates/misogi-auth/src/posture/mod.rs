@@ -27,19 +27,11 @@ pub mod edr_bridge;
 pub mod os_detector;
 pub mod types;
 
-pub use types::{
-    CheckSeverity,
-    DevicePosture,
-    EncryptionStatus,
-    FailureAction,
-    OsPlatform,
-    OsPosture,
-    PatchStatus,
-    PostureCheckResult,
-    PosturePolicy,
-    SecuritySoftwarePosture,
-};
 pub use checker::{PostureChecker, PostureEvaluationResult};
 pub use edr_bridge::build_client_report_posture;
 #[cfg(any(feature = "defender", feature = "falcon"))]
 pub use edr_bridge::convert_edr_to_posture;
+pub use types::{
+    CheckSeverity, DevicePosture, EncryptionStatus, FailureAction, OsPlatform, OsPosture,
+    PatchStatus, PostureCheckResult, PosturePolicy, SecuritySoftwarePosture,
+};

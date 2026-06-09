@@ -132,7 +132,10 @@ mod tests {
     #[test]
     fn test_compute_md5_known_answer() {
         assert_eq!(compute_md5(b""), "d41d8cd98f00b204e9800998ecf8427e");
-        assert_eq!(compute_md5(b"hello world"), "5eb63bbbe01eeed093cb22bb8f5acdc3");
+        assert_eq!(
+            compute_md5(b"hello world"),
+            "5eb63bbbe01eeed093cb22bb8f5acdc3"
+        );
     }
 
     #[test]
@@ -152,7 +155,7 @@ mod tests {
         // Both functions should handle empty input gracefully
         assert!(!compute_md5(b"").is_empty());
         assert!(!compute_sha256(b"").is_empty());
-        assert_eq!(compute_md5(b"").len(), 32);  // MD5 = 32 hex chars
-        assert_eq!(compute_sha256(b"").len(), 64);  // SHA-256 = 64 hex chars
+        assert_eq!(compute_md5(b"").len(), 32); // MD5 = 32 hex chars
+        assert_eq!(compute_sha256(b"").len(), 64); // SHA-256 = 64 hex chars
     }
 }

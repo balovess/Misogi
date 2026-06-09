@@ -36,9 +36,7 @@ use std::sync::{Arc, RwLock};
 
 use tracing::{info, instrument, warn};
 
-use crate::provider::{
-    AuthRequest, IdentityError, IdentityProvider, MisogiIdentity,
-};
+use crate::provider::{AuthRequest, IdentityError, IdentityProvider, MisogiIdentity};
 
 // ---------------------------------------------------------------------------
 // Provider Metadata
@@ -150,20 +148,18 @@ impl IdentityRegistry {
     #[instrument(skip(self), fields(provider_id))]
     pub fn get(&self, provider_id: &str) -> Result<Arc<dyn IdentityProvider>, IdentityError> {
         match self.providers.read() {
-            Ok(guard) => guard
-                .get(provider_id)
-                .cloned()
-                .ok_or_else(|| IdentityError::ConfigurationError(format!(
+            Ok(guard) => guard.get(provider_id).cloned().ok_or_else(|| {
+                IdentityError::ConfigurationError(format!(
                     "provider '{provider_id}' not found in registry"
-                ))),
+                ))
+            }),
             Err(poisoned) => {
                 let guard = poisoned.into_inner();
-                guard
-                    .get(provider_id)
-                    .cloned()
-                    .ok_or_else(|| IdentityError::InternalError(format!(
+                guard.get(provider_id).cloned().ok_or_else(|| {
+                    IdentityError::InternalError(format!(
                         "registry lock poisoned during get('{provider_id}')"
-                    )))
+                    ))
+                })
             }
         }
     }
@@ -279,10 +275,7 @@ impl IdentityRegistry {
 
         let results = futures::future::join_all(futures).await;
 
-        provider_ids
-            .into_iter()
-            .zip(results.into_iter())
-            .collect()
+        provider_ids.into_iter().zip(results).collect()
     }
 }
 

@@ -214,11 +214,7 @@ impl RepairEngine {
             }
             Err(e) => {
                 progress.failed_indices.push(index);
-                tracing::warn!(
-                    "Chunk {} repair failed after all attempts: {}",
-                    index,
-                    e
-                );
+                tracing::warn!("Chunk {} repair failed after all attempts: {}", index, e);
             }
         }
     }
@@ -289,11 +285,7 @@ impl RepairEngine {
                 Ok(Ok(())) => {
                     // Success!
                     if attempt > 1 {
-                        tracing::info!(
-                            "Chunk {} succeeded on attempt {}",
-                            index,
-                            attempt
-                        );
+                        tracing::info!("Chunk {} succeeded on attempt {}", index, attempt);
                     }
                     return Ok(());
                 }
@@ -385,8 +377,8 @@ impl RepairEngine {
         }
 
         // Use JoinSet for structured concurrency with bounded parallelism.
-        use tokio::task::JoinSet;
         use std::sync::Arc;
+        use tokio::task::JoinSet;
         let fn_arc = Arc::new(repair_fn);
         let mut set: JoinSet<(u32, Result<(), IntegrityError>)> = JoinSet::new();
 
@@ -399,31 +391,29 @@ impl RepairEngine {
             set.spawn(async move {
                 // Each spawned task runs its own retry loop internally.
                 // We wrap it with timeout for safety.
-                let result =
-                    tokio::time::timeout(timeout * max_attempts.max(1), async move {
-                        // Simple retry without backoff for parallel mode
-                        // (backoff would slow down all other tasks).
-                        let mut last_err = None;
-                        let effective_max =
-                            if max_attempts == 0 { 1 } else { max_attempts };
+                let result = tokio::time::timeout(timeout * max_attempts.max(1), async move {
+                    // Simple retry without backoff for parallel mode
+                    // (backoff would slow down all other tasks).
+                    let mut last_err = None;
+                    let effective_max = if max_attempts == 0 { 1 } else { max_attempts };
 
-                        for _ in 0..effective_max {
-                            match fn_clone(index).await {
-                                Ok(()) => return Ok(()),
-                                Err(e) => last_err = Some(e),
-                            }
-                            // Small fixed delay between parallel retries.
-                            tokio::time::sleep(Duration::from_millis(100)).await;
+                    for _ in 0..effective_max {
+                        match fn_clone(index).await {
+                            Ok(()) => return Ok(()),
+                            Err(e) => last_err = Some(e),
                         }
+                        // Small fixed delay between parallel retries.
+                        tokio::time::sleep(Duration::from_millis(100)).await;
+                    }
 
-                        Err(last_err.unwrap_or_else(|| {
-                            IntegrityError::InvalidEnvelope(format!(
-                                "Parallel repair exhausted for chunk {}",
-                                index
-                            ))
-                        }))
-                    })
-                    .await;
+                    Err(last_err.unwrap_or_else(|| {
+                        IntegrityError::InvalidEnvelope(format!(
+                            "Parallel repair exhausted for chunk {}",
+                            index
+                        ))
+                    }))
+                })
+                .await;
 
                 match result {
                     Ok(r) => (index, r),

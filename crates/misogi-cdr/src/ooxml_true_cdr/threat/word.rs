@@ -27,16 +27,20 @@ pub fn scan_word_element_threats(
 ) -> bool {
     let mut force_drop = false;
 
-    let attr_vec: Vec<(String, String)> = attrs.flatten()
-        .map(|a| (
-            String::from_utf8_lossy(a.key.as_ref()).to_string(),
-            String::from_utf8_lossy(&a.value).to_string(),
-        ))
+    let attr_vec: Vec<(String, String)> = attrs
+        .flatten()
+        .map(|a| {
+            (
+                String::from_utf8_lossy(a.key.as_ref()).to_string(),
+                String::from_utf8_lossy(&a.value).to_string(),
+            )
+        })
         .collect();
 
     match elem_name {
         "altChunk" => {
-            let chunk_id = attr_vec.iter()
+            let chunk_id = attr_vec
+                .iter()
                 .find(|(k, _)| k == "r:id" || k == "id")
                 .map(|(_, v)| v.clone())
                 .unwrap_or_else(|| "unknown".to_string());
@@ -54,14 +58,15 @@ pub fn scan_word_element_threats(
         }
 
         "hyperlink" => {
-            let target = attr_vec.iter()
+            let target = attr_vec
+                .iter()
                 .find(|(k, _)| k == "Target" || k == "r:id")
                 .map(|(_, v)| v.clone())
                 .unwrap_or_default();
 
             if !target.is_empty() && has_blocked_url_protocol(&target) {
-                let proto = identify_blocked_protocol(&target)
-                    .unwrap_or_else(|| "unknown".to_string());
+                let proto =
+                    identify_blocked_protocol(&target).unwrap_or_else(|| "unknown".to_string());
 
                 report.word_threats_neutralized += 1;
                 report.actions_taken.push(OoxmlCdrAction::HyperlinkBlocked {
@@ -79,15 +84,18 @@ pub fn scan_word_element_threats(
         }
 
         "permStart" | "permEnd" => {
-            let perm_id = attr_vec.iter()
+            let perm_id = attr_vec
+                .iter()
                 .find(|(k, _)| k == "id")
                 .map(|(_, v)| v.clone())
                 .unwrap_or_default();
 
             report.word_threats_neutralized += 1;
-            report.actions_taken.push(OoxmlCdrAction::IrmPermissionStripped {
-                location: format!("{}[{}]", elem_name, perm_id),
-            });
+            report
+                .actions_taken
+                .push(OoxmlCdrAction::IrmPermissionStripped {
+                    location: format!("{}[{}]", elem_name, perm_id),
+                });
 
             tracing::warn!(
                 element = %elem_name,

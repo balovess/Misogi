@@ -22,12 +22,10 @@
 const PDF_HEADER: &[u8] = b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n";
 
 /// Minimal PDF catalog object without any active content markers.
-const CLEAN_CATALOG_OBJ: &[u8] =
-    b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n";
+const CLEAN_CATALOG_OBJ: &[u8] = b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n";
 
 /// Minimal PDF pages object referencing a single page.
-const CLEAN_PAGES_OBJ: &[u8] =
-    b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n";
+const CLEAN_PAGES_OBJ: &[u8] = b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n";
 
 /// Minimal PDF page object with a clean content stream reference.
 const CLEAN_PAGE_OBJ: &[u8] = b"3 0 obj\n<< /Type /Page /Parent 2 0 R \
@@ -186,7 +184,8 @@ pub fn generate_malicious_pdf(target_size: usize, threat_density: f64) -> Vec<u8
 
     for i in 0..obj_count {
         let obj_num = 10 + i as u32;
-        let is_malicious = malicious_interval > 0 && (i % malicious_interval == 0)
+        let is_malicious = malicious_interval > 0
+            && (i % malicious_interval == 0)
             && (i < malicious_count * malicious_interval || i == obj_count - 1);
 
         if is_malicious {
@@ -297,7 +296,9 @@ pub fn generate_ooxml(target_size: usize, include_vba: bool) -> Vec<u8> {
     writer
         .start_file("_rels/.rels", SimpleFileOptions::default())
         .expect("ZIP write: rels");
-    writer.write_all(rels_xml.as_bytes()).expect("ZIP write: rels body");
+    writer
+        .write_all(rels_xml.as_bytes())
+        .expect("ZIP write: rels body");
 
     // --- word/document.xml (main body, padded to fill budget) ---
     // Estimate current ZIP size conservatively (headers + entries written so far)
@@ -321,7 +322,9 @@ pub fn generate_ooxml(target_size: usize, include_vba: bool) -> Vec<u8> {
         writer
             .start_file("word/vbaProject.bin", SimpleFileOptions::default())
             .expect("ZIP write: vbaProject.bin");
-        writer.write_all(&vba_data).expect("ZIP write: vbaProject.bin body");
+        writer
+            .write_all(&vba_data)
+            .expect("ZIP write: vbaProject.bin body");
     }
 
     // Finalize ZIP archive and extract underlying Vec<u8>
@@ -431,7 +434,8 @@ fn generate_padded_document_xml(target_content_size: usize) -> String {
         .saturating_sub(header.len())
         .saturating_sub(footer.len());
 
-    let paragraph = "<w:p><w:r><w:t>Benchmark padding paragraph with safe content.</w:t></w:r></w:p>\n";
+    let paragraph =
+        "<w:p><w:r><w:t>Benchmark padding paragraph with safe content.</w:t></w:r></w:p>\n";
     let repeat_count = inner_budget / paragraph.len();
 
     let mut xml = String::with_capacity(target_content_size);
@@ -538,8 +542,7 @@ pub fn generate_pii_text(target_size: usize, pii_density: f64) -> Vec<u8> {
         } else {
             // Use deterministic selection based on position (no RNG needed)
             let threshold = (density * 1000.0) as usize;
-            ((bytes_written.wrapping_mul(31) ^ bytes_written.wrapping_mul(17)) % 1000)
-                < threshold
+            ((bytes_written.wrapping_mul(31) ^ bytes_written.wrapping_mul(17)) % 1000) < threshold
         };
 
         if should_include_pii && !pii_patterns.is_empty() {
@@ -573,7 +576,10 @@ mod tests {
     #[test]
     fn test_clean_pdf_starts_with_header() {
         let pdf = generate_clean_pdf(1024);
-        assert!(pdf.starts_with(b"%PDF"), "Clean PDF must start with %PDF header");
+        assert!(
+            pdf.starts_with(b"%PDF"),
+            "Clean PDF must start with %PDF header"
+        );
     }
 
     #[test]
@@ -624,7 +630,10 @@ mod tests {
         let ooxml = generate_ooxml(10 * 1024, false);
         // Verify it can be opened as a ZIP archive
         let result = zip::ZipArchive::new(std::io::Cursor::new(&ooxml));
-        assert!(result.is_ok(), "Generated OOXML must be a valid ZIP archive");
+        assert!(
+            result.is_ok(),
+            "Generated OOXML must be a valid ZIP archive"
+        );
     }
 
     #[test]

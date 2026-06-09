@@ -76,18 +76,13 @@ pub struct CompliancePreset {
 /// | `StripActiveContent` | Remove macros/scripts/embedded objects; preserve layout |
 /// | `ConvertToFlat` | Flatten to safe subset (e.g., PDF → image-only) |
 /// | `TextOnly` | Extract text only; discard all formatting |
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub enum SanitizationPolicy {
+    #[default]
     StripActiveContent,
     ConvertToFlat,
     TextOnly,
-}
-
-impl Default for SanitizationPolicy {
-    fn default() -> Self {
-        Self::StripActiveContent
-    }
 }
 
 impl CompliancePreset {
@@ -100,11 +95,15 @@ impl CompliancePreset {
     /// 地方公共機関情報システム安全対策基準.
     pub fn lgwan_government() -> Self {
         let mut localized = HashMap::new();
-        localized.insert("ja".to_string(), "地方自治体LGWAN対応プロファイル（最強セキュリティ）".to_string());
+        localized.insert(
+            "ja".to_string(),
+            "地方自治体LGWAN対応プロファイル（最強セキュリティ）".to_string(),
+        );
 
         Self {
             name: "lgwan_government".to_string(),
-            description: "Japanese local government LGWAN compliance profile (maximum security)".to_string(),
+            description: "Japanese local government LGWAN compliance profile (maximum security)"
+                .to_string(),
             localized_descriptions: localized,
             approval_required: true,
             reason_required: true,
@@ -126,11 +125,15 @@ impl CompliancePreset {
     /// records under 個人情報保護法 and 医療分野ガイドライン.
     pub fn medical_hipaa_jp() -> Self {
         let mut localized = HashMap::new();
-        localized.insert("ja".to_string(), "医療機関向けプライバシー優先プロファイル".to_string());
+        localized.insert(
+            "ja".to_string(),
+            "医療機関向けプライバシー優先プロファイル".to_string(),
+        );
 
         Self {
             name: "medical_hipaa_jp".to_string(),
-            description: "Medical institution privacy-priority profile (HIPAA-Japan aligned)".to_string(),
+            description: "Medical institution privacy-priority profile (HIPAA-Japan aligned)"
+                .to_string(),
             localized_descriptions: localized,
             approval_required: true,
             reason_required: true,
@@ -152,7 +155,10 @@ impl CompliancePreset {
     /// where operational throughput takes priority over maximum lockdown.
     pub fn sler_general() -> Self {
         let mut localized = HashMap::new();
-        localized.insert("ja".to_string(), "一般企業向け効率重視プロファイル".to_string());
+        localized.insert(
+            "ja".to_string(),
+            "一般企業向け効率重視プロファイル".to_string(),
+        );
 
         Self {
             name: "sler_general".to_string(),
@@ -255,11 +261,16 @@ impl CompliancePreset {
     /// - Extended retention (7-year ZTA audit requirement)
     pub fn digital_agency_zt() -> Self {
         let mut localized = HashMap::new();
-        localized.insert("ja".to_string(), "デジタル庁ゼロトラストアーキテクチャ対応プロファイル（2030年移行目標）".to_string());
+        localized.insert(
+            "ja".to_string(),
+            "デジタル庁ゼロトラストアーキテクチャ対応プロファイル（2030年移行目標）".to_string(),
+        );
 
         Self {
             name: "digital_agency_zt".to_string(),
-            description: "Digital Agency Japan Zero Trust Architecture migration profile (G-Cloud native)".to_string(),
+            description:
+                "Digital Agency Japan Zero Trust Architecture migration profile (G-Cloud native)"
+                    .to_string(),
             localized_descriptions: localized,
             approval_required: true,
             reason_required: true,
@@ -290,7 +301,8 @@ impl CompliancePreset {
 
     /// Find preset by name (case-insensitive exact match).
     pub fn find_by_name(name: &str) -> Option<Self> {
-        Self::all_presets().into_iter()
+        Self::all_presets()
+            .into_iter()
             .find(|p| p.name.to_lowercase() == name.to_lowercase())
     }
 

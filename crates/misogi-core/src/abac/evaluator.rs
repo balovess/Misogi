@@ -72,7 +72,9 @@ impl ConditionEvaluator {
             ConditionOperator::Gt => Self::evaluate_gt(&attr_val, &condition.value),
             ConditionOperator::Lt => Self::evaluate_lt(&attr_val, &condition.value),
             ConditionOperator::Regex => Self::evaluate_regex(&attr_val, &condition.value),
-            ConditionOperator::IpInRange => Ok(Self::evaluate_ip_in_range(&attr_val, &condition.value)),
+            ConditionOperator::IpInRange => {
+                Ok(Self::evaluate_ip_in_range(&attr_val, &condition.value))
+            }
         }
     }
 
@@ -80,9 +82,13 @@ impl ConditionEvaluator {
     // Equality Operators
     // -------------------------------------------------------------------
 
-    fn evaluate_eq(attr_val: &AbacValue, expected: &AbacValue) -> bool { attr_val == expected }
+    fn evaluate_eq(attr_val: &AbacValue, expected: &AbacValue) -> bool {
+        attr_val == expected
+    }
 
-    fn evaluate_neq(attr_val: &AbacValue, expected: &AbacValue) -> bool { attr_val != expected }
+    fn evaluate_neq(attr_val: &AbacValue, expected: &AbacValue) -> bool {
+        attr_val != expected
+    }
 
     // -------------------------------------------------------------------
     // Membership Operators
@@ -129,10 +135,12 @@ impl ConditionEvaluator {
     /// Regex match. Both operands must be `String`. Invalid pattern returns error.
     fn evaluate_regex(attr_val: &AbacValue, pattern: &AbacValue) -> Result<bool, EvalError> {
         let actual = attr_val.as_str().ok_or_else(|| EvalError::TypeMismatch {
-            expected: "String".to_string(), actual: attr_val.type_name().to_string(),
+            expected: "String".to_string(),
+            actual: attr_val.type_name().to_string(),
         })?;
         let pat = pattern.as_str().ok_or_else(|| EvalError::TypeMismatch {
-            expected: "String".to_string(), actual: pattern.type_name().to_string(),
+            expected: "String".to_string(),
+            actual: pattern.type_name().to_string(),
         })?;
         let re = regex::Regex::new(pat)?;
         Ok(re.is_match(actual))
@@ -144,8 +152,14 @@ impl ConditionEvaluator {
 
     /// IPv4 CIDR range membership. Parses CIDR notation (e.g., `"10.0.0.0/8"`).
     fn evaluate_ip_in_range(attr_val: &AbacValue, range: &AbacValue) -> bool {
-        let ip = match attr_val.as_str() { Some(s) => s, None => return false };
-        let cidr = match range.as_str() { Some(s) => s, None => return false };
+        let ip = match attr_val.as_str() {
+            Some(s) => s,
+            None => return false,
+        };
+        let cidr = match range.as_str() {
+            Some(s) => s,
+            None => return false,
+        };
         Self::ip_matches_cidr(ip, cidr)
     }
 
@@ -159,8 +173,10 @@ impl ConditionEvaluator {
         attribute_map: &HashMap<String, AbacValue>,
     ) -> Result<AbacValue, EvalError> {
         let key = Self::attribute_key_for(&condition.attribute);
-        attribute_map.get(&key).cloned()
-            .ok_or_else(|| EvalError::AttributeNotFound(key))
+        attribute_map
+            .get(&key)
+            .cloned()
+            .ok_or(EvalError::AttributeNotFound(key))
     }
 
     // -------------------------------------------------------------------
@@ -203,17 +219,31 @@ impl ConditionEvaluator {
 
     /// IPv4 CIDR matching via 32-bit integer masking.
     fn ip_matches_cidr(ip_str: &str, cidr: &str) -> bool {
-        let Some((net_str, prefix_str)) = cidr.split_once('/') else { return false };
-        let Some(prefix) = prefix_str.parse::<u32>().ok().filter(|&p| p <= 32) else { return false };
-        let Some(ip) = Self::parse_ipv4(ip_str) else { return false };
-        let Some(net) = Self::parse_ipv4(net_str) else { return false };
-        let mask = if prefix == 0 { 0u32 } else { u32::MAX << (32 - prefix) };
+        let Some((net_str, prefix_str)) = cidr.split_once('/') else {
+            return false;
+        };
+        let Some(prefix) = prefix_str.parse::<u32>().ok().filter(|&p| p <= 32) else {
+            return false;
+        };
+        let Some(ip) = Self::parse_ipv4(ip_str) else {
+            return false;
+        };
+        let Some(net) = Self::parse_ipv4(net_str) else {
+            return false;
+        };
+        let mask = if prefix == 0 {
+            0u32
+        } else {
+            u32::MAX << (32 - prefix)
+        };
         (ip & mask) == (net & mask)
     }
 
     fn parse_ipv4(addr: &str) -> Option<u32> {
         let parts: Vec<&str> = addr.split('.').collect();
-        if parts.len() != 4 { return None; }
+        if parts.len() != 4 {
+            return None;
+        }
         let mut result = 0u32;
         for (i, part) in parts.iter().enumerate() {
             let octet: u8 = part.parse().ok()?;

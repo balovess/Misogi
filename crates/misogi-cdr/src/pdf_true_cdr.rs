@@ -45,8 +45,8 @@
 // Sub-module declarations
 // =============================================================================
 
-mod types;
 mod constants;
+mod types;
 
 #[cfg(feature = "pdf-cdr")]
 mod parse;
@@ -65,16 +65,8 @@ mod rebuild;
 // =============================================================================
 
 pub use types::{
-    BlockedItemType,
-    BlockedItemRecord,
-    FontPolicy,
-    ImageExtractionPolicy,
-    PdfCdrError,
-    PdfCdrReport,
-    PdfTrueCdrConfig,
-    PdfTrueCdrResult,
-    ThreatRemovalRecord,
-    ThreatType,
+    BlockedItemRecord, BlockedItemType, FontPolicy, ImageExtractionPolicy, PdfCdrError,
+    PdfCdrReport, PdfTrueCdrConfig, PdfTrueCdrResult, ThreatRemovalRecord, ThreatType,
 };
 
 // =============================================================================
@@ -275,7 +267,7 @@ mod tests {
     /// Create a minimal valid PDF for testing (using lopdf for structural correctness).
     #[cfg(feature = "pdf-cdr")]
     fn create_minimal_test_pdf() -> Vec<u8> {
-        use lopdf::{dictionary, Document, Object};
+        use lopdf::{Document, Object, dictionary};
 
         let mut doc = Document::with_version("1.5");
 
@@ -340,6 +332,9 @@ mod tests {
         assert!(result.is_ok());
 
         let cdr_result = result.unwrap();
-        assert!(!cdr_result.report.is_linearized, "Minimal PDF should not be detected as linearized");
+        assert!(
+            !cdr_result.report.is_linearized,
+            "Minimal PDF should not be detected as linearized"
+        );
     }
 }

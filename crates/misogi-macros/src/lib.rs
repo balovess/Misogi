@@ -101,8 +101,10 @@ pub fn misogi_plugin(
         }
         None => quote::quote! { vec!["PluginMetadata"] },
     };
-    let ctor_fn_name =
-        quote::format_ident!("_misogi_register_{}", struct_name.to_string().to_lowercase());
+    let ctor_fn_name = quote::format_ident!(
+        "_misogi_register_{}",
+        struct_name.to_string().to_lowercase()
+    );
 
     let expanded = quote::quote! {
         #input
@@ -165,12 +167,14 @@ pub fn on_metadata(
 
     let target_struct = match args.impl_for {
         Some(ident) => ident,
-        None => return syn::Error::new(
-            proc_macro2::Span::call_site(),
-            "#[on_metadata] requires `impl_for = StructName` parameter",
-        )
-        .to_compile_error()
-        .into(),
+        None => {
+            return syn::Error::new(
+                proc_macro2::Span::call_site(),
+                "#[on_metadata] requires `impl_for = StructName` parameter",
+            )
+            .to_compile_error()
+            .into();
+        }
     };
     let detector_name = format!("{}-classifier", func_name);
 
@@ -184,7 +188,7 @@ pub fn on_metadata(
 
             async fn detect(
                 &self,
-                _file_path: &std::path::PathBuf,
+                _file_path: &std::path::Path,
                 declared_extension: &str,
             ) -> std::result::Result<misogi_core::traits::FileDetectionResult, misogi_core::MisogiError> {
                 let fake_filename = format!("dummy.{}", declared_extension);

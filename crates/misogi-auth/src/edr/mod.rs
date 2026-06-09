@@ -28,9 +28,5 @@ pub mod falcon;
 pub mod models;
 pub mod traits;
 
-pub use models::{
-    EdrDevicePosture,
-    EdrError,
-    EdrRiskScore,
-};
+pub use models::{EdrDevicePosture, EdrError, EdrRiskScore};
 pub use traits::EdrProvider;

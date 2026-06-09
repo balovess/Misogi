@@ -125,7 +125,9 @@ impl DummyJtdConverter {
     /// let converter = DummyJtdConverter::new(DummyAction::PlaceholderPdf);
     /// ```
     pub fn new(action: DummyAction) -> Self {
-        Self { dummy_action: action }
+        Self {
+            dummy_action: action,
+        }
     }
 
     // -----------------------------------------------------------------------
@@ -310,13 +312,9 @@ impl JtdConverter for DummyJtdConverter {
         let pdf_bytes = Self::generate_minimal_pdf();
 
         // Atomic write pattern: write to temp file, then rename
-        let output_dir = output_path
-            .parent()
-            .ok_or_else(|| {
-                JtdConversionError::ConversionFailed(
-                    "Output path has no parent directory".into(),
-                )
-            })?;
+        let output_dir = output_path.parent().ok_or_else(|| {
+            JtdConversionError::ConversionFailed("Output path has no parent directory".into())
+        })?;
 
         // Ensure output directory exists
         std::fs::create_dir_all(output_dir)?;
@@ -361,7 +359,8 @@ mod tests {
     /// Returns the path to a newly created empty temp directory.
     /// Caller is responsible for cleanup (or rely on OS temp cleaner).
     fn setup_temp_dir() -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("misogi_dummy_jtd_test_{}", uuid::Uuid::new_v4()));
+        let dir =
+            std::env::temp_dir().join(format!("misogi_dummy_jtd_test_{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).expect("temp dir creation must succeed");
         dir
     }
@@ -411,10 +410,7 @@ mod tests {
 
         let conv_result = result.unwrap();
         assert!(conv_result.success, "result.success must be true");
-        assert!(
-            output_path.exists(),
-            "output file must exist on disk"
-        );
+        assert!(output_path.exists(), "output file must exist on disk");
         assert!(
             conv_result.converted_size_bytes > 0,
             "converted_size_bytes must be greater than zero"
@@ -425,8 +421,7 @@ mod tests {
             "page_count must be Some(1) for single-page PDF"
         );
         assert_eq!(
-            conv_result.converter_used,
-            "dummy",
+            conv_result.converter_used, "dummy",
             "converter_used must be 'dummy'"
         );
 
@@ -449,10 +444,7 @@ mod tests {
         let converter = DummyJtdConverter::new(DummyAction::Error);
         let result = converter.convert_to_pdf(&input_path, &output_path).await;
 
-        assert!(
-            result.is_err(),
-            "convert_to_pdf must fail in Error mode"
-        );
+        assert!(result.is_err(), "convert_to_pdf must fail in Error mode");
 
         match result.unwrap_err() {
             JtdConversionError::ConversionFailed(msg) => {
@@ -555,7 +547,7 @@ mod tests {
         // Verify PDF is within expected size range (500-1000 bytes for minimal PDF)
         let size = output_bytes.len();
         assert!(
-            size >= 500 && size <= 1000,
+            (500..=1000).contains(&size),
             "PDF size {} bytes outside expected range [500, 1000]",
             size
         );

@@ -1,12 +1,13 @@
-use serde::{Deserialize, Serialize};
-use chrono::{DateTime, Utc};
-use uuid::Uuid;
 use crate::error::{MisogiError, Result};
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 /// Approval status enum matching Japanese government workflow terminology.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum ApprovalStatus {
+    #[default]
     PendingApproval,
     Approved,
     Rejected,
@@ -14,12 +15,6 @@ pub enum ApprovalStatus {
     Completed,
     Failed,
     Expired,
-}
-
-impl Default for ApprovalStatus {
-    fn default() -> Self {
-        Self::PendingApproval
-    }
 }
 
 impl std::fmt::Display for ApprovalStatus {
@@ -40,23 +35,29 @@ impl std::fmt::Display for ApprovalStatus {
 /// Returns true if transition is valid according to LGWAN compliance rules.
 impl ApprovalStatus {
     pub fn can_transition_to(&self, target: &ApprovalStatus) -> bool {
-        match (self, target) {
-            (Self::PendingApproval, Self::Approved) => true,
-            (Self::PendingApproval, Self::Rejected) => true,
-            (Self::PendingApproval, Self::Expired) => true,
-            (Self::Approved, Self::Transferring) => true,
-            (Self::Transferring, Self::Completed) => true,
-            (Self::Transferring, Self::Failed) => true,
-            _ => false,
-        }
+        matches!(
+            (self, target),
+            (Self::PendingApproval, Self::Approved)
+                | (Self::PendingApproval, Self::Rejected)
+                | (Self::PendingApproval, Self::Expired)
+                | (Self::Approved, Self::Transferring)
+                | (Self::Transferring, Self::Completed)
+                | (Self::Transferring, Self::Failed)
+        )
     }
 
     pub fn is_terminal(&self) -> bool {
-        matches!(self, Self::Completed | Self::Rejected | Self::Failed | Self::Expired)
+        matches!(
+            self,
+            Self::Completed | Self::Rejected | Self::Failed | Self::Expired
+        )
     }
 
     pub fn is_active(&self) -> bool {
-        matches!(self, Self::PendingApproval | Self::Approved | Self::Transferring)
+        matches!(
+            self,
+            Self::PendingApproval | Self::Approved | Self::Transferring
+        )
     }
 }
 
@@ -143,7 +144,8 @@ impl TransferRequest {
         if let Some(ref assigned_approver) = self.approver_id {
             if assigned_approver != approver_id {
                 return Err(MisogiError::Protocol(
-                    "Approver ID mismatch: only the assigned approver can approve this request".to_string(),
+                    "Approver ID mismatch: only the assigned approver can approve this request"
+                        .to_string(),
                 ));
             }
         } else {
@@ -312,7 +314,10 @@ mod tests {
             .unwrap();
 
         assert_eq!(req.status, ApprovalStatus::Rejected);
-        assert_eq!(req.rejection_reason.as_deref(), Some("不適切な内容が含まれています"));
+        assert_eq!(
+            req.rejection_reason.as_deref(),
+            Some("不適切な内容が含まれています")
+        );
     }
 
     #[test]

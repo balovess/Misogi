@@ -208,8 +208,7 @@ impl IntegrityVerifier {
 
         let mut corrupt_indices = Vec::new();
 
-        for (idx, (chunk, envelope)) in chunks.iter().zip(envelopes.iter()).enumerate()
-        {
+        for (idx, (chunk, envelope)) in chunks.iter().zip(envelopes.iter()).enumerate() {
             match self.verify_chunk(chunk, envelope) {
                 Ok(true) => { /* Chunk verified successfully */ }
                 Ok(false) => {
@@ -260,11 +259,7 @@ impl IntegrityVerifier {
     ///
     /// O(n) where n is the number of chunks. Each chunk requires one hash
     /// computation (the dominant cost).
-    pub fn detect_corruption(
-        &self,
-        chunks: &[&[u8]],
-        envelopes: &[IntegrityEnvelope],
-    ) -> Vec<u32> {
+    pub fn detect_corruption(&self, chunks: &[&[u8]], envelopes: &[IntegrityEnvelope]) -> Vec<u32> {
         assert_eq!(
             chunks.len(),
             envelopes.len(),
@@ -273,8 +268,7 @@ impl IntegrityVerifier {
 
         let mut corrupt = Vec::new();
 
-        for (idx, (chunk, envelope)) in chunks.iter().zip(envelopes.iter()).enumerate()
-        {
+        for (idx, (chunk, envelope)) in chunks.iter().zip(envelopes.iter()).enumerate() {
             if let Ok(false) | Err(_) = self.verify_chunk(chunk, envelope) {
                 corrupt.push(idx as u32);
             }
@@ -358,7 +352,11 @@ impl IntegrityVerifier {
     /// Called during the post-transfer verification phase to confirm that
     /// the reassembled file matches the sender's original hash. This is
     /// the final integrity gate before marking a transfer as complete.
-    pub fn verify_full_file(&self, data: &[u8], expected_hash: &str) -> Result<bool, IntegrityError> {
+    pub fn verify_full_file(
+        &self,
+        data: &[u8],
+        expected_hash: &str,
+    ) -> Result<bool, IntegrityError> {
         let computed = self.algorithm.hash(data)?;
         Ok(computed == expected_hash)
     }

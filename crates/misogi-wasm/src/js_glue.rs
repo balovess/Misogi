@@ -42,15 +42,11 @@ pub fn localize_error(error_code: &str, detail: &str) -> String {
         ),
         "invalid_pdf" => format!("無効な PDF ファイルです: {}", detail),
         "invalid_office" => format!("無効な Office ドキュメントです: {}", detail),
-        "zip_bomb" => {
-            "ZIP 爆弾が検出されました。このファイルは処理できません。".to_string()
-        }
+        "zip_bomb" => "ZIP 爆弾が検出されました。このファイルは処理できません。".to_string(),
         "memory_exceeded" => {
             "メモリ制限を超えました。ブラウザのタブを再読み込みしてください。".to_string()
         }
-        "timeout" => {
-            "処理タイムアウトしました。ファイルサイズを小さくしてください。".to_string()
-        }
+        "timeout" => "処理タイムアウトしました。ファイルサイズを小さくしてください。".to_string(),
         "unsupported_format" => {
             format!("このファイル形式はサンポートされていません: {}", detail)
         }
@@ -191,11 +187,8 @@ pub fn detect_wasm_features() -> String {
     features.insert("webassembly".to_string(), true);
 
     // SharedArrayBuffer (required for multi-threaded WASM)
-    let has_sab = js_sys::Reflect::has(
-        &js_sys::global(),
-        &JsValue::from_str("SharedArrayBuffer"),
-    )
-    .unwrap_or(false);
+    let has_sab = js_sys::Reflect::has(&js_sys::global(), &JsValue::from_str("SharedArrayBuffer"))
+        .unwrap_or(false);
     features.insert("shared_array_buffer".to_string(), has_sab);
 
     // BigInt (required for 64-bit integer passing between JS/WASM)

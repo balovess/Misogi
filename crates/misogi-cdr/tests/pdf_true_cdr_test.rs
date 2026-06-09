@@ -33,8 +33,9 @@ use misogi_cdr::pdf_true_cdr::*;
 /// Generate a minimal valid PDF document with one blank page.
 ///
 /// Uses lopdf to create a properly formatted PDF with correct xref table.
+#[cfg(feature = "pdf-cdr")]
 fn generate_minimal_pdf() -> Vec<u8> {
-    use lopdf::{dictionary, Document, Object, Stream};
+    use lopdf::{Document, Object, Stream, dictionary};
 
     let mut doc = Document::with_version("1.4");
 
@@ -79,7 +80,8 @@ fn generate_minimal_pdf() -> Vec<u8> {
     doc.prune_objects();
 
     let mut output = Vec::new();
-    doc.save_to(&mut output).expect("Failed to generate minimal PDF");
+    doc.save_to(&mut output)
+        .expect("Failed to generate minimal PDF");
     output
 }
 
@@ -87,9 +89,10 @@ fn generate_minimal_pdf() -> Vec<u8> {
 ///
 /// This PDF contains `/OpenAction` pointing to a JavaScript action,
 /// which should be detected and removed by the CDR engine.
+#[cfg(feature = "pdf-cdr")]
 #[allow(dead_code)]
 fn generate_pdf_with_javascript() -> Vec<u8> {
-    use lopdf::{dictionary, Document, Object, Stream};
+    use lopdf::{Document, Object, Stream, dictionary};
 
     let mut doc = Document::with_version("1.4");
 
@@ -138,16 +141,18 @@ fn generate_pdf_with_javascript() -> Vec<u8> {
     doc.prune_objects();
 
     let mut output = Vec::new();
-    doc.save_to(&mut output).expect("Failed to generate PDF with JavaScript");
+    doc.save_to(&mut output)
+        .expect("Failed to generate PDF with JavaScript");
     output
 }
 
 /// Generate a PDF with Additional Actions (AA) dictionary.
 ///
 /// Contains `/AA` on catalog with page-open action — should be removed.
+#[cfg(feature = "pdf-cdr")]
 #[allow(dead_code)]
 fn generate_pdf_with_aa() -> Vec<u8> {
-    use lopdf::{dictionary, Document, Object, Stream};
+    use lopdf::{Document, Object, Stream, dictionary};
 
     let mut doc = Document::with_version("1.4");
 
@@ -199,16 +204,18 @@ fn generate_pdf_with_aa() -> Vec<u8> {
     doc.prune_objects();
 
     let mut output = Vec::new();
-    doc.save_to(&mut output).expect("Failed to generate PDF with AA");
+    doc.save_to(&mut output)
+        .expect("Failed to generate PDF with AA");
     output
 }
 
 /// Generate a PDF with embedded file attachment.
 ///
 /// Contains `/EmbeddedFile` specification — should be flagged/removed.
+#[cfg(feature = "pdf-cdr")]
 #[allow(dead_code)]
 fn generate_pdf_with_embedded_file() -> Vec<u8> {
-    use lopdf::{dictionary, Document, Object, Stream};
+    use lopdf::{Document, Object, Stream, dictionary};
 
     let mut doc = Document::with_version("1.4");
 
@@ -267,7 +274,8 @@ fn generate_pdf_with_embedded_file() -> Vec<u8> {
     doc.prune_objects();
 
     let mut output = Vec::new();
-    doc.save_to(&mut output).expect("Failed to generate PDF with embedded file");
+    doc.save_to(&mut output)
+        .expect("Failed to generate PDF with embedded file");
     output
 }
 
@@ -838,7 +846,9 @@ mod feature_gate_tests {
     #[test]
     fn test_feature_disabled_returns_error() {
         let sanitizer = PdfSanitizer::default_config();
-        let pdf_bytes = generate_minimal_pdf();
+        // Use a minimal hardcoded PDF bytes instead of generate_minimal_pdf()
+        // since that function requires the pdf-cdr feature
+        let pdf_bytes = b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\nxref\n0 1\n0000000000 65535 f \ntrailer\n<< /Size 1 >>\nstartxref\n0\n%%EOF\n".to_vec();
 
         let result = sanitizer.true_cdr_reconstruct(&pdf_bytes, None);
 

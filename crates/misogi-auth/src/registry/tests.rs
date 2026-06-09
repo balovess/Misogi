@@ -15,9 +15,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 
 use super::IdentityRegistry;
-use crate::provider::{
-    AuthRequest, IdentityError, IdentityProvider, MisogiIdentity,
-};
+use crate::provider::{AuthRequest, IdentityError, IdentityProvider, MisogiIdentity};
 
 // ===========================================================================
 // Test Doubles — Mock IdentityProvider Implementations
@@ -65,10 +63,7 @@ impl IdentityProvider for MockProvider {
         &self.name
     }
 
-    async fn authenticate(
-        &self,
-        _input: AuthRequest,
-    ) -> Result<MisogiIdentity, IdentityError> {
+    async fn authenticate(&self, _input: AuthRequest) -> Result<MisogiIdentity, IdentityError> {
         if self.always_fail_auth {
             return Err(IdentityError::InvalidCredentials);
         }
@@ -121,7 +116,10 @@ fn test_register_single_provider_succeeds() {
     assert_eq!(registry.len(), 1);
 
     let retrieved = registry.get("test-idp");
-    assert!(retrieved.is_ok(), "Registered provider should be retrievable");
+    assert!(
+        retrieved.is_ok(),
+        "Registered provider should be retrievable"
+    );
     assert_eq!(retrieved.unwrap().provider_id(), "test-idp");
 }
 
@@ -145,12 +143,18 @@ fn test_register_empty_id_returns_error() {
     struct EmptyIdProvider;
     #[async_trait]
     impl IdentityProvider for EmptyIdProvider {
-        fn provider_id(&self) -> &str { "" }
-        fn provider_name(&self) -> &str { "Empty" }
+        fn provider_id(&self) -> &str {
+            ""
+        }
+        fn provider_name(&self) -> &str {
+            "Empty"
+        }
         async fn authenticate(&self, _: AuthRequest) -> Result<MisogiIdentity, IdentityError> {
             Err(IdentityError::InternalError("n/a".to_string()))
         }
-        async fn health_check(&self) -> Result<(), IdentityError> { Ok(()) }
+        async fn health_check(&self) -> Result<(), IdentityError> {
+            Ok(())
+        }
     }
 
     let result = registry.register(Arc::new(EmptyIdProvider));
@@ -179,7 +183,9 @@ fn test_get_existing_provider_returns_ok() {
 #[test]
 fn test_get_missing_provider_returns_error() {
     let registry = IdentityRegistry::new();
-    registry.register(Arc::new(MockProvider::new("real-idp", "Real"))).unwrap();
+    registry
+        .register(Arc::new(MockProvider::new("real-idp", "Real")))
+        .unwrap();
 
     let result = registry.get("nonexistent-idp");
     assert!(
@@ -201,8 +207,12 @@ fn test_get_from_empty_registry_returns_error() {
 #[test]
 fn test_remove_existing_provider() {
     let registry = IdentityRegistry::new();
-    registry.register(Arc::new(MockProvider::new("a", "A"))).unwrap();
-    registry.register(Arc::new(MockProvider::new("b", "B"))).unwrap();
+    registry
+        .register(Arc::new(MockProvider::new("a", "A")))
+        .unwrap();
+    registry
+        .register(Arc::new(MockProvider::new("b", "B")))
+        .unwrap();
     assert_eq!(registry.len(), 2);
 
     let removed = registry.remove("a");
@@ -225,9 +235,15 @@ fn test_remove_nonexistent_provider_returns_false() {
 #[test]
 fn test_list_returns_all_registered_providers() {
     let registry = IdentityRegistry::new();
-    registry.register(Arc::new(MockProvider::new("idp-1", "One"))).unwrap();
-    registry.register(Arc::new(MockProvider::new("idp-2", "Two"))).unwrap();
-    registry.register(Arc::new(MockProvider::new("idp-3", "Three"))).unwrap();
+    registry
+        .register(Arc::new(MockProvider::new("idp-1", "One")))
+        .unwrap();
+    registry
+        .register(Arc::new(MockProvider::new("idp-2", "Two")))
+        .unwrap();
+    registry
+        .register(Arc::new(MockProvider::new("idp-3", "Three")))
+        .unwrap();
 
     let listed = registry.list();
     assert_eq!(listed.len(), 3);
@@ -268,11 +284,15 @@ fn test_len_tracks_registration_and_removal() {
     assert_eq!(registry.len(), 0);
     assert!(registry.is_empty());
 
-    registry.register(Arc::new(MockProvider::new("x", "X"))).unwrap();
+    registry
+        .register(Arc::new(MockProvider::new("x", "X")))
+        .unwrap();
     assert_eq!(registry.len(), 1);
     assert!(!registry.is_empty());
 
-    registry.register(Arc::new(MockProvider::new("y", "Y"))).unwrap();
+    registry
+        .register(Arc::new(MockProvider::new("y", "Y")))
+        .unwrap();
     assert_eq!(registry.len(), 2);
 
     registry.remove("x");
@@ -353,14 +373,19 @@ async fn test_health_check_all_healthy() {
     assert_eq!(results.len(), 2);
 
     for (_id, result) in &results {
-        assert!(result.is_ok(), "All healthy providers should pass health check");
+        assert!(
+            result.is_ok(),
+            "All healthy providers should pass health check"
+        );
     }
 }
 
 #[tokio::test]
 async fn test_health_check_all_mixed_results() {
     let registry = IdentityRegistry::new();
-    registry.register(Arc::new(MockProvider::new("ok", "OK"))).unwrap();
+    registry
+        .register(Arc::new(MockProvider::new("ok", "OK")))
+        .unwrap();
     registry
         .register(Arc::new(
             MockProvider::new("unhealthy", "Unhealthy").with_health_failure(),
@@ -374,19 +399,14 @@ async fn test_health_check_all_mixed_results() {
     assert_eq!(results.len(), 3);
 
     let ok_result = &results.iter().find(|(id, _)| *id == "ok").unwrap().1;
-    let unhealthy_result = &results
-        .iter()
-        .find(|(id, _)| *id == "unhealthy")
-        .unwrap()
-        .1;
-    let also_ok_result = &results
-        .iter()
-        .find(|(id, _)| *id == "also-ok")
-        .unwrap()
-        .1;
+    let unhealthy_result = &results.iter().find(|(id, _)| *id == "unhealthy").unwrap().1;
+    let also_ok_result = &results.iter().find(|(id, _)| *id == "also-ok").unwrap().1;
 
     assert!(ok_result.is_ok(), "OK provider should be healthy");
-    assert!(unhealthy_result.is_err(), "Unhealthy provider should report failure");
+    assert!(
+        unhealthy_result.is_err(),
+        "Unhealthy provider should report failure"
+    );
     assert!(also_ok_result.is_ok(), "Also OK provider should be healthy");
 }
 

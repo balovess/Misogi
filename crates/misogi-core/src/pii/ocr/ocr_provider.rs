@@ -19,7 +19,7 @@
 
 use async_trait::async_trait;
 
-use super::types::{OcrExtractionResult, OcrError};
+use super::types::{OcrError, OcrExtractionResult};
 
 /// Standard trait for OCR service providers.
 ///
@@ -52,10 +52,7 @@ pub trait OcrProvider: Send + Sync {
     ///
     /// # Returns
     /// Structured extraction result with text blocks and positions.
-    async fn extract_text(
-        &self,
-        image_data: &[u8],
-    ) -> Result<OcrExtractionResult, OcrError>;
+    async fn extract_text(&self, image_data: &[u8]) -> Result<OcrExtractionResult, OcrError>;
 
     /// Human-readable name of this provider instance.
     fn provider_name(&self) -> &str;
@@ -108,10 +105,7 @@ impl MockOcrProvider {
 
 #[async_trait]
 impl OcrProvider for MockOcrProvider {
-    async fn extract_text(
-        &self,
-        _image_data: &[u8],
-    ) -> Result<OcrExtractionResult, OcrError> {
+    async fn extract_text(&self, _image_data: &[u8]) -> Result<OcrExtractionResult, OcrError> {
         if !self.available {
             return Err(OcrError::ProviderUnavailable {
                 provider: self.name.clone(),

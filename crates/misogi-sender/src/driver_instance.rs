@@ -33,20 +33,11 @@
 
 use bytes::Bytes;
 use misogi_core::error::Result;
-use misogi_core::traits::{
-    ChunkAck, DriverHealthStatus,
-    TransferDriver,
-};
+use misogi_core::traits::{ChunkAck, DriverHealthStatus, TransferDriver};
 
 use misogi_core::drivers::{
-    DirectTcpDriver,
-    DirectTcpDriverConfig,
-    StorageRelayDriver,
-    StorageRelayDriverConfig,
-    ExternalCommandDriver,
-    ExternalCommandDriverConfig,
-    UdpBlastDriver,
-    UdpBlastDriverConfig,
+    DirectTcpDriver, DirectTcpDriverConfig, ExternalCommandDriver, ExternalCommandDriverConfig,
+    StorageRelayDriver, StorageRelayDriverConfig, UdpBlastDriver, UdpBlastDriverConfig,
 };
 
 // =============================================================================
@@ -67,6 +58,7 @@ use misogi_core::drivers::{
 ///
 /// This enum does **not** implement `Clone` because inner driver types hold
 /// non-cloneable resources (TCP sockets, file handles). Use `Arc<>` for sharing.
+#[allow(clippy::large_enum_variant)]
 pub enum TransferDriverInstance {
     /// Direct TCP connection through [`TunnelClient`].
     ///
@@ -182,8 +174,12 @@ impl TransferDriverInstance {
     ) -> Result<ChunkAck> {
         match self {
             Self::DirectTcp(driver) => driver.send_complete(file_id, total_chunks, file_md5).await,
-            Self::StorageRelay(driver) => driver.send_complete(file_id, total_chunks, file_md5).await,
-            Self::ExternalCommand(driver) => driver.send_complete(file_id, total_chunks, file_md5).await,
+            Self::StorageRelay(driver) => {
+                driver.send_complete(file_id, total_chunks, file_md5).await
+            }
+            Self::ExternalCommand(driver) => {
+                driver.send_complete(file_id, total_chunks, file_md5).await
+            }
             Self::UdpBlast(driver) => driver.send_complete(file_id, total_chunks, file_md5).await,
         }
     }
@@ -239,7 +235,11 @@ impl TransferDriverInstance {
 
     /// Construct an `ExternalCommand` variant from command templates.
     #[must_use]
-    pub fn external_command(send_command: String, status_command: String, timeout_secs: u64) -> Self {
+    pub fn external_command(
+        send_command: String,
+        status_command: String,
+        timeout_secs: u64,
+    ) -> Self {
         let config = ExternalCommandDriverConfig {
             send_command,
             status_command: Some(status_command),
@@ -320,10 +320,8 @@ mod tests {
 
     #[test]
     fn test_arc_wrap() {
-        let instance = TransferDriverInstance::direct_tcp(
-            "10.0.0.1:9000".to_string(),
-            "arc-test".to_string(),
-        );
+        let instance =
+            TransferDriverInstance::direct_tcp("10.0.0.1:9000".to_string(), "arc-test".to_string());
         let _wrapped = Arc::new(instance); // Arc wrapping should compile
     }
 }

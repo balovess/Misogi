@@ -1,10 +1,10 @@
+use crate::error::{MisogiError, Result};
+use crate::protocol::{FrameType, ProtocolFrame};
+use crate::types::HandshakePayload;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
-use serde::{Deserialize, Serialize};
-use crate::error::{MisogiError, Result};
-use crate::protocol::{ProtocolFrame, FrameType};
-use crate::types::HandshakePayload;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChunkAckResponse {
@@ -68,7 +68,9 @@ impl TunnelClient {
         data: &[u8],
         md5: &str,
     ) -> Result<ChunkAckResponse> {
-        let stream = self.stream.as_mut()
+        let stream = self
+            .stream
+            .as_mut()
             .ok_or_else(|| MisogiError::Protocol("Not connected".to_string()))?;
 
         let payload = ChunkDataPayload {
@@ -94,7 +96,9 @@ impl TunnelClient {
     }
 
     pub async fn send_complete(&mut self, file_id: &str) -> Result<()> {
-        let stream = self.stream.as_mut()
+        let stream = self
+            .stream
+            .as_mut()
             .ok_or_else(|| MisogiError::Protocol("Not connected".to_string()))?;
 
         let complete_payload = serde_json::json!({
@@ -112,7 +116,9 @@ impl TunnelClient {
     }
 
     pub async fn send_heartbeat(&mut self) -> Result<()> {
-        let stream = self.stream.as_mut()
+        let stream = self
+            .stream
+            .as_mut()
             .ok_or_else(|| MisogiError::Protocol("Not connected".to_string()))?;
 
         let frame = ProtocolFrame::new(FrameType::Heartbeat, vec![]);
@@ -181,10 +187,7 @@ impl TunnelServer {
         }
     }
 
-    async fn handle_connection<F>(
-        mut stream: TcpStream,
-        on_chunk: F,
-    ) -> Result<()>
+    async fn handle_connection<F>(mut stream: TcpStream, on_chunk: F) -> Result<()>
     where
         F: Fn(String, u32, Vec<u8>, String) -> futures::future::BoxFuture<'static, Result<bool>>
             + Send
@@ -231,20 +234,14 @@ impl TunnelServer {
 
             match frame.frame_type {
                 FrameType::ChunkData => {
-                    let chunk_payload: ChunkDataPayload =
-                        serde_json::from_slice(&frame.payload)?;
+                    let chunk_payload: ChunkDataPayload = serde_json::from_slice(&frame.payload)?;
 
                     let file_id = chunk_payload.file_id.clone();
                     let chunk_index = chunk_payload.chunk_index;
                     let md5 = chunk_payload.md5.clone();
 
-                    let result = on_chunk(
-                        file_id.clone(),
-                        chunk_index,
-                        chunk_payload.data,
-                        md5,
-                    )
-                    .await;
+                    let result =
+                        on_chunk(file_id.clone(), chunk_index, chunk_payload.data, md5).await;
 
                     let ack = match result {
                         Ok(success) => ChunkAckResponse {

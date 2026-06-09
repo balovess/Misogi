@@ -1,4 +1,4 @@
-﻿// =============================================================================
+// =============================================================================
 // CDR Engine v2 — Archive Sanitization Stage
 // =============================================================================
 // This module implements [`ArchiveStage`], a pipeline stage that handles archive
@@ -31,9 +31,7 @@ use async_trait::async_trait;
 use crate::cdr_v2::ast::{AstNode, DocumentAst};
 use crate::cdr_v2::config::ArchiveConfig;
 use crate::cdr_v2::pipeline::{CdrContext, CdrPipeline, CdrReport, CdrStage, SanitizationReport};
-use crate::cdr_v2::types::{
-    CdrError, DocumentFormat, SanitizeAction,
-};
+use crate::cdr_v2::types::{CdrError, DocumentFormat, SanitizeAction};
 
 /// Maximum nesting depth error message template.
 const DEPTH_LIMIT_MSG: &str = "archive nesting depth limit reached";
@@ -112,7 +110,10 @@ impl ArchiveStage {
         if current_depth >= self.config.max_nesting_depth {
             return Err(CdrError::StageError {
                 stage: "archive_sanitize".to_string(),
-                detail: format!("{DEPTH_LIMIT_MSG}: {current_depth} >= {}", self.config.max_nesting_depth),
+                detail: format!(
+                    "{DEPTH_LIMIT_MSG}: {current_depth} >= {}",
+                    self.config.max_nesting_depth
+                ),
             });
         }
         Ok(())
@@ -149,11 +150,7 @@ impl ArchiveStage {
     ///
     /// # Errors
     /// Returns depth limit or size limit errors.
-    pub fn recursive_unpack(
-        &self,
-        ast: &mut DocumentAst,
-        depth: u32,
-    ) -> Result<u32, CdrError> {
+    pub fn recursive_unpack(&self, ast: &mut DocumentAst, depth: u32) -> Result<u32, CdrError> {
         self.check_nesting_depth(depth)?;
 
         // Count extractable entries from AST structure
@@ -163,32 +160,34 @@ impl ArchiveStage {
         // Each entry child represents a file within the archive
         if let AstNode::Document { children } = &ast.root {
             for child in children {
-                if let AstNode::Container { name, children: entries } = child {
-                    if name == "entries" {
-                        for entry in entries {
-                            match entry {
-                                AstNode::Container {
-                                    name: entry_name,
-                                    ..
-                                } => {
-                                    // Check for password-protected marker
-                                    if entry_name.contains("encrypted")
-                                        || entry_name.contains("password_protected")
-                                    {
-                                        self.block_password_protected(entry_name)?;
-                                        continue;
-                                    }
-
-                                    // Check for executable extensions
-                                    if self.is_blocked_executable(entry_name) {
-                                        continue; // Skip silently (blocked)
-                                    }
-
-                                    count += 1;
+                if let AstNode::Container {
+                    name,
+                    children: entries,
+                } = child
+                    && name == "entries"
+                {
+                    for entry in entries {
+                        match entry {
+                            AstNode::Container {
+                                name: entry_name, ..
+                            } => {
+                                // Check for password-protected marker
+                                if entry_name.contains("encrypted")
+                                    || entry_name.contains("password_protected")
+                                {
+                                    self.block_password_protected(entry_name)?;
+                                    continue;
                                 }
-                                _ => {
-                                    count += 1;
+
+                                // Check for executable extensions
+                                if self.is_blocked_executable(entry_name) {
+                                    continue; // Skip silently (blocked)
                                 }
+
+                                count += 1;
+                            }
+                            _ => {
+                                count += 1;
                             }
                         }
                     }
@@ -222,13 +221,8 @@ impl ArchiveStage {
 
         if let Some(pipeline) = &self.inner_pipeline {
             for nested_ast in nested_asts.iter_mut() {
-                let context = CdrContext::new(
-                    format!("nested-{}", depth),
-                    "archive_stage",
-                );
-                let report = pipeline
-                    .process_document(nested_ast, &context)
-                    .await?;
+                let context = CdrContext::new(format!("nested-{}", depth), "archive_stage");
+                let report = pipeline.process_document(nested_ast, &context).await?;
                 reports.push(report);
             }
         } else {
@@ -290,8 +284,8 @@ impl ArchiveStage {
     fn is_blocked_executable(&self, filename: &str) -> bool {
         let lower = filename.to_lowercase();
         let blocked_extensions = [
-            ".exe", ".scr", ".bat", ".cmd", ".ps1", ".vbs", ".js", ".msi",
-            ".com", ".pif", ".hta", ".wsf", ".cpl",
+            ".exe", ".scr", ".bat", ".cmd", ".ps1", ".vbs", ".js", ".msi", ".com", ".pif", ".hta",
+            ".wsf", ".cpl",
         ];
         blocked_extensions.iter().any(|ext| lower.ends_with(ext))
     }
@@ -344,10 +338,7 @@ impl CdrStage for ArchiveStage {
         let extracted_count = self.recursive_unpack(&mut ast, start_depth)?;
         total_items += extracted_count;
         if extracted_count > 0 {
-            actions_taken.push((
-                "/entries/*".to_string(),
-                SanitizeAction::Extracted,
-            ));
+            actions_taken.push(("/entries/*".to_string(), SanitizeAction::Extracted));
         }
 
         // 3. Collect nested ASTs for processing (modeled as child containers)
@@ -358,31 +349,29 @@ impl CdrStage for ArchiveStage {
                     name,
                     children: entries,
                 } = child
+                    && name == "entries"
                 {
-                    if name == "entries" {
-                        for entry in entries {
-                            if let AstNode::Container {
-                                name: entry_name,
-                                children: entry_children,
-                            } = entry
-                            {
-                                // Create a nested AST for this entry
-                                let nested_meta =
-                                    crate::cdr_v2::ast::DocumentMetadata::new(
-                                        entry_name.as_str(),
-                                        0,
-                                        DocumentFormat::Unknown("entry".into()),
-                                    );
-                                let mut nested_ast = DocumentAst::new(
-                                    DocumentFormat::Unknown("entry".into()),
-                                    nested_meta,
-                                );
-                                // Replace root with a Document node containing entry children.
-                                if let AstNode::Document { ref mut children } = nested_ast.root {
-                                    *children = entry_children.clone();
-                                }
-                                nested_asts.push(nested_ast);
+                    for entry in entries {
+                        if let AstNode::Container {
+                            name: entry_name,
+                            children: entry_children,
+                        } = entry
+                        {
+                            // Create a nested AST for this entry
+                            let nested_meta = crate::cdr_v2::ast::DocumentMetadata::new(
+                                entry_name.as_str(),
+                                0,
+                                DocumentFormat::Unknown("entry".into()),
+                            );
+                            let mut nested_ast = DocumentAst::new(
+                                DocumentFormat::Unknown("entry".into()),
+                                nested_meta,
+                            );
+                            // Replace root with a Document node containing entry children.
+                            if let AstNode::Document { ref mut children } = nested_ast.root {
+                                *children = entry_children.clone();
                             }
+                            nested_asts.push(nested_ast);
                         }
                     }
                 }
@@ -421,7 +410,9 @@ mod tests {
 
     use crate::cdr_v2::ast::DocumentMetadata;
     use crate::cdr_v2::pipeline::CdrPolicy;
-    use crate::cdr_v2::types::{ActiveContentRef, ActiveContentType, ContentLocation, ThreatSeverity};
+    use crate::cdr_v2::types::{
+        ActiveContentRef, ActiveContentType, ContentLocation, ThreatSeverity,
+    };
 
     // -- Helper Functions --
 
@@ -430,11 +421,7 @@ mod tests {
         let ext = format.extension();
         DocumentAst::new(
             format.clone(),
-            DocumentMetadata::new(
-                format!("test.{ext}"),
-                4096,
-                format.clone(),
-            ),
+            DocumentMetadata::new(format!("test.{ext}"), 4096, format.clone()),
         )
     }
 
@@ -468,17 +455,15 @@ mod tests {
 
         let inner_zip_entry = AstNode::Container {
             name: "inner.zip".to_string(),
-            children: vec![
-                AstNode::Container {
-                    name: "entries".to_string(),
-                    children: vec![AstNode::Container {
-                        name: "readme.txt".to_string(),
-                        children: vec![AstNode::Text {
-                            content: "inner content".into(),
-                        }],
+            children: vec![AstNode::Container {
+                name: "entries".to_string(),
+                children: vec![AstNode::Container {
+                    name: "readme.txt".to_string(),
+                    children: vec![AstNode::Text {
+                        content: "inner content".into(),
                     }],
-                },
-            ],
+                }],
+            }],
         };
 
         ast.root = AstNode::Document {
@@ -705,7 +690,10 @@ mod tests {
                     } if key == "sanitized_by" && value == "archive_stage"
                 )
             });
-            assert!(has_marker, "repacked archive should contain sanitized_by marker");
+            assert!(
+                has_marker,
+                "repacked archive should contain sanitized_by marker"
+            );
         }
     }
 

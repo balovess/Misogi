@@ -40,7 +40,7 @@ use misogi_cdr::{
     policy::SanitizationPolicy,
     report::{SanitizationAction, SanitizationReport},
 };
-use misogi_core::{hash, MisogiError, Result};
+use misogi_core::{MisogiError, Result, hash};
 
 // =============================================================================
 // Constants
@@ -95,7 +95,9 @@ impl WasmPdfSanitizer {
     /// * `max_file_size_bytes` - Maximum allowed input size. Files exceeding
     ///   this limit are rejected with [`MisogiError::SecurityViolation`].
     pub fn new(max_file_size_bytes: u64) -> Self {
-        Self { max_file_size_bytes }
+        Self {
+            max_file_size_bytes,
+        }
     }
 
     /// Construct with default configuration (500 MiB limit).
@@ -183,8 +185,13 @@ impl WasmPdfSanitizer {
             return data.len();
         }
 
-        for i in threat_end..data.len().min(threat_end + 256) {
-            if data[i] == b'\n' || data[i] == b'\r' {
+        for (i, &byte) in data
+            .iter()
+            .enumerate()
+            .take(data.len().min(threat_end + 256))
+            .skip(threat_end)
+        {
+            if byte == b'\n' || byte == b'\r' {
                 return i + 1;
             }
         }
@@ -223,11 +230,8 @@ impl WasmPdfSanitizer {
         sorted_threats.sort_by_key(|t| t.offset());
 
         while read_pos < data.len() {
-            if let Some(threat) = sorted_threats.first()
-                .filter(|t| t.offset() == read_pos)
-            {
-                let (replacement_bytes, action) =
-                    Self::generate_replacement(threat, policy)?;
+            if let Some(threat) = sorted_threats.first().filter(|t| t.offset() == read_pos) {
+                let (replacement_bytes, action) = Self::generate_replacement(threat, policy)?;
                 output.extend_from_slice(&replacement_bytes);
                 actions.push(action);
 
@@ -264,10 +268,9 @@ impl WasmPdfSanitizer {
                 Ok((spaces, threat.to_action()))
             }
 
-            (
-                PdfThreat::AdditionalActions { .. },
-                SanitizationPolicy::StripActiveContent,
-            ) => Ok((b"{}".to_vec(), threat.to_action())),
+            (PdfThreat::AdditionalActions { .. }, SanitizationPolicy::StripActiveContent) => {
+                Ok((b"{}".to_vec(), threat.to_action()))
+            }
 
             (
                 PdfThreat::AdditionalActions { .. },
@@ -294,10 +297,9 @@ impl WasmPdfSanitizer {
 
             (PdfThreat::AcroForm { .. }, _) => Ok((vec![], threat.to_action())),
 
-            (
-                PdfThreat::UriAction { .. },
-                SanitizationPolicy::StripActiveContent,
-            ) => Ok((b"/URI ()".to_vec(), threat.to_action())),
+            (PdfThreat::UriAction { .. }, SanitizationPolicy::StripActiveContent) => {
+                Ok((b"/URI ()".to_vec(), threat.to_action()))
+            }
 
             (PdfThreat::UriAction { .. }, _) => {
                 let spaces: Vec<u8> = vec![b' '; threat.length()];
@@ -339,11 +341,7 @@ impl WasmPdfSanitizer {
     /// // result.output_data -> send back to JS as Vec<u8>
     /// // result.report -> serialize to JSON for JS consumption
     /// ```
-    pub fn sanitize(
-        &self,
-        data: &[u8],
-        policy: &SanitizationPolicy,
-    ) -> Result<WasmPdfResult> {
+    pub fn sanitize(&self, data: &[u8], policy: &SanitizationPolicy) -> Result<WasmPdfResult> {
         let start_time = std::time::Instant::now();
 
         let threats = self.analyze(data)?;
@@ -381,7 +379,10 @@ impl WasmPdfSanitizer {
             success: true,
         };
 
-        Ok(WasmPdfResult { output_data, report })
+        Ok(WasmPdfResult {
+            output_data,
+            report,
+        })
     }
 }
 
@@ -424,7 +425,9 @@ pub struct WasmOfficeSanitizer {
 impl WasmOfficeSanitizer {
     /// Construct a new WASM Office sanitizer with explicit file size limit.
     pub fn new(max_file_size_bytes: u64) -> Self {
-        Self { max_file_size_bytes }
+        Self {
+            max_file_size_bytes,
+        }
     }
 
     /// Construct with default configuration (100 MiB limit for Office docs).
@@ -462,11 +465,7 @@ impl WasmOfficeSanitizer {
     ///
     /// # Returns
     /// [`WasmOfficeResult`] containing sanitized OOXML bytes and audit report.
-    pub fn sanitize(
-        &self,
-        data: &[u8],
-        policy: &SanitizationPolicy,
-    ) -> Result<WasmOfficeResult> {
+    pub fn sanitize(&self, data: &[u8], policy: &SanitizationPolicy) -> Result<WasmOfficeResult> {
         let start_time = std::time::Instant::now();
 
         // --- Size validation ---
@@ -480,15 +479,13 @@ impl WasmOfficeSanitizer {
 
         // --- Open ZIP from memory (Cursor instead of File) ---
         let cursor = Cursor::new(data);
-        let mut reader =
-            zip::ZipArchive::new(cursor).map_err(|e| MisogiError::Protocol(format!("Invalid OOXML/ZIP archive: {}", e)))?;
+        let mut reader = zip::ZipArchive::new(cursor)
+            .map_err(|e| MisogiError::Protocol(format!("Invalid OOXML/ZIP archive: {}", e)))?;
 
         // --- ZIP bomb protection: calculate uncompressed total ---
         let mut total_uncompressed: u64 = 0;
         for i in 0..reader.len() {
-            let entry = reader
-                .by_index(i)
-                .map_err(|e| MisogiError::Io(e.into()))?;
+            let entry = reader.by_index(i).map_err(|e| MisogiError::Io(e.into()))?;
             total_uncompressed = total_uncompressed.saturating_add(entry.size());
         }
 
@@ -521,8 +518,8 @@ impl WasmOfficeSanitizer {
                 .by_name(entry_name)
                 .map_err(|e| MisogiError::Io(e.into()))?;
 
-            let options: zip::write::FileOptions<()> = zip::write::FileOptions::default()
-                .compression_method(entry_reader.compression());
+            let options: zip::write::FileOptions<()> =
+                zip::write::FileOptions::default().compression_method(entry_reader.compression());
 
             writer
                 .start_file(entry_name, options)
@@ -533,9 +530,7 @@ impl WasmOfficeSanitizer {
             loop {
                 match entry_reader.read(&mut buffer) {
                     Ok(0) => break,
-                    Ok(n) => writer
-                        .write_all(&buffer[..n])
-                        .map_err(|e| MisogiError::Io(e))?,
+                    Ok(n) => writer.write_all(&buffer[..n]).map_err(MisogiError::Io)?,
                     Err(ref e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
                     Err(e) => return Err(MisogiError::Io(e)),
                 }
@@ -561,7 +556,10 @@ impl WasmOfficeSanitizer {
             success: true,
         };
 
-        Ok(WasmOfficeResult { output_data, report })
+        Ok(WasmOfficeResult {
+            output_data,
+            report,
+        })
     }
 }
 
@@ -662,10 +660,11 @@ pub fn extract_context(content: &str, offset: usize, length: usize) -> String {
     let mut excerpt = content[start..end].to_string();
 
     // Trim leading partial word
-    if start > 0 && !excerpt.starts_with(' ') {
-        if let Some(space_pos) = excerpt.find(' ') {
-            excerpt = excerpt[space_pos..].to_string();
-        }
+    if start > 0
+        && !excerpt.starts_with(' ')
+        && let Some(space_pos) = excerpt.find(' ')
+    {
+        excerpt = excerpt[space_pos..].to_string();
     }
 
     // Trailing ellipsis indicators
@@ -704,7 +703,10 @@ mod tests {
         let sanitizer = WasmPdfSanitizer::with_defaults();
         let malicious_pdf = b"%PDF-1.4\n1 0 obj\n<< /JS (app.alert('xss')) >>\nendobj\n";
         let threats = sanitizer.analyze(malicious_pdf).unwrap();
-        assert!(!threats.is_empty(), "Malicious PDF should detect JavaScript");
+        assert!(
+            !threats.is_empty(),
+            "Malicious PDF should detect JavaScript"
+        );
         assert!(matches!(&threats[0], PdfThreat::JavaScript { .. }));
     }
 
@@ -763,7 +765,10 @@ mod tests {
         let sanitizer = WasmOfficeSanitizer::with_defaults();
         let not_zip = b"This is not a ZIP archive at all";
         let result = sanitizer.sanitize(not_zip, &SanitizationPolicy::default());
-        assert!(result.is_err(), "Non-ZIP should be rejected as invalid OOXML");
+        assert!(
+            result.is_err(),
+            "Non-ZIP should be rejected as invalid OOXML"
+        );
     }
 
     #[test]
@@ -812,7 +817,10 @@ mod tests {
     fn test_extract_context_centered() {
         let content = "The quick brown fox jumps over the lazy dog near Tokyo Station.";
         let ctx = extract_context(content, 10, 5); // "quick"
-        assert!(ctx.contains("quick"), "Context should contain the matched word");
+        assert!(
+            ctx.contains("quick"),
+            "Context should contain the matched word"
+        );
     }
 
     #[test]

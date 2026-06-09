@@ -175,12 +175,7 @@ impl TimeWindow {
     /// or if the end time is not strictly after the start time.
     /// In release builds, out-of-range values produce undefined behavior
     /// in [`contains`](Self::contains).
-    pub fn new(
-        start_hour: u8,
-        start_minute: u8,
-        end_hour: u8,
-        end_minute: u8,
-    ) -> Self {
+    pub fn new(start_hour: u8, start_minute: u8, end_hour: u8, end_minute: u8) -> Self {
         debug_assert!(start_hour <= Self::MAX_HOUR);
         debug_assert!(start_minute <= Self::MAX_MINUTE);
         debug_assert!(end_hour <= Self::MAX_HOUR);
@@ -190,7 +185,12 @@ impl TimeWindow {
             "TimeWindow: end must be strictly after start"
         );
 
-        Self { start_hour, start_minute, end_hour, end_minute }
+        Self {
+            start_hour,
+            start_minute,
+            end_hour,
+            end_minute,
+        }
     }
 
     /// Returns `true` if the given `(hour, minute)` falls within this window.
@@ -304,7 +304,9 @@ impl DayMask {
     ///
     /// Equivalent to `0x1F` (bits 0--4 set).
     pub fn weekdays() -> Self {
-        Self { bits: Self::MON | Self::TUE | Self::WED | Self::THU | Self::FRI }
+        Self {
+            bits: Self::MON | Self::TUE | Self::WED | Self::THU | Self::FRI,
+        }
     }
 
     /// Returns a mask containing all seven days of the week.
@@ -354,7 +356,6 @@ pub enum AbacAttribute {
     // -----------------------------------------------------------------------
     // Subject Attributes (who is making the request?)
     // -----------------------------------------------------------------------
-
     /// Unique identifier of the authenticated user (e.g., LDAP DN, UPN).
     UserId(String),
 
@@ -395,7 +396,6 @@ pub enum AbacAttribute {
     // -----------------------------------------------------------------------
     // Resource Attributes (what is being accessed?)
     // -----------------------------------------------------------------------
-
     /// Data classification label assigned to the resource (e.g.,
     /// "public", "internal", "confidential", "restricted").
     DataClassification(String),
@@ -421,7 +421,6 @@ pub enum AbacAttribute {
     // -----------------------------------------------------------------------
     // Environmental Attributes (under what context?)
     // -----------------------------------------------------------------------
-
     /// Time-of-day window during which the action is permitted.
     /// Combined with `DayOfWeek` to form full temporal constraints.
     TimeOfDay(TimeWindow),
@@ -441,7 +440,6 @@ pub enum AbacAttribute {
     // -----------------------------------------------------------------------
     // Custom Extension Point
     // -----------------------------------------------------------------------
-
     /// User-defined attribute for domain-specific extensions that do not
     /// fit into the predefined categories above.
     ///

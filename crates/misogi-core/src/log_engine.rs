@@ -36,14 +36,14 @@
 //! let cef_formatter = Arc::new(SyslogCefFormatter::new());
 //! ```
 
-use std::sync::Arc;
 use async_trait::async_trait;
-use tera::{Tera, Context as TeraContext};
 use serde_json;
+use std::sync::Arc;
+use tera::{Context as TeraContext, Tera};
 
+use crate::audit_log::{AuditEventType, AuditLogEntry};
 use crate::error::{MisogiError, Result};
 use crate::traits::LogFormatter;
-use crate::audit_log::{AuditLogEntry, AuditEventType};
 
 // =============================================================================
 // Formatter A: JsonLogFormatter (DEFAULT)
@@ -119,8 +119,7 @@ impl LogFormatter for JsonLogFormatter {
     /// ```
     async fn format(&self, entry: &AuditLogEntry) -> Result<String> {
         // Exact backward compatibility: must match to_jsonl() byte-for-byte
-        let json_str = serde_json::to_string(entry)
-            .map_err(MisogiError::Serialization)?;
+        let json_str = serde_json::to_string(entry).map_err(MisogiError::Serialization)?;
 
         Ok(format!("{}\n", json_str))
     }
@@ -243,7 +242,11 @@ impl SyslogCefFormatter {
     /// ```ignore
     /// let cef = SyslogCefFormatter::with_identity("MyAgency", "FileTransfer", "3.0");
     /// ```
-    pub fn with_identity(vendor: impl Into<String>, product: impl Into<String>, version: impl Into<String>) -> Self {
+    pub fn with_identity(
+        vendor: impl Into<String>,
+        product: impl Into<String>,
+        version: impl Into<String>,
+    ) -> Self {
         Self {
             vendor: vendor.into(),
             product: product.into(),
@@ -260,17 +263,17 @@ impl SyslogCefFormatter {
     /// - 10: Very High/Critical
     fn event_to_severity(event_type: &AuditEventType) -> u8 {
         match event_type {
-            AuditEventType::FileUploaded => 3,        // Info
-            AuditEventType::FileSanitized => 3,       // Info
-            AuditEventType::FileProcessed => 3,       // Info (core compliance event)
-            AuditEventType::TransferRequested => 6,    // Warning (needs approval)
-            AuditEventType::TransferApproved => 3,     // Info
-            AuditEventType::TransferRejected => 6,     // Warning
-            AuditEventType::TransferStarted => 3,      // Info
-            AuditEventType::TransferCompleted => 3,    // Info
-            AuditEventType::FileDownloaded => 3,       // Info
-            AuditEventType::SecurityViolation => 10,   // Critical
-            AuditEventType::SystemError => 7,          // Error
+            AuditEventType::FileUploaded => 3,       // Info
+            AuditEventType::FileSanitized => 3,      // Info
+            AuditEventType::FileProcessed => 3,      // Info (core compliance event)
+            AuditEventType::TransferRequested => 6,  // Warning (needs approval)
+            AuditEventType::TransferApproved => 3,   // Info
+            AuditEventType::TransferRejected => 6,   // Warning
+            AuditEventType::TransferStarted => 3,    // Info
+            AuditEventType::TransferCompleted => 3,  // Info
+            AuditEventType::FileDownloaded => 3,     // Info
+            AuditEventType::SecurityViolation => 10, // Critical
+            AuditEventType::SystemError => 7,        // Error
         }
     }
 
@@ -337,7 +340,10 @@ impl LogFormatter for SyslogCefFormatter {
         }
         extensions.push(format!("act={}", Self::escape_cef_value(&event_type_str)));
         if !entry.filename.is_empty() {
-            extensions.push(format!("filePath={}", Self::escape_cef_value(&entry.filename)));
+            extensions.push(format!(
+                "filePath={}",
+                Self::escape_cef_value(&entry.filename)
+            ));
         }
         if let Some(ref hash) = entry.original_hash {
             extensions.push(format!("origHash={}", Self::escape_cef_value(hash)));
@@ -349,7 +355,10 @@ impl LogFormatter for SyslogCefFormatter {
 
         // FILE_PROCESSED specific fields (if present)
         if let Some(ref transfer_id) = entry.transfer_id {
-            extensions.push(format!("transferId={}", Self::escape_cef_value(transfer_id)));
+            extensions.push(format!(
+                "transferId={}",
+                Self::escape_cef_value(transfer_id)
+            ));
         }
         if let Some(ref policy) = entry.policy_applied {
             extensions.push(format!("policyApplied={}", Self::escape_cef_value(policy)));
@@ -363,13 +372,7 @@ impl LogFormatter for SyslogCefFormatter {
         // Construct full CEF message
         let cef_message = format!(
             "CEF:0|{}|{}|{}|{}|{}|{}|{}\n",
-            self.vendor,
-            self.product,
-            self.version,
-            event_type_str,
-            msg,
-            severity,
-            extension_str
+            self.vendor, self.product, self.version, event_type_str, msg, severity, extension_str
         );
 
         Ok(cef_message)
@@ -662,7 +665,10 @@ mod tests {
         let original = entry.to_jsonl();
 
         // Must be byte-for-byte identical for backward compatibility
-        assert_eq!(formatted, original, "JsonLogFormatter output must match to_jsonl()");
+        assert_eq!(
+            formatted, original,
+            "JsonLogFormatter output must match to_jsonl()"
+        );
     }
 
     #[tokio::test]
@@ -696,15 +702,24 @@ mod tests {
         let cef = formatter.format(&entry).await.unwrap();
 
         // Must start with CEF:0 prefix
-        assert!(cef.starts_with("CEF:0|"), "CEF message must start with 'CEF:0|'");
+        assert!(
+            cef.starts_with("CEF:0|"),
+            "CEF message must start with 'CEF:0|'"
+        );
 
         // Must contain default vendor/product
         assert!(cef.contains("|Misogi|"), "Must contain vendor 'Misogi'");
-        assert!(cef.contains("|CDR Engine|"), "Must contain product 'CDR Engine'");
+        assert!(
+            cef.contains("|CDR Engine|"),
+            "Must contain product 'CDR Engine'"
+        );
 
         // Must contain pipe-delimited header fields
         let header_parts: Vec<&str> = cef.split('|').collect();
-        assert!(header_parts.len() >= 7, "CEF header must have at least 7 pipe-separated parts");
+        assert!(
+            header_parts.len() >= 7,
+            "CEF header must have at least 7 pipe-separated parts"
+        );
 
         // Must end with newline
         assert!(cef.ends_with('\n'), "CEF message must end with newline");
@@ -731,27 +746,38 @@ mod tests {
             .with_actor("u1", "test", "staff")
             .with_file("f1", "test.pdf");
         let info_cef = formatter.format(&info_entry).await.unwrap();
-        assert!(info_cef.contains("|3|"), "FileUploaded should have severity 3");
+        assert!(
+            info_cef.contains("|3|"),
+            "FileUploaded should have severity 3"
+        );
 
         // Test WARNING-level events (severity 6)
         let warn_entry = AuditLogEntry::new(AuditEventType::TransferRequested)
             .with_actor("u2", "test", "staff")
             .with_file("f2", "test.pdf");
         let warn_cef = formatter.format(&warn_entry).await.unwrap();
-        assert!(warn_cef.contains("|6|"), "TransferRequested should have severity 6");
+        assert!(
+            warn_cef.contains("|6|"),
+            "TransferRequested should have severity 6"
+        );
 
         // Test CRITICAL events (severity 10)
         let crit_entry = AuditLogEntry::new(AuditEventType::SecurityViolation)
             .with_actor("u3", "test", "admin")
             .with_file("f3", "intrusion.log");
         let crit_cef = formatter.format(&crit_entry).await.unwrap();
-        assert!(crit_cef.contains("|10|"), "SecurityViolation should have severity 10");
+        assert!(
+            crit_cef.contains("|10|"),
+            "SecurityViolation should have severity 10"
+        );
 
         // Test ERROR events (severity 7)
-        let err_entry = AuditLogEntry::new(AuditEventType::SystemError)
-            .failure("Disk full");
+        let err_entry = AuditLogEntry::new(AuditEventType::SystemError).failure("Disk full");
         let err_cef = formatter.format(&err_entry).await.unwrap();
-        assert!(err_cef.contains("|7|"), "SystemError should have severity 7");
+        assert!(
+            err_cef.contains("|7|"),
+            "SystemError should have severity 7"
+        );
     }
 
     #[tokio::test]
@@ -762,11 +788,26 @@ mod tests {
         let cef = formatter.format(&entry).await.unwrap();
 
         // Check standard extension fields
-        assert!(cef.contains("src=192.168.1.100"), "Must contain src (IP address)");
-        assert!(cef.contains("suser=user-001"), "Must contain suser (actor ID)");
-        assert!(cef.contains("act=file_uploaded"), "Must contain act (action)");
-        assert!(cef.contains("filePath=document.pdf"), "Must contain filePath");
-        assert!(cef.contains("origHash=abc123def456"), "Must contain origHash");
+        assert!(
+            cef.contains("src=192.168.1.100"),
+            "Must contain src (IP address)"
+        );
+        assert!(
+            cef.contains("suser=user-001"),
+            "Must contain suser (actor ID)"
+        );
+        assert!(
+            cef.contains("act=file_uploaded"),
+            "Must contain act (action)"
+        );
+        assert!(
+            cef.contains("filePath=document.pdf"),
+            "Must contain filePath"
+        );
+        assert!(
+            cef.contains("origHash=abc123def456"),
+            "Must contain origHash"
+        );
         assert!(cef.contains("newHash=sanitized789"), "Must contain newHash");
         assert!(cef.contains("msg="), "Must contain msg field");
     }
@@ -781,19 +822,25 @@ mod tests {
         let cef = formatter.format(&entry).await.unwrap();
 
         // Special chars should be escaped in values
-        assert!(!cef.contains("user=bad") || cef.contains("user\\=bad"),
-                "Equals sign in value should be escaped");
+        assert!(
+            !cef.contains("user=bad") || cef.contains("user\\=bad"),
+            "Equals sign in value should be escaped"
+        );
     }
 
     #[tokio::test]
     async fn test_template_formatter_basic() {
-        let template_content = "{{ entry.event_type }} | {{ entry.actor_name }} | {{ entry.filename }}";
+        let template_content =
+            "{{ entry.event_type }} | {{ entry.actor_name }} | {{ entry.filename }}";
         let formatter = TemplateLogFormatter::from_template(template_content).unwrap();
         let entry = create_test_entry();
 
         let rendered = formatter.format(&entry).await.unwrap();
 
-        assert!(rendered.contains("file_uploaded"), "Must contain event type");
+        assert!(
+            rendered.contains("file_uploaded"),
+            "Must contain event type"
+        );
         assert!(rendered.contains("田中 太郎"), "Must contain actor name");
         assert!(rendered.contains("document.pdf"), "Must contain filename");
         assert!(rendered.ends_with('\n'), "Must end with newline");
@@ -808,14 +855,20 @@ mod tests {
         // Entry WITH file size
         let with_size = create_test_entry();
         let rendered_with = formatter.format(&with_size).await.unwrap();
-        assert!(rendered_with.contains("file_uploaded"), "Must contain event type");
+        assert!(
+            rendered_with.contains("file_uploaded"),
+            "Must contain event type"
+        );
 
         // Entry WITHOUT file size (file_size is None)
         let without_size = AuditLogEntry::new(AuditEventType::FileUploaded)
             .with_actor("u1", "test", "staff")
             .with_file("f1", "test.txt");
         let rendered_without = formatter.format(&without_size).await.unwrap();
-        assert!(rendered_without.contains("file_uploaded"), "Must still render event type");
+        assert!(
+            rendered_without.contains("file_uploaded"),
+            "Must still render event type"
+        );
     }
 
     #[tokio::test]
@@ -832,9 +885,15 @@ mod tests {
         let fallback_output = result.unwrap();
 
         // Fallback should be valid JSON (from JsonLogFormatter)
-        assert!(fallback_output.starts_with('{'), "Fallback should be JSON format");
+        assert!(
+            fallback_output.starts_with('{'),
+            "Fallback should be JSON format"
+        );
         let parsed: AuditLogEntry = serde_json::from_str(fallback_output.trim()).unwrap();
-        assert_eq!(parsed.event_id, entry.event_id, "Fallback JSON must preserve event_id");
+        assert_eq!(
+            parsed.event_id, entry.event_id,
+            "Fallback JSON must preserve event_id"
+        );
     }
 
     #[tokio::test]
@@ -851,7 +910,10 @@ mod tests {
             .with_sanitize_status("SUCCESS");
         let rendered = formatter.format(&with_policy).await.unwrap();
 
-        assert!(rendered.contains("file_processed"), "Must contain event type");
+        assert!(
+            rendered.contains("file_processed"),
+            "Must contain event type"
+        );
         assert!(rendered.contains("Approver"), "Must contain actor name");
         assert!(rendered.contains("secret.docx"), "Must contain filename");
 
@@ -860,7 +922,10 @@ mod tests {
             .with_actor("u2", "TestUser", "staff")
             .with_file("f2", "normal.txt");
         let rendered2 = formatter.format(&without_policy).await.unwrap();
-        assert!(rendered2.contains("file_uploaded"), "Must contain event type for second entry");
+        assert!(
+            rendered2.contains("file_uploaded"),
+            "Must contain event type for second entry"
+        );
     }
 
     #[tokio::test]
@@ -904,23 +969,48 @@ mod tests {
         let parsed: AuditLogEntry = serde_json::from_str(json_output.trim()).unwrap();
         assert_eq!(parsed.event_type, AuditEventType::FileProcessed);
         assert_eq!(parsed.transfer_id.as_deref(), Some("tx_987654321"));
-        assert_eq!(parsed.policy_applied.as_deref(), Some("REMOVE_ACTIVE_CONTENT"));
+        assert_eq!(
+            parsed.policy_applied.as_deref(),
+            Some("REMOVE_ACTIVE_CONTENT")
+        );
 
         // Test CEF formatter
         let cef_fmt = SyslogCefFormatter::new();
         let cef_output = cef_fmt.format(&entry).await.unwrap();
-        assert!(cef_output.contains("file_processed"), "CEF must contain event type");
-        assert!(cef_output.contains("transferId=tx_987654321"), "CEF must contain transfer ID");
-        assert!(cef_output.contains("policyApplied=REMOVE_ACTIVE_CONTENT"), "CEF must contain policy");
-        assert!(cef_output.contains("sanitizeStatus=SUCCESS"), "CEF must contain sanitize status");
+        assert!(
+            cef_output.contains("file_processed"),
+            "CEF must contain event type"
+        );
+        assert!(
+            cef_output.contains("transferId=tx_987654321"),
+            "CEF must contain transfer ID"
+        );
+        assert!(
+            cef_output.contains("policyApplied=REMOVE_ACTIVE_CONTENT"),
+            "CEF must contain policy"
+        );
+        assert!(
+            cef_output.contains("sanitizeStatus=SUCCESS"),
+            "CEF must contain sanitize status"
+        );
 
         // Test Template formatter
         let tmpl_fmt = TemplateLogFormatter::from_template(
-            "{{ entry.event_type }} TX={{ entry.transfer_id }} POL={{ entry.policy_applied }}"
-        ).unwrap();
+            "{{ entry.event_type }} TX={{ entry.transfer_id }} POL={{ entry.policy_applied }}",
+        )
+        .unwrap();
         let tmpl_output = tmpl_fmt.format(&entry).await.unwrap();
-        assert!(tmpl_output.contains("file_processed"), "Template must contain event type");
-        assert!(tmpl_output.contains("tx_987654321"), "Template must contain transfer ID");
-        assert!(tmpl_output.contains("REMOVE_ACTIVE_CONTENT"), "Template must contain policy");
+        assert!(
+            tmpl_output.contains("file_processed"),
+            "Template must contain event type"
+        );
+        assert!(
+            tmpl_output.contains("tx_987654321"),
+            "Template must contain transfer ID"
+        );
+        assert!(
+            tmpl_output.contains("REMOVE_ACTIVE_CONTENT"),
+            "Template must contain policy"
+        );
     }
 }

@@ -7,7 +7,7 @@
 //! - Metadata extraction
 //! - Error cases
 
-use super::super::{JwtAuthenticator, JwtConfig, JwtIssuer, JwtValidator, JwtError};
+use super::super::{JwtAuthenticator, JwtConfig, JwtError, JwtIssuer, JwtValidator};
 use crate::claims::MisogiClaims;
 
 /// Helper: create test configuration with generated keypair.
@@ -31,7 +31,7 @@ fn setup(ttl_hours: i64) -> (tempfile::TempDir, JwtConfig) {
 fn test_validator_initialization_succeeds_with_valid_key() {
     // Test that JwtValidator can be initialized with a valid public key
     let (_dir, config) = setup(1);
-    
+
     let result = JwtValidator::new(config);
     assert!(result.is_ok(), "Validator should initialize with valid key");
 }
@@ -62,7 +62,7 @@ fn test_validate_rejects_malformed_token() {
     let validator = JwtValidator::new(config).unwrap();
 
     let malformed_tokens = vec![
-        "",                                    // Empty string
+        "",                                   // Empty string
         "not.a.token",                        // Invalid format
         "a.b.c.d",                            // Too many parts
         "invalid-header.invalid-payload.sig", // Invalid base64
@@ -134,10 +134,7 @@ fn test_validate_and_extract_returns_complete_metadata() {
 
     // Verify claims are accessible
     assert_eq!(validated.claims.applicant_id, "metadata-test");
-    assert_eq!(
-        validated.claims.display_name.as_deref(),
-        Some("Meta User")
-    );
+    assert_eq!(validated.claims.display_name.as_deref(), Some("Meta User"));
 
     // Verify helper methods work
     assert!(validated.has_role("tester"));
@@ -149,7 +146,7 @@ fn test_validate_and_extract_returns_complete_metadata() {
 fn test_validate_enforces_algorithm_rs256_only() {
     // Test that tokens signed with non-RS256 algorithms would be rejected
     // (This is implicitly tested by the library's algorithm enforcement)
-    
+
     // We can't easily create an HS256 token without the secret, but we can verify
     // that the validator is configured correctly by checking it rejects obviously wrong tokens
     let (_dir, config) = setup(1);
@@ -159,7 +156,7 @@ fn test_validate_enforces_algorithm_rs256_only() {
     // This will fail signature check, which is the expected behavior
     let fake_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
 
-    let result = validator.validate(&fake_token);
+    let result = validator.validate(fake_token);
     assert!(
         result.is_err(),
         "HS256 token (or any non-matching token) should be rejected"

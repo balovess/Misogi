@@ -24,9 +24,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::cdr_v2::ast::DocumentAst;
-use crate::cdr_v2::types::{
-    ActiveContentType, CdrError, SanitizeAction, ThreatSeverity,
-};
+use crate::cdr_v2::types::{ActiveContentType, CdrError, SanitizeAction, ThreatSeverity};
 
 /// Single processing stage within the CDR pipeline.
 ///
@@ -166,7 +164,6 @@ impl CdrPolicy {
     }
 
     /// Check whether the policy's default action is valid.
-    #[must_use]
     pub fn validate(&self) -> Result<(), String> {
         if !Self::is_valid_default_action(&self.default_action) {
             return Err(format!(
@@ -322,8 +319,7 @@ impl CdrPipeline {
             match stage.process(&current_ast, context).await {
                 Ok(processed_ast) => {
                     // Build a basic stage report from the processed AST diff
-                    let items_processed =
-                        processed_ast.active_content_count() as u32;
+                    let items_processed = processed_ast.active_content_count() as u32;
                     let actions_taken: Vec<(String, SanitizeAction)> = processed_ast
                         .active_contents
                         .iter()
@@ -401,7 +397,10 @@ impl CdrPipeline {
         }
 
         // Delegate specific content types to specialist handlers
-        if !ast.find_active_contents(Some(ActiveContentType::VBMacro)).is_empty() {
+        if !ast
+            .find_active_contents(Some(ActiveContentType::VBMacro))
+            .is_empty()
+        {
             return StrategyDecision::Delegate("macro_sanitizer".into());
         }
 

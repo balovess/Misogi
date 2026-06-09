@@ -89,14 +89,12 @@ impl GcsConfig {
                 "bucket must not be empty".into(),
             ));
         }
-        if !self.bucket.chars().all(|c| c.is_ascii_lowercase()
-            || c.is_ascii_digit()
-            || c == '-'
-            || c == '_'
-            || c == '.')
-        {
+        if !self.bucket.chars().all(|c| {
+            c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_' || c == '.'
+        }) {
             return Err(StorageError::ConfigurationError(
-                "bucket must contain only lowercase letters, digits, hyphens, underscores, or dots".into(),
+                "bucket must contain only lowercase letters, digits, hyphens, underscores, or dots"
+                    .into(),
             ));
         }
         if self.bucket.len() < 3 || self.bucket.len() > 63 {
@@ -127,10 +125,9 @@ struct ServiceAccountInfo {
 
 impl ServiceAccountInfo {
     fn from_json(json: &str) -> Result<Self, StorageError> {
-        let val: serde_json::Value =
-            serde_json::from_str(json).map_err(|e| {
-                StorageError::ConfigurationError(format!("Invalid service account JSON: {e}"))
-            })?;
+        let val: serde_json::Value = serde_json::from_str(json).map_err(|e| {
+            StorageError::ConfigurationError(format!("Invalid service account JSON: {e}"))
+        })?;
 
         let ty = val["type"].as_str().unwrap_or("");
         if ty != "service_account" {
@@ -141,26 +138,28 @@ impl ServiceAccountInfo {
 
         let client_email = val["client_email"]
             .as_str()
-            .ok_or_else(|| StorageError::ConfigurationError(
-                "Missing 'client_email' in service account JSON".into(),
-            ))?
+            .ok_or_else(|| {
+                StorageError::ConfigurationError(
+                    "Missing 'client_email' in service account JSON".into(),
+                )
+            })?
             .to_string();
 
         let private_key = val["private_key"]
             .as_str()
-            .ok_or_else(|| StorageError::ConfigurationError(
-                "Missing 'private_key' in service account JSON".into(),
-            ))?
+            .ok_or_else(|| {
+                StorageError::ConfigurationError(
+                    "Missing 'private_key' in service account JSON".into(),
+                )
+            })?
             .to_string();
 
-        let project_id = val["project_id"]
+        let project_id = val["project_id"].as_str().unwrap_or("").to_string();
+
+        let token_uri = val["token_uri"]
             .as_str()
-            .unwrap_or("")
+            .unwrap_or("https://oauth2.googleapis.com/token")
             .to_string();
-
-        let token_uri = val["token_uri"].as_str().unwrap_or(
-            "https://oauth2.googleapis.com/token",
-        ).to_string();
 
         Ok(Self {
             client_email,
@@ -219,8 +218,8 @@ impl TokenCache {
     }
 
     async fn refresh_token(&self) -> Result<AccessToken, StorageError> {
-        use sha2::{Digest, Sha256};
         use rsa::pkcs8::DecodePrivateKey;
+        use sha2::{Digest, Sha256};
 
         let now_epoch = Utc::now().timestamp();
         let expiry = now_epoch + 3600;
@@ -239,31 +238,20 @@ impl TokenCache {
 
         let signing_input = format!("{header_b64}.{claim_b64}");
 
-        let private_key = rsa::RsaPrivateKey::from_pkcs8_pem(
-            &self.sa_info.private_key_pem,
-        )
-        .map_err(|e| {
-            StorageError::ConfigurationError(format!(
-                "Failed to parse RSA private key from service account: {e}"
-            ))
-        })?;
+        let private_key = rsa::RsaPrivateKey::from_pkcs8_pem(&self.sa_info.private_key_pem)
+            .map_err(|e| {
+                StorageError::ConfigurationError(format!(
+                    "Failed to parse RSA private key from service account: {e}"
+                ))
+            })?;
 
         let hash = Sha256::digest(signing_input.as_bytes());
         let digest_info = pkcs1v15_digest_info_sha256(&hash);
         let signature = private_key
-            .sign(
-                rsa::pkcs1v15::Pkcs1v15Sign::new_unprefixed(),
-                &digest_info,
-            )
-            .map_err(|e| {
-                StorageError::InternalError(format!("RSA sign failed: {e}"))
-            })?;
+            .sign(rsa::pkcs1v15::Pkcs1v15Sign::new_unprefixed(), &digest_info)
+            .map_err(|e| StorageError::InternalError(format!("RSA sign failed: {e}")))?;
 
-        let jwt = format!(
-            "{}.{}",
-            signing_input,
-            b64_encode_bytes(&signature)
-        );
+        let jwt = format!("{}.{}", signing_input, b64_encode_bytes(&signature));
 
         let response = self
             .http_client
@@ -288,9 +276,9 @@ impl TokenCache {
 
         let access_token = response["access_token"]
             .as_str()
-            .ok_or_else(|| StorageError::InternalError(
-                "No access_token in OAuth2 response".into(),
-            ))?
+            .ok_or_else(|| {
+                StorageError::InternalError("No access_token in OAuth2 response".into())
+            })?
             .to_string();
 
         let expires_in = response["expires_in"].as_i64().unwrap_or(3600);
@@ -364,11 +352,9 @@ impl GcsStorage {
         let sa_info = Arc::new(ServiceAccountInfo::from_json(&json_str)?);
         let token_cache = Arc::new(TokenCache::new(Arc::clone(&sa_info)));
 
-        let http_client = reqwest::Client::builder()
-            .build()
-            .map_err(|e| StorageError::ConfigurationError(format!(
-                "HTTP client build failed: {e}"
-            )))?;
+        let http_client = reqwest::Client::builder().build().map_err(|e| {
+            StorageError::ConfigurationError(format!("HTTP client build failed: {e}"))
+        })?;
 
         info!(
             bucket = %config.bucket,
@@ -391,9 +377,7 @@ impl GcsStorage {
         let token = self.token_cache.get().await?;
         headers.insert(
             reqwest::header::AUTHORIZATION,
-            format!("Bearer {token}")
-                .parse()
-                .unwrap(),
+            format!("Bearer {token}").parse().unwrap(),
         );
         Ok(headers)
     }
@@ -436,18 +420,18 @@ impl StorageBackend for GcsStorage {
             .await
             .map_err(|e| map_reqwest_error(&e, key))?
             .error_for_status()
-            .map_err(|e| StorageError::NetworkError(format!(
-                "GCS put HTTP error ({}) for '{}'",
-                e.status().map(|s| s.as_u16()).unwrap_or(0),
-                key
-            )))?
+            .map_err(|e| {
+                StorageError::NetworkError(format!(
+                    "GCS put HTTP error ({}) for '{}'",
+                    e.status().map(|s| s.as_u16()).unwrap_or(0),
+                    key
+                ))
+            })?
             .json::<serde_json::Value>()
             .await
             .map_err(|e| StorageError::InternalError(format!("Parse put response: {e}")))?;
 
-        let etag = response["etag"]
-            .as_str()
-            .map(String::from);
+        let etag = response["etag"].as_str().map(String::from);
 
         info!(key = %key, etag = ?etag, "Upload complete");
 
@@ -480,13 +464,18 @@ impl StorageBackend for GcsStorage {
             .await
             .map_err(|e| map_reqwest_error(&e, key))?
             .error_for_status()
-            .map_err(|e| StorageError::NetworkError(format!(
-                "GCS delete HTTP error ({}) for '{}'",
-                e.status().map(|s| s.as_u16()).unwrap_or(0),
-                key
-            )))?;
+            .map_err(|e| {
+                StorageError::NetworkError(format!(
+                    "GCS delete HTTP error ({}) for '{}'",
+                    e.status().map(|s| s.as_u16()).unwrap_or(0),
+                    key
+                ))
+            })?;
 
-        let bytes = response.bytes().await.map_err(|e| map_reqwest_error(&e, key))?;
+        let bytes = response
+            .bytes()
+            .await
+            .map_err(|e| map_reqwest_error(&e, key))?;
         debug!(key = %key, size = bytes.len(), "Download complete");
         Ok(bytes)
     }
@@ -510,11 +499,13 @@ impl StorageBackend for GcsStorage {
             .await
             .map_err(|e| map_reqwest_error(&e, key))?
             .error_for_status()
-            .map_err(|e| StorageError::NetworkError(format!(
-                "GCS HTTP error ({}) for '{}'",
-                e.status().map(|s| s.as_u16()).unwrap_or(0),
-                key
-            )))?;
+            .map_err(|e| {
+                StorageError::NetworkError(format!(
+                    "GCS HTTP error ({}) for '{}'",
+                    e.status().map(|s| s.as_u16()).unwrap_or(0),
+                    key
+                ))
+            })?;
 
         info!(key = %key, "Deleted successfully");
         Ok(())
@@ -530,13 +521,7 @@ impl StorageBackend for GcsStorage {
         );
 
         let headers = self.auth_headers().await?;
-        match self
-            .http_client
-            .get(&url)
-            .headers(headers)
-            .send()
-            .await
-        {
+        match self.http_client.get(&url).headers(headers).send().await {
             Ok(resp) => Ok(resp.status().is_success()),
             Err(e) if e.status() == Some(reqwest::StatusCode::NOT_FOUND) => Ok(false),
             Err(e) => Err(map_reqwest_error(&e, key)),
@@ -545,7 +530,10 @@ impl StorageBackend for GcsStorage {
 
     #[instrument(skip(self))]
     async fn health_check(&self) -> Result<(), StorageError> {
-        let url = format!("{}/storage/v1/b/{}?fields=name", self.base_url, self.config.bucket);
+        let url = format!(
+            "{}/storage/v1/b/{}?fields=name",
+            self.base_url, self.config.bucket
+        );
         let headers = self.auth_headers().await?;
 
         self.http_client
@@ -598,9 +586,8 @@ fn map_http_error(err: reqwest::Response, key: &str) -> StorageError {
 /// Layout: SEQUENCE { AlgorithmIdentifier (sha256WithRSAEncryption), OCTET STRING <hash> }
 fn pkcs1v15_digest_info_sha256(hash: &[u8]) -> Vec<u8> {
     const SHA256_OID: &[u8] = &[
-        0x30, 0x31, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86,
-        0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x01, 0x05, 0x00,
-        0x04, 0x20,
+        0x30, 0x31, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x01,
+        0x05, 0x00, 0x04, 0x20,
     ];
     let mut result = Vec::with_capacity(SHA256_OID.len() + hash.len());
     result.extend_from_slice(SHA256_OID);
@@ -649,32 +636,47 @@ mod tests {
     #[test]
     fn test_reject_empty_bucket() {
         let cfg = GcsConfig::new("").with_service_account_json(TEST_SA_JSON);
-        assert!(matches!(cfg.validate(), Err(StorageError::ConfigurationError(_))));
+        assert!(matches!(
+            cfg.validate(),
+            Err(StorageError::ConfigurationError(_))
+        ));
     }
 
     #[test]
     fn test_reject_short_bucket() {
         let cfg = GcsConfig::new("ab").with_service_account_json(TEST_SA_JSON);
-        assert!(matches!(cfg.validate(), Err(StorageError::ConfigurationError(_))));
+        assert!(matches!(
+            cfg.validate(),
+            Err(StorageError::ConfigurationError(_))
+        ));
     }
 
     #[test]
     fn test_reject_long_bucket() {
         let long_name = "a".repeat(64);
         let cfg = GcsConfig::new(&long_name).with_service_account_json(TEST_SA_JSON);
-        assert!(matches!(cfg.validate(), Err(StorageError::ConfigurationError(_))));
+        assert!(matches!(
+            cfg.validate(),
+            Err(StorageError::ConfigurationError(_))
+        ));
     }
 
     #[test]
     fn test_reject_uppercase_bucket() {
         let cfg = GcsConfig::new("MyBucket").with_service_account_json(TEST_SA_JSON);
-        assert!(matches!(cfg.validate(), Err(StorageError::ConfigurationError(_))));
+        assert!(matches!(
+            cfg.validate(),
+            Err(StorageError::ConfigurationError(_))
+        ));
     }
 
     #[test]
     fn test_reject_no_credentials() {
         let cfg = GcsConfig::new("my-bucket");
-        assert!(matches!(cfg.validate(), Err(StorageError::ConfigurationError(_))));
+        assert!(matches!(
+            cfg.validate(),
+            Err(StorageError::ConfigurationError(_))
+        ));
     }
 
     #[test]
@@ -701,7 +703,10 @@ mod tests {
 
     #[test]
     fn test_encode_name_preserves_safe_chars() {
-        assert_eq!(GcsStorage::encode_name("normal-file.pdf"), "normal-file.pdf");
+        assert_eq!(
+            GcsStorage::encode_name("normal-file.pdf"),
+            "normal-file.pdf"
+        );
     }
 
     #[test]

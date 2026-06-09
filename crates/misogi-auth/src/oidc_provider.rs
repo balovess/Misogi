@@ -43,10 +43,10 @@
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
-use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
-use rand::RngCore;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use jsonwebtoken::DecodingKey;
+use rand::RngCore;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -366,8 +366,10 @@ impl OidcAuthProvider {
             return Ok(meta.clone());
         }
 
-        let discovery_url =
-            format!("{}/.well-known/openid-configuration", self.config.discovery_url.trim_end_matches('/'));
+        let discovery_url = format!(
+            "{}/.well-known/openid-configuration",
+            self.config.discovery_url.trim_end_matches('/')
+        );
 
         debug!(url = %discovery_url, "Fetching OIDC discovery document");
 
@@ -376,24 +378,16 @@ impl OidcAuthProvider {
             .get(&discovery_url)
             .send()
             .await
-            .map_err(|e| {
-                OidcError::DiscoveryFailed(format!(
-                    "HTTP request failed: {e}"
-                ))
-            })?;
+            .map_err(|e| OidcError::DiscoveryFailed(format!("HTTP request failed: {e}")))?;
 
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
-            return Err(OidcError::DiscoveryFailed(format!(
-                "HTTP {status}: {body}"
-            )));
+            return Err(OidcError::DiscoveryFailed(format!("HTTP {status}: {body}")));
         }
 
         let meta: OidcMetadata = response.json().await.map_err(|e| {
-            OidcError::InvalidMetadata(format!(
-                "Failed to parse discovery document: {e}"
-            ))
+            OidcError::InvalidMetadata(format!("Failed to parse discovery document: {e}"))
         })?;
 
         // Validate required fields
@@ -402,8 +396,7 @@ impl OidcAuthProvider {
             || meta.jwks_uri.is_empty()
         {
             return Err(OidcError::InvalidMetadata(
-                "Missing required endpoints in discovery document"
-                    .to_string(),
+                "Missing required endpoints in discovery document".to_string(),
             ));
         }
 
@@ -447,41 +440,26 @@ impl OidcAuthProvider {
     /// - [`OidcError::NotDiscovered`] — `discover()` has not been called yet
     /// - [`OidcError::UrlBuildFailed`] — authorization endpoint URL construction failed
     #[instrument(skip(self, state, code_verifier))]
-    pub fn authorization_url(
-        &self,
-        state: &str,
-        code_verifier: &str,
-    ) -> Result<String, OidcError> {
-        let meta = self.metadata.get().ok_or_else(|| {
-            OidcError::NotDiscovered
-        })?;
+    pub fn authorization_url(&self, state: &str, code_verifier: &str) -> Result<String, OidcError> {
+        let meta = self.metadata.get().ok_or(OidcError::NotDiscovered)?;
 
-        let mut url =
-            Url::parse(&meta.authorization_endpoint).map_err(|e| {
-                OidcError::UrlBuildFailed(format!(
-                    "Failed to parse authorization endpoint: {e}"
-                ))
-            })?;
+        let mut url = Url::parse(&meta.authorization_endpoint).map_err(|e| {
+            OidcError::UrlBuildFailed(format!("Failed to parse authorization endpoint: {e}"))
+        })?;
 
         {
             let mut params = url.query_pairs_mut();
             params.append_pair("response_type", "code");
             params.append_pair("client_id", &self.config.client_id);
             params.append_pair("redirect_uri", &self.config.redirect_uri);
-            params.append_pair(
-                "scope",
-                &self.config.scopes.join(" "),
-            );
+            params.append_pair("scope", &self.config.scopes.join(" "));
             params.append_pair("state", state);
 
             // Add PKCE parameters if enabled
             if self.config.pkce {
                 let challenge = compute_code_challenge(code_verifier);
                 params.append_pair("code_challenge", &challenge);
-                params.append_pair(
-                    "code_challenge_method",
-                    "S256",
-                );
+                params.append_pair("code_challenge_method", "S256");
             }
         }
 
@@ -516,7 +494,7 @@ impl OidcAuthProvider {
     pub async fn generate_and_store_nonce(&self) -> String {
         let mut bytes = [0u8; 32];
         rand::thread_rng().fill_bytes(&mut bytes);
-        let nonce = URL_SAFE_NO_PAD.encode(&bytes);
+        let nonce = URL_SAFE_NO_PAD.encode(bytes);
 
         let mut store = self.nonce_store.lock().await;
         store.push(NonceEntry {
@@ -547,9 +525,7 @@ impl OidcAuthProvider {
         code: &str,
         code_verifier: &str,
     ) -> Result<OidcTokens, OidcError> {
-        let meta = self.metadata.get().ok_or_else(|| {
-            OidcError::NotDiscovered
-        })?;
+        let meta = self.metadata.get().ok_or(OidcError::NotDiscovered)?;
 
         debug!("Exchanging authorization code for tokens");
 
@@ -571,9 +547,7 @@ impl OidcAuthProvider {
             .form(&form_params)
             .send()
             .await
-            .map_err(|e| {
-                OidcError::HttpError(format!("Token request failed: {e}"))
-            })?;
+            .map_err(|e| OidcError::HttpError(format!("Token request failed: {e}")))?;
 
         if !response.status().is_success() {
             let status = response.status();
@@ -589,9 +563,7 @@ impl OidcAuthProvider {
         }
 
         let tokens: OidcTokens = response.json().await.map_err(|e| {
-            OidcError::TokenExchangeFailed(format!(
-                "Failed to parse token response: {e}"
-            ))
+            OidcError::TokenExchangeFailed(format!("Failed to parse token response: {e}"))
         })?;
 
         info!(
@@ -642,13 +614,8 @@ impl OidcAuthProvider {
     /// Refresh tokens are long-lived credentials. Store them securely
     /// (encrypted at rest) and never expose them to client-side JavaScript.
     #[instrument(skip(self, refresh_token))]
-    pub async fn refresh_access_token(
-        &self,
-        refresh_token: &str,
-    ) -> Result<OidcTokens, OidcError> {
-        let meta = self.metadata.get().ok_or_else(|| {
-            OidcError::NotDiscovered
-        })?;
+    pub async fn refresh_access_token(&self, refresh_token: &str) -> Result<OidcTokens, OidcError> {
+        let meta = self.metadata.get().ok_or(OidcError::NotDiscovered)?;
 
         debug!("Refreshing access token");
 
@@ -665,11 +632,7 @@ impl OidcAuthProvider {
             .form(&form_params)
             .send()
             .await
-            .map_err(|e| {
-                OidcError::HttpError(format!(
-                    "Refresh token request failed: {e}"
-                ))
-            })?;
+            .map_err(|e| OidcError::HttpError(format!("Refresh token request failed: {e}")))?;
 
         if !response.status().is_success() {
             let status = response.status();
@@ -684,9 +647,7 @@ impl OidcAuthProvider {
         }
 
         let tokens: OidcTokens = response.json().await.map_err(|e| {
-            OidcError::TokenExchangeFailed(format!(
-                "Failed to parse refresh response: {e}"
-            ))
+            OidcError::TokenExchangeFailed(format!("Failed to parse refresh response: {e}"))
         })?;
 
         // Validate that we got a new access token
@@ -745,25 +706,19 @@ impl OidcAuthProvider {
         id_token_hint: &str,
         post_logout_redirect_uri: &str,
     ) -> Result<String, OidcError> {
-        let meta = self.metadata.get().ok_or_else(|| {
-            OidcError::NotDiscovered
-        })?;
+        let meta = self.metadata.get().ok_or(OidcError::NotDiscovered)?;
 
-        let end_session_url = meta.end_session_endpoint.as_deref().ok_or_else(
-            || {
-                OidcError::LogoutNotSupported(
-                    "IdP does not provide end_session_endpoint \
+        let end_session_url = meta.end_session_endpoint.as_deref().ok_or_else(|| {
+            OidcError::LogoutNotSupported(
+                "IdP does not provide end_session_endpoint \
                      in discovery metadata. \
                      RP-Initiated Logout is not supported."
-                        .to_string(),
-                )
-            },
-        )?;
+                    .to_string(),
+            )
+        })?;
 
         let mut url = Url::parse(end_session_url).map_err(|e| {
-            OidcError::UrlBuildFailed(format!(
-                "Failed to parse end_session_endpoint: {e}"
-            ))
+            OidcError::UrlBuildFailed(format!("Failed to parse end_session_endpoint: {e}"))
         })?;
 
         {
@@ -795,22 +750,12 @@ impl OidcAuthProvider {
     /// - [`OidcError::UserInfoFailed`] — UserInfo endpoint error
     /// - [`OidcError::HttpError`] — network error
     #[instrument(skip(self, access_token))]
-    pub async fn get_userinfo(
-        &self,
-        access_token: &str,
-    ) -> Result<OidcUserInfo, OidcError> {
-        let meta = self.metadata.get().ok_or_else(|| {
-            OidcError::NotDiscovered
-        })?;
+    pub async fn get_userinfo(&self, access_token: &str) -> Result<OidcUserInfo, OidcError> {
+        let meta = self.metadata.get().ok_or(OidcError::NotDiscovered)?;
 
-        let userinfo_url = meta.userinfo_endpoint.as_deref().ok_or_else(
-            || {
-                OidcError::UserInfoFailed(
-                    "UserInfo endpoint not available in metadata"
-                        .to_string(),
-                )
-            },
-        )?;
+        let userinfo_url = meta.userinfo_endpoint.as_deref().ok_or_else(|| {
+            OidcError::UserInfoFailed("UserInfo endpoint not available in metadata".to_string())
+        })?;
 
         debug!("Requesting UserInfo from IdP");
 
@@ -820,24 +765,16 @@ impl OidcAuthProvider {
             .header("Authorization", format!("Bearer {access_token}"))
             .send()
             .await
-            .map_err(|e| {
-                OidcError::HttpError(format!(
-                    "UserInfo request failed: {e}"
-                ))
-            })?;
+            .map_err(|e| OidcError::HttpError(format!("UserInfo request failed: {e}")))?;
 
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
-            return Err(OidcError::UserInfoFailed(format!(
-                "HTTP {status}: {body}"
-            )));
+            return Err(OidcError::UserInfoFailed(format!("HTTP {status}: {body}")));
         }
 
         let userinfo: OidcUserInfo = response.json().await.map_err(|e| {
-            OidcError::UserInfoFailed(format!(
-                "Failed to parse UserInfo response: {e}"
-            ))
+            OidcError::UserInfoFailed(format!("Failed to parse UserInfo response: {e}"))
         })?;
 
         debug!(sub = %userinfo.sub, "UserInfo retrieved successfully");
@@ -881,29 +818,18 @@ impl OidcAuthProvider {
     /// - [`OidcError::HttpError`] — network error during JWKS fetch
     /// - [`OidcError::NonceVerificationFailed`] — nonce mismatch or expired
     #[instrument(skip(self, id_token))]
-    pub async fn validate_id_token(
-        &self,
-        id_token: &str,
-    ) -> Result<ValidatedIdToken, OidcError> {
-        use jsonwebtoken::{
-            decode, decode_header, Validation,
-        };
+    pub async fn validate_id_token(&self, id_token: &str) -> Result<ValidatedIdToken, OidcError> {
+        use jsonwebtoken::{Validation, decode, decode_header};
 
-        let meta = self.metadata.get().ok_or_else(|| {
-            OidcError::NotDiscovered
-        })?;
+        let meta = self.metadata.get().ok_or(OidcError::NotDiscovered)?;
 
         // Step 1: Decode header to get kid
         let header = decode_header(id_token).map_err(|e| {
-            OidcError::IdTokenValidationFailed(format!(
-                "Failed to decode ID token header: {e}"
-            ))
+            OidcError::IdTokenValidationFailed(format!("Failed to decode ID token header: {e}"))
         })?;
 
         let kid = header.kid.ok_or_else(|| {
-            OidcError::IdTokenValidationFailed(
-                "ID token missing 'kid' header".to_string(),
-            )
+            OidcError::IdTokenValidationFailed("ID token missing 'kid' header".to_string())
         })?;
 
         debug!(kid = %kid, "Decoded ID token header");
@@ -921,22 +847,18 @@ impl OidcAuthProvider {
         validation.validate_exp = true;
 
         // Decode into a generic map to capture extra claims
-        let token_data =
-            decode::<serde_json::Value>(id_token, &decoding_key, &validation)
-                .map_err(|e| match e.kind() {
-                    jsonwebtoken::errors::ErrorKind::ExpiredSignature => {
-                        OidcError::IdTokenValidationFailed(
-                            "ID token has expired".to_string(),
-                        )
-                    }
-                    jsonwebtoken::errors::ErrorKind::InvalidSignature => {
-                        OidcError::IdTokenValidationFailed(
-                            "ID token signature verification failed"
-                                .to_string(),
-                        )
-                    }
-                    _ => OidcError::IdTokenValidationFailed(e.to_string()),
-                })?;
+        let token_data = decode::<serde_json::Value>(id_token, &decoding_key, &validation)
+            .map_err(|e| match e.kind() {
+                jsonwebtoken::errors::ErrorKind::ExpiredSignature => {
+                    OidcError::IdTokenValidationFailed("ID token has expired".to_string())
+                }
+                jsonwebtoken::errors::ErrorKind::InvalidSignature => {
+                    OidcError::IdTokenValidationFailed(
+                        "ID token signature verification failed".to_string(),
+                    )
+                }
+                _ => OidcError::IdTokenValidationFailed(e.to_string()),
+            })?;
 
         let claims = &token_data.claims;
 
@@ -945,10 +867,24 @@ impl OidcAuthProvider {
             self.verify_nonce(token_nonce).await?;
         }
 
-        info!(sub = claims["sub"].as_str().unwrap_or("?"), "ID token validated successfully");
+        info!(
+            sub = claims["sub"].as_str().unwrap_or("?"),
+            "ID token validated successfully"
+        );
 
         // Extract extra claims (filter out standard OIDC claims)
-        let standard_claims = ["iss", "sub", "aud", "exp", "iat", "auth_time", "nonce", "acr", "amr", "azp"];
+        let standard_claims = [
+            "iss",
+            "sub",
+            "aud",
+            "exp",
+            "iat",
+            "auth_time",
+            "nonce",
+            "acr",
+            "amr",
+            "azp",
+        ];
         let extra_claims: HashMap<String, serde_json::Value> = claims
             .as_object()
             .map(|obj| {
@@ -960,14 +896,8 @@ impl OidcAuthProvider {
             .unwrap_or_default();
 
         Ok(ValidatedIdToken {
-            sub: claims["sub"]
-                .as_str()
-                .unwrap_or_default()
-                .to_string(),
-            iss: claims["iss"]
-                .as_str()
-                .unwrap_or_default()
-                .to_string(),
+            sub: claims["sub"].as_str().unwrap_or_default().to_string(),
+            iss: claims["iss"].as_str().unwrap_or_default().to_string(),
             aud: claims["aud"]
                 .as_array()
                 .map(|arr| {
@@ -978,9 +908,7 @@ impl OidcAuthProvider {
                 .unwrap_or_default(),
             exp: claims["exp"].as_u64().unwrap_or(0),
             iat: claims["iat"].as_u64().unwrap_or(0),
-            nonce: claims["nonce"]
-                .as_str()
-                .map(String::from),
+            nonce: claims["nonce"].as_str().map(String::from),
             extra_claims,
         })
     }
@@ -996,17 +924,18 @@ impl OidcAuthProvider {
     /// 3. If cache exists but has exceeded TTL → force refresh
     /// 4. If cache does not exist or was forced out → fetch fresh JWKS
     /// 5. Search fresh JWKS for the `kid`; return or error
-    async fn get_jwk_for_kid(
-        &self,
-        kid: &str,
-        jwks_uri: &str,
-    ) -> Result<Jwk, OidcError> {
+    async fn get_jwk_for_kid(&self, kid: &str, jwks_uri: &str) -> Result<Jwk, OidcError> {
         let mut cache_guard = self.jwks_cache.lock().await;
 
         // Check if we have a valid cached JWKS
         if let Some(ref cache) = *cache_guard {
             // Try to find the key in current cache
-            if let Some(jwk) = cache.keys.keys.iter().find(|k| k.kid.as_deref() == Some(kid)) {
+            if let Some(jwk) = cache
+                .keys
+                .keys
+                .iter()
+                .find(|k| k.kid.as_deref() == Some(kid))
+            {
                 debug!(kid = %kid, "Found key in JWKS cache");
                 return Ok(jwk.clone());
             }
@@ -1042,14 +971,16 @@ impl OidcAuthProvider {
         });
 
         // Now search the fresh JWKS
-        fresh_jwks.keys.into_iter().find(|k| k.kid.as_deref() == Some(kid)).ok_or_else(
-            || {
+        fresh_jwks
+            .keys
+            .into_iter()
+            .find(|k| k.kid.as_deref() == Some(kid))
+            .ok_or_else(|| {
                 OidcError::IdTokenValidationFailed(format!(
                     "No matching key found for kid='{kid}' in fresh JWKS ({} keys total)",
                     cache_guard.as_ref().map(|c| c.keys.keys.len()).unwrap_or(0)
                 ))
-            },
-        )
+            })
     }
 
     /// Refresh the JWKS cache if the TTL has expired.
@@ -1066,9 +997,7 @@ impl OidcAuthProvider {
     /// - `Ok(false)` if no refresh was needed (within TTL or no cache)
     /// - `Err(...)` if the refresh attempt failed
     pub async fn refresh_jwks_if_needed(&self) -> Result<bool, OidcError> {
-        let meta = self.metadata.get().ok_or_else(|| {
-            OidcError::NotDiscovered
-        })?;
+        let meta = self.metadata.get().ok_or(OidcError::NotDiscovered)?;
 
         let ttl = match self.config.jwks_ttl {
             Some(ttl) => ttl,
@@ -1153,21 +1082,17 @@ impl OidcAuthProvider {
                 let cleaned = before - store.len();
 
                 if expired_match {
-                    Err(OidcError::NonceVerificationFailed(
-                        format!(
-                            "Nonce found but expired (validity={}s)",
-                            self.config.nonce_validity_seconds
-                        ),
-                    ))
+                    Err(OidcError::NonceVerificationFailed(format!(
+                        "Nonce found but expired (validity={}s)",
+                        self.config.nonce_validity_seconds
+                    )))
                 } else {
                     warn!(
                         nonce_preview = &token_nonce[..token_nonce.len().min(16)],
-                        cleaned,
-                        "Nonce verification failed: unknown nonce"
+                        cleaned, "Nonce verification failed: unknown nonce"
                     );
                     Err(OidcError::NonceVerificationFailed(
-                        "Unknown nonce — possible replay attack or server restart"
-                            .to_string(),
+                        "Unknown nonce — possible replay attack or server restart".to_string(),
                     ))
                 }
             }
@@ -1192,16 +1117,17 @@ impl OidcAuthProvider {
 
         let removed = before - store.len();
         if removed > 0 {
-            debug!(removed, remaining = store.len(), "Cleaned up expired nonces");
+            debug!(
+                removed,
+                remaining = store.len(),
+                "Cleaned up expired nonces"
+            );
         }
         removed
     }
 
     /// Fetch the JSON Web Key Set from the specified URI (internal version, no caching).
-    async fn fetch_jwks_internal(
-        &self,
-        jwks_uri: &str,
-    ) -> Result<JwksKeySet, OidcError> {
+    async fn fetch_jwks_internal(&self, jwks_uri: &str) -> Result<JwksKeySet, OidcError> {
         debug!(uri = %jwks_uri, "Fetching JWKS from IdP");
 
         let response = self
@@ -1209,23 +1135,18 @@ impl OidcAuthProvider {
             .get(jwks_uri)
             .send()
             .await
-            .map_err(|e| {
-                OidcError::JwksFetchFailed(format!("HTTP error: {e}"))
-            })?;
+            .map_err(|e| OidcError::JwksFetchFailed(format!("HTTP error: {e}")))?;
 
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
-            return Err(OidcError::JwksFetchFailed(format!(
-                "HTTP {status}: {body}"
-            )));
+            return Err(OidcError::JwksFetchFailed(format!("HTTP {status}: {body}")));
         }
 
-        let jwks: JwksKeySet = response.json().await.map_err(|e| {
-            OidcError::JwksFetchFailed(format!(
-                "Failed to parse JWKS: {e}"
-            ))
-        })?;
+        let jwks: JwksKeySet = response
+            .json()
+            .await
+            .map_err(|e| OidcError::JwksFetchFailed(format!("Failed to parse JWKS: {e}")))?;
 
         debug!(key_count = jwks.keys.len(), "JWKS fetched successfully");
         Ok(jwks)
@@ -1239,14 +1160,10 @@ impl OidcAuthProvider {
             "RSA" => {
                 // Build RSA public key from n (modulus) and e (exponent)
                 let n = jwk.n.as_deref().ok_or_else(|| {
-                    OidcError::IdTokenValidationFailed(
-                        "RSA JWK missing 'n' field".to_string(),
-                    )
+                    OidcError::IdTokenValidationFailed("RSA JWK missing 'n' field".to_string())
                 })?;
                 let e = jwk.e.as_deref().ok_or_else(|| {
-                    OidcError::IdTokenValidationFailed(
-                        "RSA JWK missing 'e' field".to_string(),
-                    )
+                    OidcError::IdTokenValidationFailed("RSA JWK missing 'e' field".to_string())
                 })?;
 
                 // Build DER-encoded RSA public key
@@ -1255,14 +1172,10 @@ impl OidcAuthProvider {
             }
             "EC" => {
                 let x = jwk.x.as_deref().ok_or_else(|| {
-                    OidcError::IdTokenValidationFailed(
-                        "EC JWK missing 'x' field".to_string(),
-                    )
+                    OidcError::IdTokenValidationFailed("EC JWK missing 'x' field".to_string())
                 })?;
                 let y = jwk.y.as_deref().ok_or_else(|| {
-                    OidcError::IdTokenValidationFailed(
-                        "EC JWK missing 'y' field".to_string(),
-                    )
+                    OidcError::IdTokenValidationFailed("EC JWK missing 'y' field".to_string())
                 })?;
                 let crv = jwk.crv.as_deref().unwrap_or("P-256");
 
@@ -1373,9 +1286,7 @@ pub fn azure_ad_config(
     redirect_uri: &str,
 ) -> OidcConfig {
     OidcConfig {
-        discovery_url: format!(
-            "https://login.microsoftonline.com/{tenant_id}/v2.0"
-        ),
+        discovery_url: format!("https://login.microsoftonline.com/{tenant_id}/v2.0"),
         client_id: client_id.to_string(),
         client_secret: client_secret.to_string(),
         redirect_uri: redirect_uri.to_string(),
@@ -1500,8 +1411,8 @@ pub fn gcloud_japan_config(entity_id: &str) -> OidcConfig {
             "profile".to_string(),
             "email".to_string(),
             // G-Cloud-specific scopes for government attributes
-            "urn:oid:2.5.4.42".to_string(),  // givenName
-            "urn:oid:2.5.4.4".to_string(),    // sn (surname)
+            "urn:oid:2.5.4.42".to_string(), // givenName
+            "urn:oid:2.5.4.4".to_string(),  // sn (surname)
             "urn:oid:0.9.2342.19200300.100.1.3".to_string(), // email (RFC 1274)
         ],
         pkce: true,
@@ -1524,7 +1435,7 @@ pub fn gcloud_japan_config(entity_id: &str) -> OidcConfig {
 pub fn generate_code_verifier() -> String {
     let mut bytes = [0u8; 64];
     rand::thread_rng().fill_bytes(&mut bytes);
-    URL_SAFE_NO_PAD.encode(&bytes)
+    URL_SAFE_NO_PAD.encode(bytes)
 }
 
 /// Generate a cryptographically random CSRF `state` parameter.
@@ -1533,7 +1444,7 @@ pub fn generate_code_verifier() -> String {
 pub fn generate_random_state() -> String {
     let mut bytes = [0u8; 32];
     rand::thread_rng().fill_bytes(&mut bytes);
-    URL_SAFE_NO_PAD.encode(&bytes)
+    URL_SAFE_NO_PAD.encode(bytes)
 }
 
 /// Compute the PKCE `code_challenge` from a `code_verifier` using S256 method.
@@ -1543,7 +1454,7 @@ fn compute_code_challenge(code_verifier: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(code_verifier.as_bytes());
     let hash = hasher.finalize();
-    URL_SAFE_NO_PAD.encode(&hash)
+    URL_SAFE_NO_PAD.encode(hash)
 }
 
 // ---------------------------------------------------------------------------
@@ -1595,14 +1506,10 @@ struct JwksKeySet {
 /// Build a DER-encoded RSA public key from JWK `n` and `e` components.
 fn build_rsa_der_from_jwk(n_b64: &str, e_b64: &str) -> Result<Vec<u8>, OidcError> {
     let n = URL_SAFE_NO_PAD.decode(n_b64).map_err(|e| {
-        OidcError::IdTokenValidationFailed(format!(
-            "Failed to decode JWK 'n': {e}"
-        ))
+        OidcError::IdTokenValidationFailed(format!("Failed to decode JWK 'n': {e}"))
     })?;
     let e = URL_SAFE_NO_PAD.decode(e_b64).map_err(|e| {
-        OidcError::IdTokenValidationFailed(format!(
-            "Failed to decode JWK 'e': {e}"
-        ))
+        OidcError::IdTokenValidationFailed(format!("Failed to decode JWK 'e': {e}"))
     })?;
 
     // Build ASN.1 DER sequence for RSA public key: SEQUENCE { INTEGER(n), INTEGER(e) }
@@ -1613,7 +1520,9 @@ fn build_rsa_der_from_jwk(n_b64: &str, e_b64: &str) -> Result<Vec<u8>, OidcError
     // Wrap in SubjectPublicKeyInfo for PKCS#8 / X.509 format
     let spki = build_subject_public_key_info(
         // RSA OID: 1.2.840.113549.1.1.1
-        &[0x06, 0x09, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01],
+        &[
+            0x06, 0x09, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01,
+        ],
         &rsa_pubkey,
     );
 
@@ -1621,20 +1530,12 @@ fn build_rsa_der_from_jwk(n_b64: &str, e_b64: &str) -> Result<Vec<u8>, OidcError
 }
 
 /// Build a DER-encoded EC public key from JWK `x`, `y`, and curve.
-fn build_ec_der_from_jwk(
-    x_b64: &str,
-    y_b64: &str,
-    crv: &str,
-) -> Result<Vec<u8>, OidcError> {
+fn build_ec_der_from_jwk(x_b64: &str, y_b64: &str, crv: &str) -> Result<Vec<u8>, OidcError> {
     let x = URL_SAFE_NO_PAD.decode(x_b64).map_err(|e| {
-        OidcError::IdTokenValidationFailed(format!(
-            "Failed to decode JWK 'x': {e}"
-        ))
+        OidcError::IdTokenValidationFailed(format!("Failed to decode JWK 'x': {e}"))
     })?;
     let y = URL_SAFE_NO_PAD.decode(y_b64).map_err(|e| {
-        OidcError::IdTokenValidationFailed(format!(
-            "Failed to decode JWK 'y': {e}"
-        ))
+        OidcError::IdTokenValidationFailed(format!("Failed to decode JWK 'y': {e}"))
     })?;
 
     // Build uncompressed point representation: 0x04 || x || y
@@ -1646,17 +1547,17 @@ fn build_ec_der_from_jwk(
     let ec_point = asn1_bit_string(&point);
 
     // Select OID based on curve
-        let oid_bytes: &[u8] = match crv {
-            "P-256" => &[0x06, 0x08, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x03, 0x01, 0x07],
-            "P-384" => &[0x06, 0x05, 0x2b, 0x81, 0x04, 0x00, 0x22],
-            _ => {
-                return Err(OidcError::IdTokenValidationFailed(format!(
-                    "Unsupported EC curve: {crv}"
-                )))
-            }
-        };
+    let oid_bytes: &[u8] = match crv {
+        "P-256" => &[0x06, 0x08, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x03, 0x01, 0x07],
+        "P-384" => &[0x06, 0x05, 0x2b, 0x81, 0x04, 0x00, 0x22],
+        _ => {
+            return Err(OidcError::IdTokenValidationFailed(format!(
+                "Unsupported EC curve: {crv}"
+            )));
+        }
+    };
 
-        let spki = build_subject_public_key_info(oid_bytes, &ec_point);
+    let spki = build_subject_public_key_info(oid_bytes, &ec_point);
     Ok(spki)
 }
 
@@ -1794,7 +1695,9 @@ mod tests {
         );
         // Verify URL-safe characters only
         assert!(
-            verifier.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_'),
+            verifier
+                .chars()
+                .all(|c| c.is_alphanumeric() || c == '-' || c == '_'),
             "Code verifier contains non-URL-safe characters"
         );
     }
@@ -1804,7 +1707,9 @@ mod tests {
         let state = generate_random_state();
         assert_eq!(state.len(), 43); // 32 bytes → 43 base64url chars
         assert!(
-            state.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_'),
+            state
+                .chars()
+                .all(|c| c.is_alphanumeric() || c == '-' || c == '_'),
             "State contains non-URL-safe characters"
         );
     }
@@ -1814,10 +1719,7 @@ mod tests {
         let verifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
         let challenge = compute_code_challenge(verifier);
         // Known test vector from RFC 7636 Appendix B
-        assert_eq!(
-            challenge,
-            "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"
-        );
+        assert_eq!(challenge, "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM");
     }
 
     // --- Config Tests ---
@@ -1874,7 +1776,10 @@ mod tests {
             "client-secret",
             "https://app.example.com/callback",
         );
-        assert_eq!(config.discovery_url, "https://custom.okta.example.com/.well-known/oauth-authorization-server");
+        assert_eq!(
+            config.discovery_url,
+            "https://custom.okta.example.com/.well-known/oauth-authorization-server"
+        );
     }
 
     #[test]
@@ -1886,7 +1791,10 @@ mod tests {
             "client-secret",
             "https://app.example.com/callback",
         );
-        assert_eq!(config.discovery_url, "https://example.okta.com/.well-known/oauth-authorization-server");
+        assert_eq!(
+            config.discovery_url,
+            "https://example.okta.com/.well-known/oauth-authorization-server"
+        );
     }
 
     #[test]
@@ -1934,14 +1842,20 @@ mod tests {
             OidcError::NotDiscovered.to_string(),
             "OIDC provider not discovered"
         );
-        assert!(OidcError::DiscoveryFailed("test".to_string())
-            .to_string()
-            .contains("test"));
-        assert!(OidcError::NonceVerificationFailed("expired".to_string())
-            .to_string()
-            .contains("expired"));
-        assert!(OidcError::LogoutNotSupported("no endpoint".to_string())
-            .to_string()
-            .contains("no endpoint"));
+        assert!(
+            OidcError::DiscoveryFailed("test".to_string())
+                .to_string()
+                .contains("test")
+        );
+        assert!(
+            OidcError::NonceVerificationFailed("expired".to_string())
+                .to_string()
+                .contains("expired")
+        );
+        assert!(
+            OidcError::LogoutNotSupported("no endpoint".to_string())
+                .to_string()
+                .contains("no endpoint")
+        );
     }
 }

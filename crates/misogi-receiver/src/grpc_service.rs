@@ -1,15 +1,12 @@
-use tonic::{Request, Response, Status, Streaming};
-use misogi_core::proto::receiver_service_server::{
-    ReceiverService,
-    ReceiverServiceServer,
-};
+use crate::state::SharedState;
+use futures::stream::Stream;
+use misogi_core::proto::receiver_service_server::{ReceiverService, ReceiverServiceServer};
 #[allow(dead_code)]
 use misogi_core::proto::*;
-use crate::state::SharedState;
 use std::pin::Pin;
-use futures::stream::Stream;
-use tokio_stream::wrappers::ReceiverStream;
 use tokio::sync::mpsc;
+use tokio_stream::wrappers::ReceiverStream;
+use tonic::{Request, Response, Status, Streaming};
 
 pub struct ReceiverGrpcService {
     pub state: SharedState,
@@ -45,7 +42,8 @@ impl ReceiverService for ReceiverGrpcService {
                 let data = chunk_data.data;
                 let expected_md5 = chunk_data.chunk_md5;
 
-                let result = state.storage
+                let result = state
+                    .storage
                     .save_chunk(&file_id, chunk_index, &data, &expected_md5)
                     .await;
 
@@ -85,16 +83,22 @@ impl ReceiverService for ReceiverGrpcService {
     ) -> Result<Response<Self::DownloadFileStream>, Status> {
         let file_id = request.into_inner().file_id;
 
-        let file_info = self.state.storage.get_file_info(&file_id).await.map_err(|e| {
-            Status::internal(format!("Failed to get file info: {}", e))
-        })?;
+        let file_info = self
+            .state
+            .storage
+            .get_file_info(&file_id)
+            .await
+            .map_err(|e| Status::internal(format!("Failed to get file info: {}", e)))?;
 
         let file_info = match file_info {
             Some(info) => info,
             None => return Err(Status::not_found("File not found")),
         };
 
-        let download_path = self.state.storage.get_download_path(&file_id, &file_info.filename);
+        let download_path = self
+            .state
+            .storage
+            .get_download_path(&file_id, &file_info.filename);
 
         if !download_path.exists() {
             return Err(Status::not_found("File not ready for download"));
@@ -133,16 +137,21 @@ impl ReceiverService for ReceiverGrpcService {
         });
 
         let output_stream = ReceiverStream::new(rx);
-        Ok(Response::new(Box::pin(output_stream) as Self::DownloadFileStream))
+        Ok(Response::new(
+            Box::pin(output_stream) as Self::DownloadFileStream
+        ))
     }
 
     async fn list_files(
         &self,
         _request: Request<()>,
     ) -> Result<Response<ListFilesResponse>, Status> {
-        let files = self.state.storage.list_ready_files().await.map_err(|e| {
-            Status::internal(format!("Failed to list files: {}", e))
-        })?;
+        let files = self
+            .state
+            .storage
+            .list_ready_files()
+            .await
+            .map_err(|e| Status::internal(format!("Failed to list files: {}", e)))?;
 
         let file_responses: Vec<FileStatusResponse> = files
             .into_iter()

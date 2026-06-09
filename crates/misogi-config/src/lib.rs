@@ -41,17 +41,12 @@
 //! }
 //! ```
 
-pub mod error;
 pub mod config;
+pub mod error;
 
 // --- Public exports ---
-pub use error::ConfigError;
 pub use config::{
-    MisogiConfig,
-    GeneralConfig,
-    JwtConfigSection,
-    IdentityProviderConfig,
-    StorageConfigSection,
-    TransportConfigSection,
-    ParsersConfigSection,
+    GeneralConfig, IdentityProviderConfig, JwtConfigSection, MisogiConfig, ParsersConfigSection,
+    StorageConfigSection, TransportConfigSection,
 };
+pub use error::ConfigError;

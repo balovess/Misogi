@@ -22,9 +22,9 @@ use std::time::Duration;
 
 use bytes::Bytes;
 
-use crate::traits::{TransferDriver, TransferDriverConfig};
-use super::types::{PullConfig, PullBufferEntry, PullEntryStatus};
 use super::driver::PullDriver;
+use super::types::{PullBufferEntry, PullConfig, PullEntryStatus};
+use crate::traits::{TransferDriver, TransferDriverConfig};
 
 // =========================================================================
 // Test Group 1: Configuration Validation
@@ -62,7 +62,10 @@ fn test_pull_config_rejects_excessive_buffer_size() {
     let result = cfg.validate();
     assert!(result.is_err());
     assert!(
-        result.unwrap_err().to_string().contains("buffer_max_size_mb"),
+        result
+            .unwrap_err()
+            .to_string()
+            .contains("buffer_max_size_mb"),
         "Error should mention buffer_max_size_mb"
     );
 }
@@ -94,7 +97,10 @@ async fn test_send_chunk_and_list_pending() {
     driver.init(PullConfig::default()).await.unwrap();
 
     let data = Bytes::from_static(b"hello pull world");
-    let ack = driver.send_chunk("file-001", 0, data.clone()).await.unwrap();
+    let ack = driver
+        .send_chunk("file-001", 0, data.clone())
+        .await
+        .unwrap();
 
     assert_eq!(ack.file_id, "file-001");
     assert_eq!(ack.chunk_index, 0);
@@ -115,7 +121,10 @@ async fn test_pull_and_ack_cycle() {
 
     // Send
     let data = Bytes::from_static(b"pull-test-data");
-    driver.send_chunk("file-pull", 0, data.clone()).await.unwrap();
+    driver
+        .send_chunk("file-pull", 0, data.clone())
+        .await
+        .unwrap();
 
     // List
     let pending = driver.list_pending_files().await.unwrap();
@@ -149,10 +158,13 @@ async fn test_concurrent_sends() {
         buffer_max_size_mb: 100,
         ..Default::default()
     });
-    driver.init(PullConfig {
-        buffer_max_size_mb: 100,
-        ..Default::default()
-    }).await.unwrap();
+    driver
+        .init(PullConfig {
+            buffer_max_size_mb: 100,
+            ..Default::default()
+        })
+        .await
+        .unwrap();
 
     // Spawn multiple concurrent send tasks using Arc for 'static lifetime.
     let driver_arc = Arc::new(driver);
@@ -221,10 +233,13 @@ async fn test_retention_cleanup_evicts_old_entries() {
         retention_duration: Duration::from_millis(1500), // >= 1s minimum for validation
         ..Default::default()
     });
-    driver.init(PullConfig {
-        retention_duration: Duration::from_millis(1500),
-        ..Default::default()
-    }).await.unwrap();
+    driver
+        .init(PullConfig {
+            retention_duration: Duration::from_millis(1500),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
 
     // Insert an entry that will expire.
     driver
@@ -311,10 +326,13 @@ async fn test_buffer_unlimited_mode() {
         buffer_max_size_mb: 0, // 0 = unlimited
         ..Default::default()
     });
-    driver.init(PullConfig {
-        buffer_max_size_mb: 0,
-        ..Default::default()
-    }).await.unwrap();
+    driver
+        .init(PullConfig {
+            buffer_max_size_mb: 0,
+            ..Default::default()
+        })
+        .await
+        .unwrap();
 
     // Large payload should succeed when unlimited mode is active.
     let big_data = Bytes::from(vec![0xAB; 1024 * 1024]); // 1 MB
@@ -328,10 +346,13 @@ async fn test_buffer_single_byte_accepted() {
         buffer_max_size_mb: 0, // Unlimited
         ..Default::default()
     });
-    driver.init(PullConfig {
-        buffer_max_size_mb: 0,
-        ..Default::default()
-    }).await.unwrap();
+    driver
+        .init(PullConfig {
+            buffer_max_size_mb: 0,
+            ..Default::default()
+        })
+        .await
+        .unwrap();
 
     let data = Bytes::from_static(b"x");
     assert!(driver.send_chunk("f", 0, data).await.is_ok());
@@ -386,7 +407,9 @@ async fn test_shutdown_clears_buffer() {
     driver.shutdown().await.unwrap();
 
     // After shutdown, operations should fail (not initialized).
-    let result = driver.send_chunk("after-shutdown", 0, Bytes::from_static(b"x")).await;
+    let result = driver
+        .send_chunk("after-shutdown", 0, Bytes::from_static(b"x"))
+        .await;
     assert!(result.is_err(), "Send after shutdown should fail");
 }
 

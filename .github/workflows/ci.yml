@@ -1,3 +1,26 @@
+# =============================================================================
+# Misogi Multi-Platform CI Pipeline
+# =============================================================================
+#
+# Platform Support:
+#   - Linux (ubuntu-latest)    — Primary development platform
+#   - Windows (windows-latest) — Enterprise deployment target
+#   - macOS (macos-latest)     — Apple ecosystem support
+#
+# Rust Version Support:
+#   - stable  — Current stable Rust toolchain
+#   - 1.75.0  — MSRV (Minimum Supported Rust Version)
+#
+# Jobs:
+#   1. lint        — Format and clippy checks (Linux + stable only)
+#   2. check       — Compilation check (all platforms × all versions)
+#   3. test        — Unit and integration tests (all platforms × stable)
+#   4. doc         — Documentation generation (Linux + stable)
+#   5. security    — Security audit (Linux + stable)
+#   6. wasm-gate   — WASM compilation gate (Linux + stable)
+#   7. build       — Release build artifacts (all platforms)
+#   8. summary     — CI status aggregation
+
 name: CI
 
 on:
@@ -6,8 +29,16 @@ on:
   pull_request:
     branches: [main]
   schedule:
+    # Monday and Thursday at 09:00 UTC
     - cron: '0 9 * * 1'
     - cron: '0 9 * * 4'
+  workflow_dispatch:
+    inputs:
+      run_all_platforms:
+        description: 'Run on all platforms (including macOS)'
+        required: false
+        default: true
+        type: boolean
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -17,99 +48,303 @@ env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
   RUSTFLAGS: "-D warnings"
+  # MSRV — Minimum Supported Rust Version
+  MSRV: "1.85.0"
+
+# =============================================================================
+# Platform Matrix Configuration
+# =============================================================================
 
 jobs:
-  check-linux:
-    name: Check (Linux)
+  # ===========================================================================
+  # Job 1: Lint — Code Quality Checks
+  # ===========================================================================
+  # Only runs on Linux + stable to avoid redundant checks across platforms.
+
+  lint:
+    name: Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy, rust-src
-      - uses: Swatinem/rust-cache@v2
+
+      - name: Cache Cargo artifacts
+        uses: Swatinem/rust-cache@v2
         with:
-          key: workspace-${{ hashFiles('**/Cargo.lock') }}
-      - name: Format check
+          key: lint-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Check formatting
         run: cargo fmt --all -- --check
-      - name: Clippy (strict)
-        run: cargo clippy --workspace -- -D warnings -D clippy::all
+
+      - name: Run Clippy (strict)
+        run: cargo clippy --workspace --all-targets -- -D warnings -D clippy::all
+
+  # ===========================================================================
+  # Job 2: Check — Compilation Verification
+  # ===========================================================================
+  # Matrix: All platforms × stable + Linux × MSRV
+
+  check:
+    name: Check (${{ matrix.os }}, Rust ${{ matrix.rust }})
+    runs-on: ${{ matrix.os }}
+    needs: lint
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Stable Rust on all platforms
+          - os: ubuntu-latest
+            rust: stable
+          - os: windows-latest
+            rust: stable
+          - os: macos-latest
+            rust: stable
+          # MSRV on Linux only (representative)
+          - os: ubuntu-latest
+            rust: msrv
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust == 'msrv' && env.MSRV || 'stable' }}
+
+      - name: Cache Cargo artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: check-${{ matrix.os }}-${{ matrix.rust }}-${{ hashFiles('**/Cargo.lock') }}
+
       - name: Compile check (all targets)
         run: cargo check --workspace --all-targets
-      - name: Documentation check
+
+  # ===========================================================================
+  # Job 3: Test — Unit & Integration Tests
+  # ===========================================================================
+  # Matrix: All platforms × stable Rust
+
+  test:
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    needs: [lint, check]
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: test-${{ matrix.os }}-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Run tests
+        run: cargo test --workspace -- --nocapture
+
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-failures-${{ matrix.os }}
+          path: |
+            target/debug/deps/
+            **/*.stderr
+          retention-days: 7
+
+  # ===========================================================================
+  # Job 4: Doc — Documentation Generation
+  # ===========================================================================
+  # Only runs on Linux + stable to avoid redundant builds.
+
+  doc:
+    name: Documentation
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rust-docs
+
+      - name: Cache Cargo artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: doc-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Generate documentation
         run: cargo doc --workspace --no-deps
 
-  check-windows:
-    name: Check (Windows)
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Upload documentation
+        uses: actions/upload-artifact@v4
         with:
-          components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
-        with:
-          key: workspace-${{ hashFiles('**/Cargo.lock') }}
-      - name: Format check
-        run: cargo fmt --all -- --check
-      - name: Clippy (strict)
-        run: cargo clippy --workspace -- -D warnings
-      - name: Compile check (all targets)
-        run: cargo check --workspace --all-targets
+          name: api-docs
+          path: target/doc/
+          retention-days: 30
 
-  test-linux:
-    name: Test (Linux)
-    needs: check-linux
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-        with:
-          key: workspace-${{ hashFiles('**/Cargo.lock') }}
-      - name: Run tests
-        run: cargo test --workspace -- --nocapture
+  # ===========================================================================
+  # Job 5: Security — Security Audit
+  # ===========================================================================
+  # Runs cargo-audit for vulnerability scanning.
 
-  test-windows:
-    name: Test (Windows)
-    needs: check-windows
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-        with:
-          key: workspace-${{ hashFiles('**/Cargo.lock') }}
-      - name: Run tests
-        run: cargo test --workspace -- --nocapture
-
-  security-audit:
+  security:
     name: Security Audit
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'schedule'
+    needs: lint
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo artifacts
+        uses: Swatinem/rust-cache@v2
         with:
-          key: workspace-${{ hashFiles('**/Cargo.lock') }}
+          key: security-${{ hashFiles('**/Cargo.lock') }}
+
       - name: Install cargo-audit
         run: cargo install cargo-audit
+
       - name: Fetch advisory database
         run: cargo audit --fetch
-      - name: Run audit
+
+      - name: Run security audit
         run: cargo audit
+
+  # ===========================================================================
+  # Job 6: WASM Gate — WASM Compilation Check
+  # ===========================================================================
+  # Validates that the WASM target compiles successfully.
 
   wasm-gate:
     name: WASM Compile Gate
     runs-on: ubuntu-latest
+    needs: lint
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@v2
+
+      - name: Cache Cargo artifacts
+        uses: Swatinem/rust-cache@v2
         with:
-          key: workspace-wasm-${{ hashFiles('**/Cargo.lock') }}
+          key: wasm-gate-${{ hashFiles('**/Cargo.lock') }}
+
       - name: WASM compile check
-        run: cargo check -p misogi-wasm --target wasm32-unknown-unknown
+        run: cargo check -p misogi-wasm --target wasm32-unknown-unknown --no-default-features --features browser
+
+  # ===========================================================================
+  # Job 7: Build — Release Artifacts
+  # ===========================================================================
+  # Builds release binaries for each platform.
+
+  build:
+    name: Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    needs: [check, test]
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact_name: misogi-linux-x86_64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact_name: misogi-windows-x86_64
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact_name: misogi-macos-aarch64
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache Cargo artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: build-${{ matrix.os }}-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build release binaries
+        run: cargo build --release --workspace --target ${{ matrix.target }}
+
+      - name: Prepare artifacts (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          mkdir -p artifacts
+          find target/${{ matrix.target }}/release -maxdepth 1 -type f -executable -exec cp {} artifacts/ \;
+          # Include README and LICENSE
+          cp README.md artifacts/ 2>/dev/null || true
+          cp LICENSE artifacts/ 2>/dev/null || true
+
+      - name: Prepare artifacts (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts
+          Copy-Item target/${{ matrix.target }}/release/*.exe artifacts/ -ErrorAction SilentlyContinue
+          Copy-Item README.md artifacts/ -ErrorAction SilentlyContinue
+          Copy-Item LICENSE artifacts/ -ErrorAction SilentlyContinue
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: artifacts/
+          retention-days: 30
+
+  # ===========================================================================
+  # Job 8: Summary — CI Status Aggregation
+  # ===========================================================================
+  # Provides a single job to check for overall CI success.
+
+  summary:
+    name: CI Summary
+    runs-on: ubuntu-latest
+    needs: [lint, check, test, doc, security, wasm-gate, build]
+    if: always()
+    steps:
+      - name: Check CI status
+        run: |
+          echo "## CI Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+          
+          for job in lint check test doc security wasm-gate build; do
+            status="${{ needs.${{ job }}.result }}"
+            case "$status" in
+              success) emoji="✅" ;;
+              failure) emoji="❌" ;;
+              skipped) emoji="⏭️" ;;
+              *) emoji="❓" ;;
+            esac
+            echo "| $job | $emoji $status |" >> $GITHUB_STEP_SUMMARY
+          done
+
+      - name: Fail if any job failed
+        if: contains(needs.*.result, 'failure')
+        run: exit 1

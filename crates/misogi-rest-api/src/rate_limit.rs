@@ -272,7 +272,7 @@ mod tests {
     #[test]
     fn test_stale_bucket_cleanup() {
         let limiter = RateLimiter::new(10, Duration::from_millis(100));
-        
+
         // Add a key
         limiter.check("stale-key", None);
         assert_eq!(limiter.active_key_count(), 1);
@@ -282,7 +282,7 @@ mod tests {
 
         // Accessing a different key triggers lazy cleanup
         limiter.check("other-key", None);
-        
+
         // Stale key should have been removed
         assert_eq!(limiter.active_key_count(), 1);
     }

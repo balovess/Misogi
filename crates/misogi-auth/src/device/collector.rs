@@ -18,14 +18,11 @@
 //! Base64 Decode → JSON Parse → Schema Validate → Return DeviceFingerprint
 //! ```
 
-use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
+use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use tracing::{debug, warn};
 
 use super::fingerprint::{
-    DeviceFingerprint,
-    FingerprintSignal,
-    MIN_CONFIDENCE_THRESHOLD,
-    MIN_UA_HASH_LENGTH,
+    DeviceFingerprint, FingerprintSignal, MIN_CONFIDENCE_THRESHOLD, MIN_UA_HASH_LENGTH,
 };
 use crate::AuthError;
 
@@ -87,10 +84,7 @@ pub fn collect_fingerprint_from_header(
         _ => return Ok(None), // No fingerprint provided — not an error
     };
 
-    debug!(
-        header_len = raw.len(),
-        "Received device fingerprint header"
-    );
+    debug!(header_len = raw.len(), "Received device fingerprint header");
 
     // Size check to prevent DoS
     if raw.len() > MAX_FINGERPRINT_SIZE_BYTES {

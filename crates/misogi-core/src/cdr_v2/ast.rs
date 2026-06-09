@@ -18,10 +18,7 @@
 //   when deep inspection is required; None for lightweight scans.
 // =============================================================================
 
-use crate::cdr_v2::types::{
-    ActiveContentRef, ActiveContentType, DocumentFormat,
-    ThreatSeverity,
-};
+use crate::cdr_v2::types::{ActiveContentRef, ActiveContentType, DocumentFormat, ThreatSeverity};
 
 /// Node in the document Abstract Syntax Tree.
 ///
@@ -150,7 +147,9 @@ impl AstNode {
             || match self {
                 Self::Document { children }
                 | Self::Page { children, .. }
-                | Self::Container { children, .. } => children.iter().any(|c| c.has_active_content()),
+                | Self::Container { children, .. } => {
+                    children.iter().any(|c| c.has_active_content())
+                }
                 _ => false,
             }
     }
@@ -245,7 +244,9 @@ impl DocumentAst {
     pub fn new(format: DocumentFormat, metadata: DocumentMetadata) -> Self {
         Self {
             format,
-            root: AstNode::Document { children: Vec::new() },
+            root: AstNode::Document {
+                children: Vec::new(),
+            },
             metadata,
             active_contents: Vec::new(),
         }
@@ -288,10 +289,7 @@ impl DocumentAst {
     /// Uses `Ord::max()` for deterministic worst-case selection.
     #[must_use]
     pub fn max_severity(&self) -> Option<ThreatSeverity> {
-        self.active_contents
-            .iter()
-            .map(|ac| ac.severity)
-            .max()
+        self.active_contents.iter().map(|ac| ac.severity).max()
     }
 }
 
@@ -513,7 +511,9 @@ mod tests {
     fn ast_node_node_counts_correctly() {
         let tree = AstNode::Document {
             children: vec![
-                AstNode::Text { content: "a".into() },
+                AstNode::Text {
+                    content: "a".into(),
+                },
                 AstNode::Page {
                     index: 0,
                     children: vec![

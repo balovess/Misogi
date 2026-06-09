@@ -24,7 +24,7 @@ use std::time::Instant;
 use async_trait::async_trait;
 
 use super::ocr_provider::OcrProvider;
-use super::types::{OcrBoundingBox, OcrExtractionResult, OcrImageMetadata, OcrTextBlock, OcrError};
+use super::types::{OcrBoundingBox, OcrError, OcrExtractionResult, OcrImageMetadata, OcrTextBlock};
 use crate::pii::{PIIRule, RegexPIIDetector};
 use crate::traits::{PIIAction, PIIDetector, PIIMatch};
 
@@ -157,9 +157,13 @@ impl OcrPiiDetector {
             )));
         }
 
-        let ocr_result = self.ocr_provider.extract_text(image_data).await.map_err(|e| {
-            crate::error::MisogiError::Protocol(format!("OCR extraction failed: {}", e))
-        })?;
+        let ocr_result = self
+            .ocr_provider
+            .extract_text(image_data)
+            .await
+            .map_err(|e| {
+                crate::error::MisogiError::Protocol(format!("OCR extraction failed: {}", e))
+            })?;
 
         if ocr_result.full_text.is_empty() || ocr_result.blocks.is_empty() {
             return Ok(OcrPiiScanResult {

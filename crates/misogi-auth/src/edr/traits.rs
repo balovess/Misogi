@@ -5,11 +5,7 @@
 
 use async_trait::async_trait;
 
-use super::models::{
-    EdrDevicePosture,
-    EdrError,
-    EdrRiskScore,
-};
+use super::models::{EdrDevicePosture, EdrError, EdrRiskScore};
 
 /// EDR (Endpoint Detection and Response) provider trait.
 ///
@@ -32,10 +28,7 @@ pub trait EdrProvider: Send + Sync {
     /// # Arguments
     ///
     /// * `device_id` — Identifier of the device in the EDR system
-    async fn get_device_posture(
-        &self,
-        device_id: &str,
-    ) -> Result<EdrDevicePosture, EdrError>;
+    async fn get_device_posture(&self, device_id: &str) -> Result<EdrDevicePosture, EdrError>;
 
     /// Check if the device currently has active threats or detections.
     ///
@@ -45,10 +38,7 @@ pub trait EdrProvider: Send + Sync {
     /// # Arguments
     ///
     /// * `device_id` — Identifier of the device in the EDR system
-    async fn has_active_threats(
-        &self,
-        device_id: &str,
-    ) -> Result<bool, EdrError>;
+    async fn has_active_threats(&self, device_id: &str) -> Result<bool, EdrError>;
 
     /// Get the current risk score for a device from EDR analytics.
     ///
@@ -58,8 +48,5 @@ pub trait EdrProvider: Send + Sync {
     /// # Arguments
     ///
     /// * `device_id` — Identifier of the device in the EDR system
-    async fn get_risk_score(
-        &self,
-        device_id: &str,
-    ) -> Result<EdrRiskScore, EdrError>;
+    async fn get_risk_score(&self, device_id: &str) -> Result<EdrRiskScore, EdrError>;
 }

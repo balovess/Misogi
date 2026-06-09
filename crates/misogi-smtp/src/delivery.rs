@@ -31,10 +31,7 @@
 
 use crate::error::Result;
 use chrono::{DateTime, Utc};
-use lettre::{
-    message::Mailbox,
-    Message, SmtpTransport, Transport,
-};
+use lettre::{Message, SmtpTransport, Transport, message::Mailbox};
 use std::collections::VecDeque;
 use tracing::{debug, error, info, warn};
 
@@ -340,9 +337,9 @@ impl DeliveryQueue {
                         // Exhausted all retries
                         let fail_result = DeliveryResult::FailedPermanently {
                             recipient: recipient.clone(),
-                            last_error: task.last_error.unwrap_or_else(|| {
-                                "Retry limit exceeded".to_string()
-                            }),
+                            last_error: task
+                                .last_error
+                                .unwrap_or_else(|| "Retry limit exceeded".to_string()),
                             attempts: new_attempts,
                         };
                         error!(
@@ -434,7 +431,7 @@ impl DeliveryQueue {
             },
             Err(e) => {
                 let error_string = e.to_string();
-                
+
                 // Classify error type based on lettre error content
                 // Note: lettre wraps SMTP responses; we inspect for common patterns
                 let is_transient = error_string.contains("timeout")
@@ -479,7 +476,10 @@ impl DeliveryQueue {
         let parsed = mailparse::parse_mail(raw_data)?;
 
         // Extract key headers
-        let from_header = parsed.headers.iter().find(|h| h.get_key().to_lowercase() == "from");
+        let from_header = parsed
+            .headers
+            .iter()
+            .find(|h| h.get_key().to_lowercase() == "from");
         let subject_header = parsed
             .headers
             .iter()
@@ -489,9 +489,7 @@ impl DeliveryQueue {
             .map(|h| h.get_value())
             .unwrap_or_else(|| "misogi-smtp@localhost".to_string());
 
-        let subject = subject_header
-            .map(|h| h.get_value())
-            .unwrap_or_default();
+        let subject = subject_header.map(|h| h.get_value()).unwrap_or_default();
 
         // Get body text
         let body = parsed.get_body().unwrap_or_default();

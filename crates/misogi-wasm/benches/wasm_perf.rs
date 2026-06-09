@@ -25,16 +25,13 @@
 
 mod generators;
 
-use criterion::{
-    black_box, criterion_group, criterion_main, BenchmarkId, Criterion,
-    Throughput,
-};
+use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
 
+use generators::*;
 use misogi_cdr::policy::SanitizationPolicy;
 use misogi_wasm::wasm_compat::{
     WasmOfficeSanitizer, WasmPdfSanitizer, wasm_compute_md5, wasm_compute_sha256,
 };
-use generators::*;
 
 // =============================================================================
 // Configuration Constants
@@ -187,8 +184,9 @@ fn bench_pdf_memory_peak(c: &mut Criterion) {
             |b, data| {
                 b.iter(|| {
                     // Force output to be consumed so compiler cannot elide allocations
-                    let result =
-                        sanitizer.sanitize(black_box(data), &DEFAULT_POLICY).unwrap();
+                    let result = sanitizer
+                        .sanitize(black_box(data), &DEFAULT_POLICY)
+                        .unwrap();
                     black_box(result.output_data.len());
                     black_box(result.report.actions_taken.len());
                 });
@@ -503,9 +501,4 @@ criterion_group! {
         bench_hash_sha256,
 }
 
-criterion_main!(
-    pdf_benches,
-    office_benches,
-    pii_benches,
-    hash_benches,
-);
+criterion_main!(pdf_benches, office_benches, pii_benches, hash_benches,);

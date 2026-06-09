@@ -148,10 +148,7 @@ pub struct ContextAnalysisResponse {
 pub enum ContextError {
     /// The configured NLP provider is unavailable or misconfigured.
     #[error("Context provider '{provider}' unavailable: {message}")]
-    ProviderUnavailable {
-        provider: String,
-        message: String,
-    },
+    ProviderUnavailable { provider: String, message: String },
 
     /// Network or communication failure with external NLP service.
     #[error("Provider communication failed: {0}")]
@@ -170,16 +167,11 @@ pub enum ContextError {
 
     /// Authentication failure with external NLP service.
     #[error("Authentication failed for provider '{provider}': {message}")]
-    Authentication {
-        provider: String,
-        message: String,
-    },
+    Authentication { provider: String, message: String },
 
     /// Timeout waiting for NLP provider response.
     #[error("Provider timeout after {timeout_ms}ms")]
-    Timeout {
-        timeout_ms: u64,
-    },
+    Timeout { timeout_ms: u64 },
 
     /// Configuration error (missing API key, invalid YAML, etc.).
     #[error("Configuration error: {0}")]

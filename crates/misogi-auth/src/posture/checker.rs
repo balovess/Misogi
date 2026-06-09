@@ -6,12 +6,7 @@
 use tracing::{debug, info, warn};
 
 use super::types::{
-    CheckSeverity,
-    DevicePosture,
-    FailureAction,
-    OsPlatform,
-    OsRequirement,
-    PostureCheckResult,
+    CheckSeverity, DevicePosture, FailureAction, OsPlatform, OsRequirement, PostureCheckResult,
     PosturePolicy,
 };
 
@@ -130,10 +125,7 @@ impl PostureChecker {
             (
                 false,
                 FailureAction::Block,
-                format!(
-                    "Critical checks failed: {}",
-                    failed_critical.join(", ")
-                ),
+                format!("Critical checks failed: {}", failed_critical.join(", ")),
             )
         } else if below_threshold {
             match self.policy.failure_action {
@@ -221,10 +213,7 @@ impl PostureChecker {
         }
     }
 
-    fn check_antivirus(
-        &self,
-        sw: &super::types::SecuritySoftwarePosture,
-    ) -> PostureCheckResult {
+    fn check_antivirus(&self, sw: &super::types::SecuritySoftwarePosture) -> PostureCheckResult {
         if !self.policy.require_antivirus {
             return PostureCheckResult {
                 check_id: "antivirus_enabled".to_string(),
@@ -263,10 +252,7 @@ impl PostureChecker {
         }
     }
 
-    fn check_patch_compliance(
-        &self,
-        patch: &super::types::PatchStatus,
-    ) -> PostureCheckResult {
+    fn check_patch_compliance(&self, patch: &super::types::PatchStatus) -> PostureCheckResult {
         if patch.is_compliant && patch.critical_patches_missing == 0 {
             PostureCheckResult {
                 check_id: "patch_compliant".to_string(),
@@ -300,10 +286,7 @@ impl PostureChecker {
         }
     }
 
-    fn check_edr(
-        &self,
-        sw: &super::types::SecuritySoftwarePosture,
-    ) -> PostureCheckResult {
+    fn check_edr(&self, sw: &super::types::SecuritySoftwarePosture) -> PostureCheckResult {
         if !self.policy.require_edr {
             return PostureCheckResult {
                 check_id: "edr_present".to_string(),

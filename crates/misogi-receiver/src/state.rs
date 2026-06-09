@@ -17,13 +17,12 @@
 //! When `transfer_driver` is `Some(...)`, the receiver can poll for incoming
 //! files instead of (or in addition to) listening for TCP connections.
 
-#[allow(dead_code)]
-
-use std::sync::Arc;
-use tokio::sync::RwLock;
 use crate::config::ReceiverConfig;
 use crate::storage::ChunkStorage;
 use misogi_core::FileInfo;
+#[allow(dead_code)]
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
 /// Central application state for the Misogi Receiver component.
 ///
@@ -45,7 +44,6 @@ pub struct AppState {
     // =======================================================================
     // Pluggable Trait Layer (Task 5.14)
     // =======================================================================
-
     /// Optional transfer driver for receiving files via non-TCP transports.
     ///
     /// When `Some(driver)`, the receiver can use this driver to poll for
@@ -81,7 +79,8 @@ impl AppState {
     /// # Returns
     /// Fully initialized `AppState` ready for use.
     pub fn new(config: ReceiverConfig) -> Self {
-        let storage = ChunkStorage::new(&config.storage_dir, &config.download_dir.to_string_lossy());
+        let storage =
+            ChunkStorage::new(&config.storage_dir, &config.download_dir.to_string_lossy());
 
         // Initialize transfer driver if configured for non-TCP mode (Task 5.14)
         // For now, default to None (TCP mode); StorageRelayDriver integration

@@ -49,9 +49,7 @@ impl MockStorageBackend {
     /// Create a new mock storage backend with the given type identifier.
     fn new(backend_name: &'static str) -> Self {
         Self {
-            store: Arc::new(parking_lot::RwLock::new(
-                std::collections::HashMap::new(),
-            )),
+            store: Arc::new(parking_lot::RwLock::new(std::collections::HashMap::new())),
             backend_name,
         }
     }
@@ -59,11 +57,7 @@ impl MockStorageBackend {
 
 #[async_trait]
 impl StorageBackend for MockStorageBackend {
-    async fn put(
-        &self,
-        key: &str,
-        data: Bytes,
-    ) -> Result<StorageInfo, StorageError> {
+    async fn put(&self, key: &str, data: Bytes) -> Result<StorageInfo, StorageError> {
         let mut store = self.store.write();
         let size = data.len() as u64;
         store.insert(key.to_string(), data);
@@ -151,8 +145,7 @@ async fn test_trait_object_safety() {
     // Verify that StorageBackend can be used as a trait object (dyn StorageBackend).
     // This is essential for the plugin architecture where backends are selected
     // at runtime via configuration.
-    let backend: Arc<dyn StorageBackend> =
-        Arc::new(MockStorageBackend::new("memory-dyn"));
+    let backend: Arc<dyn StorageBackend> = Arc::new(MockStorageBackend::new("memory-dyn"));
 
     // Verify all methods work through trait object
     let data = Bytes::from_static(b"trait object test");
@@ -182,10 +175,7 @@ async fn test_error_conversion_from_io_error() {
     match storage_err {
         StorageError::IoError(ref source) => {
             assert_eq!(source.kind(), io::ErrorKind::NotFound);
-            assert_eq!(
-                source.to_string(),
-                "file not found"
-            );
+            assert_eq!(source.to_string(), "file not found");
         }
         _ => panic!("Expected StorageError::IoError variant"),
     }
@@ -300,8 +290,7 @@ fn test_storage_info_helper_methods() {
 
 #[tokio::test]
 async fn test_concurrent_access_safety() {
-    let backend: Arc<dyn StorageBackend> =
-        Arc::new(MockStorageBackend::new("memory-concurrent"));
+    let backend: Arc<dyn StorageBackend> = Arc::new(MockStorageBackend::new("memory-concurrent"));
 
     // Spawn multiple concurrent tasks writing to different keys
     let mut handles = Vec::new();

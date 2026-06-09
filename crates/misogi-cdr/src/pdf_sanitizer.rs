@@ -1,5 +1,5 @@
-use crate::report::{SanitizationAction, SanitizationReport};
 use crate::policy::SanitizationPolicy;
+use crate::report::{SanitizationAction, SanitizationReport};
 
 // Core error types (always available from misogi-core)
 use misogi_core::MisogiError;
@@ -7,11 +7,11 @@ use misogi_core::Result;
 
 // Runtime-dependent imports (async trait, file sanitizer, tokio I/O)
 #[cfg(feature = "runtime")]
-use async_trait::async_trait;
-#[cfg(feature = "runtime")]
 use super::FileSanitizer;
 #[cfg(feature = "pdf-cdr")]
 use crate::pdf_true_cdr::{PdfTrueCdrConfig, PdfTrueCdrEngine, PdfTrueCdrResult};
+#[cfg(feature = "runtime")]
+use async_trait::async_trait;
 use nom::{
     IResult,
     branch::alt,
@@ -329,17 +329,17 @@ impl PdfSanitizer {
 
         if let Some(name_start) = windows_iterfind(remaining, b"/Name") {
             let after_name = &remaining[name_start + 5..];
-            if after_name.starts_with(b"(") {
-                if let Some(close_pos) = after_name.iter().position(|&b| b == b')') {
-                    let name_content = &after_name[1..close_pos];
-                    return Ok((
-                        remaining,
-                        PdfThreat::EmbeddedFile {
-                            offset: 0,
-                            name: String::from_utf8_lossy(name_content).into_owned(),
-                        },
-                    ));
-                }
+            if after_name.starts_with(b"(")
+                && let Some(close_pos) = after_name.iter().position(|&b| b == b')')
+            {
+                let name_content = &after_name[1..close_pos];
+                return Ok((
+                    remaining,
+                    PdfThreat::EmbeddedFile {
+                        offset: 0,
+                        name: String::from_utf8_lossy(name_content).into_owned(),
+                    },
+                ));
             }
         }
 
@@ -446,8 +446,13 @@ impl PdfSanitizer {
             return data.len();
         }
 
-        for i in threat_end..data.len().min(threat_end + 256) {
-            if data[i] == b'\n' || data[i] == b'\r' {
+        for (i, &byte) in data
+            .iter()
+            .enumerate()
+            .take(data.len().min(threat_end + 256))
+            .skip(threat_end)
+        {
+            if byte == b'\n' || byte == b'\r' {
                 return i + 1;
             }
         }
@@ -695,10 +700,10 @@ impl PdfSanitizer {
                 }
                 let entry = &data[pos..pos + 20];
                 let offset_str = &entry[..10];
-                if let Ok(offset) = std::str::from_utf8(offset_str) {
-                    if let Ok(byte_offset) = offset.trim().parse::<usize>() {
-                        objects.push((obj_num + i, byte_offset));
-                    }
+                if let Ok(offset) = std::str::from_utf8(offset_str)
+                    && let Ok(byte_offset) = offset.trim().parse::<usize>()
+                {
+                    objects.push((obj_num + i, byte_offset));
                 }
                 pos += 20;
             }
@@ -807,11 +812,7 @@ impl PdfSanitizer {
     ///
     /// Always returns error indicating feature not available.
     #[cfg(not(feature = "pdf-cdr"))]
-    pub fn true_cdr_reconstruct(
-        &self,
-        _data: &[u8],
-        _config: Option<()>,
-    ) -> Result<()> {
+    pub fn true_cdr_reconstruct(&self, _data: &[u8], _config: Option<()>) -> Result<()> {
         Err(MisogiError::Protocol(
             "PDF True CDR requires 'pdf-cdr' feature flag. Enable with: cargo build --features pdf-cdr"
                 .to_string(),

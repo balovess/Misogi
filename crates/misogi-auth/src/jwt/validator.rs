@@ -30,7 +30,7 @@
 //! println!("Token issued at: {}", validated.issued_at);
 //! ```
 
-use jsonwebtoken::{decode, DecodingKey, Validation, Algorithm};
+use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode};
 use tracing::{debug, info, instrument};
 
 use super::{JwtConfig, JwtError, unix_timestamp};
@@ -147,20 +147,16 @@ impl JwtValidator {
     /// ```
     #[instrument(skip(config), fields(issuer = %config.issuer))]
     pub fn new(config: JwtConfig) -> Result<Self, JwtError> {
-        let public_pem =
-            std::fs::read_to_string(&config.rsa_pub_pem_path).map_err(|e| {
-                JwtError::KeyLoadFailed(format!(
-                    "Failed to read public key from {}: {}",
-                    config.rsa_pub_pem_path.display(), e
-                ))
-            })?;
+        let public_pem = std::fs::read_to_string(&config.rsa_pub_pem_path).map_err(|e| {
+            JwtError::KeyLoadFailed(format!(
+                "Failed to read public key from {}: {}",
+                config.rsa_pub_pem_path.display(),
+                e
+            ))
+        })?;
 
-        let decoding_key =
-            DecodingKey::from_rsa_pem(public_pem.as_bytes()).map_err(|e| {
-                JwtError::KeyLoadFailed(format!(
-                    "Invalid RSA public key: {e}"
-                ))
-            })?;
+        let decoding_key = DecodingKey::from_rsa_pem(public_pem.as_bytes())
+            .map_err(|e| JwtError::KeyLoadFailed(format!("Invalid RSA public key: {e}")))?;
 
         info!(
             issuer = %config.issuer,
@@ -263,14 +259,12 @@ impl JwtValidator {
         validation.validate_nbf = true;
         validation.leeway = 0; // Strict expiration checking - no clock skew tolerance
 
-        let token_data = decode::<MisogiClaims>(token, &self.decoding_key, &validation)
-            .map_err(|e| match e.kind() {
-                jsonwebtoken::errors::ErrorKind::ExpiredSignature => {
-                    JwtError::TokenExpired
-                }
-                jsonwebtoken::errors::ErrorKind::InvalidSignature => {
-                    JwtError::InvalidSignature
-                }
+        let token_data =
+            decode::<MisogiClaims>(token, &self.decoding_key, &validation).map_err(|e| match e
+                .kind()
+            {
+                jsonwebtoken::errors::ErrorKind::ExpiredSignature => JwtError::TokenExpired,
+                jsonwebtoken::errors::ErrorKind::InvalidSignature => JwtError::InvalidSignature,
                 _ => JwtError::ClaimValidationFailed(e.to_string()),
             })?;
 
@@ -341,21 +335,18 @@ impl JwtValidator {
     /// Same as [`validate_and_extract`](Self::validate_and_extract), except
     /// [`JwtError::TokenExpired`] will never be returned.
     #[instrument(skip(self, token))]
-    pub fn validate_without_expiry_check(
-        &self,
-        token: &str,
-    ) -> Result<ValidatedToken, JwtError> {
+    pub fn validate_without_expiry_check(&self, token: &str) -> Result<ValidatedToken, JwtError> {
         let mut validation = Validation::new(Algorithm::RS256);
         validation.set_issuer(&[&self.config.issuer]);
         validation.set_audience(&[&self.config.audience]);
         validation.validate_exp = false; // Skip expiration check
         validation.validate_nbf = true;
 
-        let token_data = decode::<MisogiClaims>(token, &self.decoding_key, &validation)
-            .map_err(|e| match e.kind() {
-                jsonwebtoken::errors::ErrorKind::InvalidSignature => {
-                    JwtError::InvalidSignature
-                }
+        let token_data =
+            decode::<MisogiClaims>(token, &self.decoding_key, &validation).map_err(|e| match e
+                .kind()
+            {
+                jsonwebtoken::errors::ErrorKind::InvalidSignature => JwtError::InvalidSignature,
                 _ => JwtError::ClaimValidationFailed(e.to_string()),
             })?;
 

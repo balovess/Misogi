@@ -28,9 +28,10 @@
 use serde::{Deserialize, Serialize};
 
 /// Lifecycle phase for an API version within the sunset policy.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub enum SunsetPhase {
     /// Fully supported. No deprecation notice. This is the default for new versions.
+    #[default]
     Stable,
 
     /// Still functional, but emits `[DEPRECATION]` warnings on every request.
@@ -51,12 +52,6 @@ pub enum SunsetPhase {
         /// Example: `/api/v2/upload`
         successor_endpoint: String,
     },
-}
-
-impl Default for SunsetPhase {
-    fn default() -> Self {
-        Self::Stable
-    }
 }
 
 /// Per-version lifecycle configuration controlling deprecation behavior.
@@ -141,7 +136,10 @@ impl VersionSunsetPolicy {
 
     /// Generate the successor-version Link header value (RFC 8288).
     pub fn successor_link_header(&self, _original_path: &str) -> Option<String> {
-        if let SunsetPhase::HardSunset { ref successor_endpoint } = self.phase {
+        if let SunsetPhase::HardSunset {
+            ref successor_endpoint,
+        } = self.phase
+        {
             Some(format!(
                 "<{}>; rel=\"successor-version\"; type=\"text/html\"",
                 successor_endpoint
@@ -265,8 +263,12 @@ mod tests {
         let phases = vec![
             SunsetPhase::Stable,
             SunsetPhase::Deprecated,
-            SunsetPhase::SoftSunset { max_requests_per_sec: 50 },
-            SunsetPhase::HardSunset { successor_endpoint: "/v2".to_string() },
+            SunsetPhase::SoftSunset {
+                max_requests_per_sec: 50,
+            },
+            SunsetPhase::HardSunset {
+                successor_endpoint: "/v2".to_string(),
+            },
         ];
         for phase in &phases {
             let json = serde_json::to_string(phase).unwrap();

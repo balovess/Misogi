@@ -32,15 +32,11 @@ use std::path::Path;
 
 use chrono::{Datelike, NaiveDate, Weekday};
 use regex::Regex;
-use serde::{Deserialize, Serialize};
 use serde::ser::Error as SerError;
+use serde::{Deserialize, Serialize};
 
 use crate::error::{MisogiError, Result};
-use crate::traits::{
-    CalendarProvider,
-    Holiday,
-    HolidayCategory,
-};
+use crate::traits::{CalendarProvider, Holiday, HolidayCategory};
 
 // =============================================================================
 // Era Definitions
@@ -447,7 +443,10 @@ impl JapaneseCalendarProvider {
     fn find_era_for_year(&self, year: i32) -> Option<&EraDefinition> {
         // Search in reverse order (newest first) so current era is found first
         // This is important for years at era boundaries (e.g., 2019 has both Heisei and Reiwa)
-        ERA_DEFINITIONS.iter().rev().find(|era| era.contains_gregorian_year(year))
+        ERA_DEFINITIONS
+            .iter()
+            .rev()
+            .find(|era| era.contains_gregorian_year(year))
     }
 
     /// Find the era definition for a specific date.
@@ -461,9 +460,9 @@ impl JapaneseCalendarProvider {
     /// # Returns
     /// Reference to the matching [`EraDefinition`], or `None` if out of range.
     fn find_era_for_date(&self, date: NaiveDate) -> Option<&EraDefinition> {
-        ERA_DEFINITIONS.iter().find(|era| {
-            date >= era.start_date && era.end_date.map_or(true, |end| date <= end)
-        })
+        ERA_DEFINITIONS
+            .iter()
+            .find(|era| date >= era.start_date && era.end_date.map_or(true, |end| date <= end))
     }
 
     /// Find the era definition by its Kanji name or abbreviation.
@@ -502,9 +501,9 @@ impl CalendarProvider for JapaneseCalendarProvider {
         month: u32,
         day: u32,
     ) -> Result<NaiveDate> {
-        let era = self.find_era_by_name(era_name).ok_or_else(|| {
-            MisogiError::Protocol(format!("Unknown era name: {}", era_name))
-        })?;
+        let era = self
+            .find_era_by_name(era_name)
+            .ok_or_else(|| MisogiError::Protocol(format!("Unknown era name: {}", era_name)))?;
 
         let gregorian_year = era.wareki_to_gregorian_year(era_year);
 
@@ -535,10 +534,7 @@ impl CalendarProvider for JapaneseCalendarProvider {
         Ok(date)
     }
 
-    async fn gregorian_to_regional(
-        &self,
-        date: NaiveDate,
-    ) -> Result<(String, u32, u32, u32)> {
+    async fn gregorian_to_regional(&self, date: NaiveDate) -> Result<(String, u32, u32, u32)> {
         // Use find_era_for_date for precise date-based era lookup
         let era = self.find_era_for_date(date).ok_or_else(|| {
             MisogiError::Protocol(format!(
@@ -549,7 +545,12 @@ impl CalendarProvider for JapaneseCalendarProvider {
 
         let year = date.year();
         let wareki_year = era.gregorian_to_wareki_year(year);
-        Ok((era.name_ja.to_string(), wareki_year, date.month() as u32, date.day()))
+        Ok((
+            era.name_ja.to_string(),
+            wareki_year,
+            date.month() as u32,
+            date.day(),
+        ))
     }
 
     async fn is_business_day(&self, date: NaiveDate) -> Result<bool> {
@@ -722,9 +723,7 @@ fn default_category() -> String {
 /// - [`MisogiError::Io`] if the file cannot be read.
 /// - [`MisogiError::Serialization`] if the TOML content is invalid or unparseable.
 pub fn load_calendar_toml(path: &Path) -> Result<Vec<Holiday>> {
-    let content = std::fs::read_to_string(path).map_err(|e| {
-        MisogiError::Io(e)
-    })?;
+    let content = std::fs::read_to_string(path).map_err(|e| MisogiError::Io(e))?;
 
     let config: TomlConfig = toml::from_str(&content).map_err(|e| {
         MisogiError::Serialization(serde_json::Error::custom(format!(
@@ -780,12 +779,7 @@ struct TomlConfig {
 /// # Returns
 /// - `Some(NaiveDate)` if the N-th weekday exists in that month.
 /// - `None` if parameters are invalid or N exceeds possible occurrences.
-fn nth_weekday_of_month(
-    year: i32,
-    month: u32,
-    weekday: Weekday,
-    n: u32,
-) -> Option<NaiveDate> {
+fn nth_weekday_of_month(year: i32, month: u32, weekday: Weekday, n: u32) -> Option<NaiveDate> {
     if !(1..=12).contains(&month) || !(1..=5).contains(&n) {
         return None;
     }
@@ -795,10 +789,8 @@ fn nth_weekday_of_month(
 
     // Calculate days to add to reach the target weekday
     let first_weekday = first_day.weekday();
-    let days_until_target = (weekday.number_from_monday() as i32
-        - first_weekday.number_from_monday() as i32
-        + 7)
-        % 7;
+    let days_until_target =
+        (weekday.number_from_monday() as i32 - first_weekday.number_from_monday() as i32 + 7) % 7;
 
     // Calculate the N-th occurrence date
     let target_day = 1 + days_until_target + ((n as i32 - 1) * 7);

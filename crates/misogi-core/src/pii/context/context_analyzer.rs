@@ -22,9 +22,7 @@ use std::sync::Arc;
 
 use super::context_provider::{ContextProvider, MockContextProvider};
 use super::keyword_engine::KeywordRuleEngine;
-use super::types::{
-    ContextAnalysisRequest, ContextAnalysisResponse, ContextError,
-};
+use super::types::{ContextAnalysisRequest, ContextAnalysisResponse, ContextError};
 
 use crate::error::Result;
 
@@ -163,9 +161,9 @@ impl ContextAnalyzer {
         &self,
         request: &ContextAnalysisRequest,
     ) -> Result<ContextAnalysisResponse> {
-        self.keyword_engine
-            .analyze(request)
-            .map_err(|e| crate::error::MisogiError::Protocol(format!("Keyword engine error: {}", e)))
+        self.keyword_engine.analyze(request).map_err(|e| {
+            crate::error::MisogiError::Protocol(format!("Keyword engine error: {}", e))
+        })
     }
 
     /// Check if an external NLP provider is configured.

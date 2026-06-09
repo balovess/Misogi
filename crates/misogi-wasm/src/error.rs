@@ -88,7 +88,9 @@ pub enum WasmError {
     /// Function signature mismatch between expected and actual WASM export.
     ///
     /// This indicates an ABI version mismatch or incorrectly compiled plugin.
-    #[error("signature mismatch for export '{function}' in {path}: expected {expected}, got {actual}")]
+    #[error(
+        "signature mismatch for export '{function}' in {path}: expected {expected}, got {actual}"
+    )]
     SignatureMismatch {
         /// Exported function with wrong signature.
         function: String,
@@ -288,7 +290,7 @@ mod tests {
 
         let msg = format!("{}", err);
         assert!(msg.contains("134217728")); // 128 MB in bytes
-        assert!(msg.contains("67108864"));   // 64 MB in bytes
+        assert!(msg.contains("67108864")); // 64 MB in bytes
     }
 
     #[test]

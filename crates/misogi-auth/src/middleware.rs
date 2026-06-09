@@ -55,22 +55,21 @@
 // definitions will be replaced with: pub use super::engine::{...};
 
 use std::collections::HashMap;
-use std::sync::Arc; // For shared ownership of auth providers
+#[cfg(any(feature = "jwt", feature = "ldap", feature = "oidc", feature = "saml"))]
+use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error, info, instrument, warn};
 
-use super::role::UserRole;
 #[cfg(feature = "jwt")]
 use super::jwt::{JwtAuthenticator, JwtConfig, ValidatedClaims};
 #[cfg(feature = "ldap")]
 use super::ldap_provider::LdapAuthProvider;
 #[cfg(feature = "oidc")]
-use super::oidc_provider::{
-    OidcAuthProvider, OidcUserInfo, ValidatedIdToken,
-};
+use super::oidc_provider::{OidcAuthProvider, OidcUserInfo, ValidatedIdToken};
+use super::role::UserRole;
 #[cfg(feature = "saml")]
 use super::saml_provider::{SamlAttributes, SamlAuthProvider};
 #[cfg(all(feature = "oidc", feature = "axum"))]
@@ -97,7 +96,7 @@ use cookie::{Cookie, SameSite};
 /// # Thread Safety
 ///
 /// This enum is `Copy` and can be freely shared across threads.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum AuthStrategy {
     /// Try all configured backends in order; merge claims from all successful authentications.
@@ -110,6 +109,7 @@ pub enum AuthStrategy {
     ///
     /// Optimal for high-performance scenarios where latency is critical and
     /// any single successful backend is sufficient for authorization.
+    #[default]
     FirstMatch,
 
     /// Require ALL configured backends to succeed (strictest mode).
@@ -118,12 +118,6 @@ pub enum AuthStrategy {
     /// authentication is mandated by compliance requirements (e.g., Japanese
     /// government security standards for LGWAN systems).
     Required,
-}
-
-impl Default for AuthStrategy {
-    fn default() -> Self {
-        Self::FirstMatch
-    }
 }
 
 impl std::fmt::Display for AuthStrategy {
@@ -423,16 +417,13 @@ pub fn default_role_mapping_rules() -> Vec<RoleMappingRule> {
             .expect("hardcoded regex must be valid"),
         RoleMappingRule::new(r"(?i)^administrators$", UserRole::Admin, 10)
             .expect("hardcoded regex must be valid"),
-
         // Priority 20: Approver/Manager patterns > Approver role
         RoleMappingRule::new(r"(?i)approvers?", UserRole::Approver, 20)
             .expect("hardcoded regex must be valid"),
         RoleMappingRule::new(r"(?i)(?:managers?|課長)", UserRole::Approver, 20)
             .expect("hardcoded regex must be valid"),
-
         // Priority 30: Catch-all > Staff role (baseline)
-        RoleMappingRule::new(r".*", UserRole::Staff, 30)
-            .expect("hardcoded regex must be valid"),
+        RoleMappingRule::new(r".*", UserRole::Staff, 30).expect("hardcoded regex must be valid"),
     ]
 }
 
@@ -542,6 +533,7 @@ impl AuditEvent {
 }
 
 /// Default maximum capacity for the audit log ring buffer.
+#[allow(dead_code)]
 const DEFAULT_AUDIT_LOG_MAX_SIZE: usize = 10_000;
 
 // ---------------------------------------------------------------------------
@@ -628,9 +620,10 @@ impl AuthEngine {
         let _ = config; // Suppress unused warning when feature is off
 
         #[cfg(feature = "jwt")]
-        let jwt = Arc::new(JwtAuthenticator::new(config).map_err(|e| {
-            AuthError::InternalError(format!("JWT init failed: {e}"))
-        })?);
+        let jwt = Arc::new(
+            JwtAuthenticator::new(config)
+                .map_err(|e| AuthError::InternalError(format!("JWT init failed: {e}")))?,
+        );
 
         info!(
             strategy = %AuthStrategy::FirstMatch,
@@ -657,16 +650,26 @@ impl AuthEngine {
     }
 
     /// Return the default backend order: Jwt > Oidc > Ldap > Saml.
+    #[allow(dead_code)]
     fn default_backend_order() -> Vec<AuthBackend> {
+        #[allow(unused_mut)]
         let mut order = Vec::with_capacity(4);
         #[cfg(feature = "jwt")]
-        { order.push(AuthBackend::Jwt); }
+        {
+            order.push(AuthBackend::Jwt);
+        }
         #[cfg(feature = "oidc")]
-        { order.push(AuthBackend::Oidc); }
+        {
+            order.push(AuthBackend::Oidc);
+        }
         #[cfg(feature = "ldap")]
-        { order.push(AuthBackend::Ldap); }
+        {
+            order.push(AuthBackend::Ldap);
+        }
         #[cfg(feature = "saml")]
-        { order.push(AuthBackend::Saml); }
+        {
+            order.push(AuthBackend::Saml);
+        }
         order
     }
 
@@ -685,9 +688,10 @@ impl AuthEngine {
     pub fn set_auth_strategy(&mut self, strategy: AuthStrategy) {
         info!(old = %self.auth_strategy, new = %strategy, "AuthStrategy updated");
         self.auth_strategy = strategy;
-        self.record_audit_event(
-            AuditEvent::new(AuditEventType::ConfigChange, format!("auth_strategy changed to {strategy}"))
-        );
+        self.record_audit_event(AuditEvent::new(
+            AuditEventType::ConfigChange,
+            format!("auth_strategy changed to {strategy}"),
+        ));
     }
 
     /// Set a custom backend try-order (overrides the default).
@@ -700,9 +704,10 @@ impl AuthEngine {
         let count = order.len();
         info!(count, "Backend order customized");
         self.backend_order = order;
-        self.record_audit_event(
-            AuditEvent::new(AuditEventType::ConfigChange, format!("backend_order changed ({} backends)", count))
-        );
+        self.record_audit_event(AuditEvent::new(
+            AuditEventType::ConfigChange,
+            format!("backend_order changed ({} backends)", count),
+        ));
     }
 
     /// Set custom role mapping rules (replaces built-in defaults).
@@ -714,9 +719,10 @@ impl AuthEngine {
     pub fn set_role_mapping_rules(&mut self, rules: Vec<RoleMappingRule>) {
         info!(rule_count = rules.len(), "Role mapping rules updated");
         self.role_mapping_rules = rules;
-        self.record_audit_event(
-            AuditEvent::new(AuditEventType::ConfigChange, "role_mapping_rules updated")
-        );
+        self.record_audit_event(AuditEvent::new(
+            AuditEventType::ConfigChange,
+            "role_mapping_rules updated",
+        ));
     }
 
     /// Set the maximum capacity of the audit log ring buffer.
@@ -827,10 +833,13 @@ impl AuthEngine {
         for backend in &self.backend_order {
             match self.try_backend(backend, token) {
                 Ok(result) => {
-                    let evt = AuditEvent::new(AuditEventType::AuthSuccess, "first_match authentication succeeded")
-                        .with_user_id(&result.user_id)
-                        .with_backend(result.backend.clone())
-                        .with_ip(ip_address.unwrap_or_default());
+                    let evt = AuditEvent::new(
+                        AuditEventType::AuthSuccess,
+                        "first_match authentication succeeded",
+                    )
+                    .with_user_id(&result.user_id)
+                    .with_backend(result.backend.clone())
+                    .with_ip(ip_address.unwrap_or_default());
                     self.record_audit_event(evt);
 
                     info!(
@@ -848,8 +857,11 @@ impl AuthEngine {
         }
 
         // All backends failed
-        let evt = AuditEvent::new(AuditEventType::AuthFailure, format!("all backends failed: {last_error}"))
-            .with_ip(ip_address.unwrap_or_default());
+        let evt = AuditEvent::new(
+            AuditEventType::AuthFailure,
+            format!("all backends failed: {last_error}"),
+        )
+        .with_ip(ip_address.unwrap_or_default());
         self.record_audit_event(evt);
 
         warn!(error = %last_error, "All authentication backends failed");
@@ -879,8 +891,11 @@ impl AuthEngine {
         }
 
         if results.is_empty() {
-            let evt = AuditEvent::new(AuditEventType::AuthFailure, "all backends failed in sequential mode")
-                .with_ip(ip_address.unwrap_or_default());
+            let evt = AuditEvent::new(
+                AuditEventType::AuthFailure,
+                "all backends failed in sequential mode",
+            )
+            .with_ip(ip_address.unwrap_or_default());
             self.record_audit_event(evt);
 
             Err(AuthError::InvalidToken(format!(
@@ -894,7 +909,10 @@ impl AuthEngine {
 
             let evt = AuditEvent::new(
                 AuditEventType::AuthSuccess,
-                format!("sequential auth succeeded via {} backend(s)", merged.authenticated_by.len()),
+                format!(
+                    "sequential auth succeeded via {} backend(s)",
+                    merged.authenticated_by.len()
+                ),
             )
             .with_user_id(&merged.user_id)
             .with_ip(ip_address.unwrap_or_default());
@@ -935,7 +953,11 @@ impl AuthEngine {
         if !errors.is_empty() || results.len() != self.backend_order.len() {
             let evt = AuditEvent::new(
                 AuditEventType::AuthFailure,
-                format!("required auth failed: {}/{} backends succeeded", results.len(), self.backend_order.len()),
+                format!(
+                    "required auth failed: {}/{} backends succeeded",
+                    results.len(),
+                    self.backend_order.len()
+                ),
             )
             .with_ip(ip_address.unwrap_or_default());
             self.record_audit_event(evt);
@@ -951,7 +973,10 @@ impl AuthEngine {
 
             let evt = AuditEvent::new(
                 AuditEventType::AuthSuccess,
-                format!("required auth succeeded: all {} backends verified", merged.authenticated_by.len()),
+                format!(
+                    "required auth succeeded: all {} backends verified",
+                    merged.authenticated_by.len()
+                ),
             )
             .with_user_id(&merged.user_id)
             .with_ip(ip_address.unwrap_or_default());
@@ -968,6 +993,7 @@ impl AuthEngine {
     }
 
     /// Attempt authentication against a single specific backend.
+    #[allow(unused_variables)]
     fn try_backend(&self, backend: &AuthBackend, token: &str) -> Result<AuthResult, AuthError> {
         match backend {
             #[cfg(feature = "jwt")]
@@ -987,18 +1013,26 @@ impl AuthEngine {
     /// Try JWT backend authentication.
     #[cfg(feature = "jwt")]
     fn try_jwt_backend(&self, token: &str) -> Result<AuthResult, AuthError> {
-        let claims = self.jwt.validate_token(token).map_err(|e: crate::JwtError| match e {
-            crate::JwtError::TokenExpired => AuthError::ExpiredToken,
-            crate::JwtError::InvalidSignature => {
-                AuthError::InvalidToken("Signature verification failed".to_string())
-            }
-            other => AuthError::InvalidToken(other.to_string()),
-        })?;
+        let claims = self
+            .jwt
+            .validate_token(token)
+            .map_err(|e: crate::JwtError| match e {
+                crate::JwtError::TokenExpired => AuthError::ExpiredToken,
+                crate::JwtError::InvalidSignature => {
+                    AuthError::InvalidToken("Signature verification failed".to_string())
+                }
+                other => AuthError::InvalidToken(other.to_string()),
+            })?;
 
         // Map JWT claims to AuthResult
         // ValidatedClaims has: sub (String), name (String), roles (Vec<String>), iat, exp
-        let mut result = AuthResult::new(AuthBackend::Jwt, &claims.sub)
-            .with_display_name(if claims.name.is_empty() { claims.sub.clone() } else { claims.name.clone() });
+        let mut result = AuthResult::new(AuthBackend::Jwt, &claims.sub).with_display_name(
+            if claims.name.is_empty() {
+                claims.sub.clone()
+            } else {
+                claims.name.clone()
+            },
+        );
 
         // Extract roles from claims (roles is Vec<String>, not Option)
         result.groups = claims.roles.clone();
@@ -1014,9 +1048,10 @@ impl AuthEngine {
     /// Try OIDC backend authentication.
     #[cfg(feature = "oidc")]
     fn try_oidc_backend(&self, token: &str) -> Result<AuthResult, AuthError> {
-        let oidc_provider = self.oidc.as_ref().ok_or_else(|| {
-            AuthError::InternalError("OIDC provider not configured".to_string())
-        })?;
+        let oidc_provider = self
+            .oidc
+            .as_ref()
+            .ok_or_else(|| AuthError::InternalError("OIDC provider not configured".to_string()))?;
 
         // Note: Full async validation would be here; this is structural validation
         // In production, integrate with OidcAuthProvider's validate methods
@@ -1025,23 +1060,29 @@ impl AuthEngine {
         // For now, parse basic JWT structure to extract sub claim
         let parts: Vec<&str> = token.split('.').collect();
         if parts.len() != 3 {
-            return Err(AuthError::InvalidToken("Not a valid JWT for OIDC".to_string()));
+            return Err(AuthError::InvalidToken(
+                "Not a valid JWT for OIDC".to_string(),
+            ));
         }
 
         // Decode payload (without signature verification — that's done by OidcAuthProvider)
-        let payload_b64 = parts.get(1).ok_or_else(|| {
-            AuthError::InvalidToken("Malformed JWT: missing payload".to_string())
-        })?;
+        let payload_b64 = parts
+            .get(1)
+            .ok_or_else(|| AuthError::InvalidToken("Malformed JWT: missing payload".to_string()))?;
 
         let payload_json = base64_url_decode(payload_b64)?;
-        let payload: serde_json::Value =
-            serde_json::from_str(&payload_json).map_err(|e| {
-                AuthError::InvalidToken(format!("Invalid JWT payload JSON: {e}"))
-            })?;
+        let payload: serde_json::Value = serde_json::from_str(&payload_json)
+            .map_err(|e| AuthError::InvalidToken(format!("Invalid JWT payload JSON: {e}")))?;
 
-        let sub = payload.get("sub").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let sub = payload
+            .get("sub")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
         if sub.is_empty() {
-            return Err(AuthError::InvalidToken("OIDC token missing 'sub' claim".to_string()));
+            return Err(AuthError::InvalidToken(
+                "OIDC token missing 'sub' claim".to_string(),
+            ));
         }
 
         let preferred_username = payload
@@ -1088,31 +1129,31 @@ impl AuthEngine {
     /// Try LDAP backend authentication.
     #[cfg(feature = "ldap")]
     fn try_ldap_backend(&self, _token: &str) -> Result<AuthResult, AuthError> {
-        let _ldap_provider = self.ldap.as_ref().ok_or_else(|| {
-            AuthError::InternalError("LDAP provider not configured".to_string())
-        })?;
+        let _ldap_provider = self
+            .ldap
+            .as_ref()
+            .ok_or_else(|| AuthError::InternalError("LDAP provider not configured".to_string()))?;
 
         // LDAP bind authentication would happen here
         // For now, return not-applicable since LDAP typically uses username/password
         // rather than bearer tokens
         Err(AuthError::InternalError(
-            "LDAP backend requires username/password authentication, not bearer tokens"
-                .to_string(),
+            "LDAP backend requires username/password authentication, not bearer tokens".to_string(),
         ))
     }
 
     /// Try SAML backend authentication.
     #[cfg(feature = "saml")]
     fn try_saml_backend(&self, _token: &str) -> Result<AuthResult, AuthError> {
-        let _saml_provider = self.saml.as_ref().ok_or_else(|| {
-            AuthError::InternalError("SAML provider not configured".to_string())
-        })?;
+        let _saml_provider = self
+            .saml
+            .as_ref()
+            .ok_or_else(|| AuthError::InternalError("SAML provider not configured".to_string()))?;
 
         // SAML assertions are processed via assertion_consumer_service, not bearer tokens
         // This method exists for protocol completeness; actual SAML auth uses ACS flow
         Err(AuthError::InternalError(
-            "SAML authentication uses assertion_consumer_service, not bearer tokens"
-                .to_string(),
+            "SAML authentication uses assertion_consumer_service, not bearer tokens".to_string(),
         ))
     }
 
@@ -1125,10 +1166,7 @@ impl AuthEngine {
             return results.into_iter().next().expect("checked len == 1");
         }
 
-        let mut merged = AuthResult::new(
-            results[0].backend.clone(),
-            &results[0].user_id,
-        );
+        let mut merged = AuthResult::new(results[0].backend.clone(), &results[0].user_id);
         // Set timestamp from first result
         merged.authenticated_at = results[0].authenticated_at;
 
@@ -1196,13 +1234,15 @@ impl AuthEngine {
 
         #[cfg(feature = "jwt")]
         {
-            self.jwt.validate_token(token).map_err(|e: crate::JwtError| match e {
-                crate::JwtError::TokenExpired => AuthError::ExpiredToken,
-                crate::JwtError::InvalidSignature => AuthError::InvalidToken(format!(
-                    "Signature verification failed"
-                )),
-                other => AuthError::InvalidToken(other.to_string()),
-            })
+            self.jwt
+                .validate_token(token)
+                .map_err(|e: crate::JwtError| match e {
+                    crate::JwtError::TokenExpired => AuthError::ExpiredToken,
+                    crate::JwtError::InvalidSignature => {
+                        AuthError::InvalidToken("Signature verification failed".to_string())
+                    }
+                    other => AuthError::InvalidToken(other.to_string()),
+                })
         }
 
         #[cfg(not(feature = "jwt"))]
@@ -1242,8 +1282,11 @@ impl AuthEngine {
         );
         self.api_keys.insert(key_id.clone(), account);
         self.record_audit_event(
-            AuditEvent::new(AuditEventType::ConfigChange, format!("API key registered: {}", name))
-                .with_user_id(&key_id)
+            AuditEvent::new(
+                AuditEventType::ConfigChange,
+                format!("API key registered: {}", name),
+            )
+            .with_user_id(&key_id),
         );
     }
 
@@ -1490,16 +1533,16 @@ impl AuthEngine {
         log.iter()
             .filter(|evt| {
                 // Time filter
-                if let Some(since_time) = since {
-                    if evt.timestamp < since_time {
-                        return false;
-                    }
+                if let Some(since_time) = since
+                    && evt.timestamp < since_time
+                {
+                    return false;
                 }
                 // Type filter
-                if let Some(filter_type) = filter {
-                    if evt.event_type != filter_type {
-                        return false;
-                    }
+                if let Some(filter_type) = filter
+                    && evt.event_type != filter_type
+                {
+                    return false;
                 }
                 true
             })
@@ -1542,9 +1585,8 @@ impl AuthEngine {
                 poisoned.into_inner()
             }
         };
-        serde_json::to_string_pretty(&*log).map_err(|e| {
-            AuthError::InternalError(format!("Audit JSON export failed: {e}"))
-        })
+        serde_json::to_string_pretty(&*log)
+            .map_err(|e| AuthError::InternalError(format!("Audit JSON export failed: {e}")))
     }
 
     /// Clear all audit events from the log.
@@ -1704,6 +1746,7 @@ impl AuthEngine {
 ///
 /// Used by OIDC backend to decode JWT payload segments. Handles both
 /// standard base64 and base64url (with `-` and `_` instead of `+` and `/`).
+#[allow(dead_code)]
 fn base64_url_decode(input: &str) -> Result<String, AuthError> {
     use base64::Engine as _;
 
@@ -1713,16 +1756,18 @@ fn base64_url_decode(input: &str) -> Result<String, AuthError> {
     // Add padding if needed
     match s.len() % 4 {
         2 => s.push_str("=="),
-        3 => s.push_str("="),
+        3 => s.push('='),
         _ => {} // Already correctly padded or empty
     }
 
     base64::engine::general_purpose::STANDARD
         .decode(&s)
         .map_err(|e| AuthError::InvalidToken(format!("Base64 decode failed: {e}")))
-        .and_then(|bytes| String::from_utf8(bytes).map_err(|e| {
-            AuthError::InvalidToken(format!("Invalid UTF-8 in token payload: {e}"))
-        }))
+        .and_then(|bytes| {
+            String::from_utf8(bytes).map_err(|e| {
+                AuthError::InvalidToken(format!("Invalid UTF-8 in token payload: {e}"))
+            })
+        })
 }
 
 // ===========================================================================
@@ -1791,7 +1836,10 @@ mod tests {
         assert_eq!(result.groups.len(), 2);
         assert!(result.groups.contains(&"engineers".to_string()));
         assert!(result.groups.contains(&"tokyo".to_string()));
-        assert_eq!(result.attributes.get("department"), Some(&"engineering".to_string()));
+        assert_eq!(
+            result.attributes.get("department"),
+            Some(&"engineering".to_string())
+        );
     }
 
     #[test]
@@ -1858,13 +1906,15 @@ mod tests {
         assert!(!rules.is_empty());
 
         // Verify Admin patterns exist
-        let admin_rules: Vec<_> = rules.iter()
+        let admin_rules: Vec<_> = rules
+            .iter()
             .filter(|r| r.target_role == UserRole::Admin)
             .collect();
         assert!(!admin_rules.is_empty());
 
         // Verify catch-all Staff rule exists
-        let staff_rules: Vec<_> = rules.iter()
+        let staff_rules: Vec<_> = rules
+            .iter()
             .filter(|r| r.target_role == UserRole::Staff)
             .collect();
         assert!(!staff_rules.is_empty());
@@ -1928,7 +1978,10 @@ mod tests {
         let groups = vec!["Domain Admins".to_string()];
         let roles = apply_rules(&rules, &groups);
 
-        assert!(roles.contains(&UserRole::Admin), "Domain Admins should map to Admin role");
+        assert!(
+            roles.contains(&UserRole::Admin),
+            "Domain Admins should map to Admin role"
+        );
     }
 
     #[test]
@@ -2187,9 +2240,7 @@ mod tests {
 ///     .await?;
 /// ```
 #[cfg(all(feature = "jwt", feature = "grpc"))]
-pub fn create_jwt_interceptor(
-    engine: Arc<AuthEngine>,
-) -> JwtInterceptor {
+pub fn create_jwt_interceptor(engine: Arc<AuthEngine>) -> JwtInterceptor {
     JwtInterceptor { engine }
 }
 
@@ -2214,12 +2265,13 @@ impl Clone for JwtInterceptor {
 
 #[cfg(all(feature = "jwt", feature = "grpc"))]
 impl tonic::service::Interceptor for JwtInterceptor {
-    fn call(&mut self, mut request: tonic::Request<()>) -> Result<tonic::Request<()>, tonic::Status> {
+    fn call(
+        &mut self,
+        mut request: tonic::Request<()>,
+    ) -> Result<tonic::Request<()>, tonic::Status> {
         // Extract Authorization header
         let metadata = request.metadata();
-        let auth_header = metadata
-            .get("authorization")
-            .and_then(|v| v.to_str().ok());
+        let auth_header = metadata.get("authorization").and_then(|v| v.to_str().ok());
 
         match auth_header {
             Some(header) => {
@@ -2239,7 +2291,7 @@ impl tonic::service::Interceptor for JwtInterceptor {
                     Err(e) => {
                         warn!(error = %e, "gRPC request rejected: invalid token");
                         Err(tonic::Status::unauthenticated(
-                            "Invalid authentication credentials"
+                            "Invalid authentication credentials",
                         ))
                     }
                 }
@@ -2247,7 +2299,7 @@ impl tonic::service::Interceptor for JwtInterceptor {
             None => {
                 warn!("gRPC request missing Authorization header");
                 Err(tonic::Status::unauthenticated(
-                    "Missing Authorization header"
+                    "Missing Authorization header",
                 ))
             }
         }
@@ -2350,10 +2402,7 @@ where
         parts: &mut axum::http::request::Parts,
         _state: &S,
     ) -> Result<Self, Self::Rejection> {
-        let api_key = parts
-            .headers
-            .get("X-API-Key")
-            .and_then(|v| v.to_str().ok());
+        let api_key = parts.headers.get("X-API-Key").and_then(|v| v.to_str().ok());
 
         match api_key {
             Some(key) => {
@@ -2395,9 +2444,7 @@ pub struct ServiceAccount {
 impl ServiceAccount {
     /// Check whether this service account's API key has expired.
     pub fn is_expired(&self) -> bool {
-        self.expires_at
-            .map(|exp| Utc::now() > exp)
-            .unwrap_or(false)
+        self.expires_at.map(|exp| Utc::now() > exp).unwrap_or(false)
     }
 }
 
@@ -2644,10 +2691,7 @@ pub const OIDC_SESSION_COOKIE_NAME: &str = "oidc_session";
 /// | SameSite   | Strict        | Prevent CSRF attacks                   |
 /// | Path       | /auth         | Scope to authentication routes         |
 #[cfg(all(feature = "oidc", feature = "axum"))]
-pub fn build_oidc_session_cookie(
-    access_token: &str,
-    max_age_seconds: i64,
-) -> String {
+pub fn build_oidc_session_cookie(access_token: &str, max_age_seconds: i64) -> String {
     let cookie = Cookie::build((OIDC_SESSION_COOKIE_NAME, access_token))
         .http_only(true)
         .secure(true)
@@ -2750,10 +2794,7 @@ impl OidcGrpcInterceptor {
     ///
     /// For production deployments requiring cryptographic verification,
     /// use a tokio task spawn or integrate with the async validation pipeline.
-    fn validate_access_token_sync(
-        &self,
-        token: &str,
-    ) -> Result<ValidatedIdToken, AuthError> {
+    fn validate_access_token_sync(&self, token: &str) -> Result<ValidatedIdToken, AuthError> {
         // Basic format validation — full crypto validation is async
         if token.is_empty() {
             return Err(AuthError::MissingCredentials);
@@ -2772,9 +2813,9 @@ impl OidcGrpcInterceptor {
 
         // Decode payload without signature verification (lightweight check)
         // In production, this should be replaced with proper async validation
-        let _payload = parts.get(1).ok_or_else(|| {
-            AuthError::InvalidToken("Malformed JWT: missing payload".to_string())
-        })?;
+        let _payload = parts
+            .get(1)
+            .ok_or_else(|| AuthError::InvalidToken("Malformed JWT: missing payload".to_string()))?;
 
         // Placeholder: return a minimal valid-looking result
         // Production code should perform full async validation here
@@ -2786,12 +2827,13 @@ impl OidcGrpcInterceptor {
 
 #[cfg(all(feature = "oidc", feature = "grpc"))]
 impl tonic::service::Interceptor for OidcGrpcInterceptor {
-    fn call(&mut self, mut request: tonic::Request<()>) -> Result<tonic::Request<()>, tonic::Status> {
+    fn call(
+        &mut self,
+        mut request: tonic::Request<()>,
+    ) -> Result<tonic::Request<()>, tonic::Status> {
         // Extract Authorization header from gRPC metadata
         let metadata = request.metadata();
-        let auth_header = metadata
-            .get("authorization")
-            .and_then(|v| v.to_str().ok());
+        let auth_header = metadata.get("authorization").and_then(|v| v.to_str().ok());
 
         match auth_header {
             Some(header) => {
@@ -2812,9 +2854,7 @@ impl tonic::service::Interceptor for OidcGrpcInterceptor {
                     }
                     Err(AuthError::ExpiredToken) => {
                         warn!("gRPC request rejected: expired OIDC token");
-                        Err(tonic::Status::unauthenticated(
-                            "OIDC token has expired",
-                        ))
+                        Err(tonic::Status::unauthenticated("OIDC token has expired"))
                     }
                     Err(e) => {
                         warn!(error = %e, "gRPC request rejected: invalid OIDC token");
@@ -2848,8 +2888,6 @@ impl tonic::service::Interceptor for OidcGrpcInterceptor {
 ///
 /// An [`OidcGrpcInterceptor`] ready for use with `tonic::Server::builder().interceptor()`.
 #[cfg(all(feature = "oidc", feature = "grpc"))]
-pub fn create_oidc_grpc_interceptor(
-    provider: Arc<OidcAuthProvider>,
-) -> OidcGrpcInterceptor {
+pub fn create_oidc_grpc_interceptor(provider: Arc<OidcAuthProvider>) -> OidcGrpcInterceptor {
     OidcGrpcInterceptor::new(provider)
 }

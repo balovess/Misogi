@@ -236,8 +236,10 @@ fn test_validate_blind_send_valid() {
 
 #[test]
 fn test_validate_blind_send_invalid_redundancy_fails() {
-    let mut bad_cfg = BlindSendConfig::default();
-    bad_cfg.redundancy_factor = 0.5; // Below minimum 1.5
+    let bad_cfg = BlindSendConfig {
+        redundancy_factor: 0.5, // Below minimum 1.5
+        ..Default::default()
+    };
     let config = TransferFactoryConfig {
         mode: TransferMode::BlindSend,
         blind_send_config: Some(bad_cfg),
@@ -315,8 +317,10 @@ fn test_built_driver_config_validate_delegates() {
     let cfg = BuiltDriverConfig::Pull(PullConfig::default());
     assert!(cfg.validate().is_ok());
 
-    let mut bad_bs = BlindSendConfig::default();
-    bad_bs.redundancy_factor = 0.5;
+    let bad_bs = BlindSendConfig {
+        redundancy_factor: 0.5,
+        ..Default::default()
+    };
     let bad_cfg = BuiltDriverConfig::BlindSend(bad_bs);
     assert!(bad_cfg.validate().is_err());
 }

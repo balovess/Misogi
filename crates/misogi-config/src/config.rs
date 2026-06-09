@@ -41,11 +41,11 @@
 //! wasm_plugins_dir = "./plugins"
 //! ```
 
-use std::path::{Path, PathBuf};
 use std::env;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
-use tracing::{info, warn, debug};
+use tracing::{debug, info, warn};
 
 use crate::error::ConfigError;
 
@@ -323,7 +323,7 @@ impl Default for ParsersConfigSection {
 /// # Lifecycle
 ///
 /// 1. **Load**: Parse TOML file via [`MisogiConfig::from_file()`](Self::from_file)
-///              or [`MisogiConfig::from_toml_str()`](Self::from_toml_str)
+///    or [`MisogiConfig::from_toml_str()`](Self::from_toml_str)
 /// 2. **Override**: Apply environment variables (MISOGI_* prefix)
 /// 3. **Validate**: Check all required fields and value ranges
 /// 4. **Distribute**: Extract subsection configs via accessor methods
@@ -455,7 +455,7 @@ impl MisogiConfig {
     /// let config = MisogiConfig::default();
     /// assert_eq!(config.general.environment, "development");
     /// ```
-    pub fn default() -> Self {
+    fn default_impl() -> Self {
         debug!("creating default development configuration");
 
         Self {
@@ -467,7 +467,15 @@ impl MisogiConfig {
             parsers: Some(ParsersConfigSection::default()),
         }
     }
+}
 
+impl Default for MisogiConfig {
+    fn default() -> Self {
+        Self::default_impl()
+    }
+}
+
+impl MisogiConfig {
     // -----------------------------------------------------------------------
     // Accessor Methods
     // -----------------------------------------------------------------------
@@ -628,9 +636,7 @@ impl MisogiConfig {
                     return Err(ConfigError::ValidationError {
                         section: "storage".to_string(),
                         field: "backend".to_string(),
-                        reason: format!(
-                            "unknown backend '{other}', expected: filesystem, s3, gcs"
-                        ),
+                        reason: format!("unknown backend '{other}', expected: filesystem, s3, gcs"),
                     });
                 }
             }
@@ -656,9 +662,7 @@ impl MisogiConfig {
                     return Err(ConfigError::ValidationError {
                         section: "transport".to_string(),
                         field: "mode".to_string(),
-                        reason: format!(
-                            "unknown mode '{other}', expected: streaming, buffered"
-                        ),
+                        reason: format!("unknown mode '{other}', expected: streaming, buffered"),
                     });
                 }
             }
@@ -735,18 +739,18 @@ impl MisogiConfig {
         debug!("applying environment variable overrides");
 
         // General section
-        if let Ok(val) = env::var(env_vars::GENERAL_ENVIRONMENT) {
-            if !val.is_empty() {
-                info!(env_var = env_vars::GENERAL_ENVIRONMENT, value = %val, "overriding general.environment");
-                self.general.environment = val;
-            }
+        if let Ok(val) = env::var(env_vars::GENERAL_ENVIRONMENT)
+            && !val.is_empty()
+        {
+            info!(env_var = env_vars::GENERAL_ENVIRONMENT, value = %val, "overriding general.environment");
+            self.general.environment = val;
         }
 
-        if let Ok(val) = env::var(env_vars::GENERAL_LOG_LEVEL) {
-            if !val.is_empty() {
-                info!(env_var = env_vars::GENERAL_LOG_LEVEL, value = %val, "overriding general.log_level");
-                self.general.log_level = val;
-            }
+        if let Ok(val) = env::var(env_vars::GENERAL_LOG_LEVEL)
+            && !val.is_empty()
+        {
+            info!(env_var = env_vars::GENERAL_LOG_LEVEL, value = %val, "overriding general.log_level");
+            self.general.log_level = val;
         }
 
         // JWT section
@@ -755,30 +759,34 @@ impl MisogiConfig {
         }
 
         if let Some(ref mut jwt) = self.jwt {
-            if let Ok(val) = env::var(env_vars::JWT_ISSUER) {
-                if !val.is_empty() {
-                    info!(env_var = env_vars::JWT_ISSUER, value = %val, "overriding jwt.issuer");
-                    jwt.issuer = val;
-                }
+            if let Ok(val) = env::var(env_vars::JWT_ISSUER)
+                && !val.is_empty()
+            {
+                info!(env_var = env_vars::JWT_ISSUER, value = %val, "overriding jwt.issuer");
+                jwt.issuer = val;
             }
 
-            if let Ok(val) = env::var(env_vars::JWT_AUDIENCE) {
-                if !val.is_empty() {
-                    info!(env_var = env_vars::JWT_AUDIENCE, value = %val, "overriding jwt.audience");
-                    jwt.audience = val.split(',').map(|s| s.trim().to_string()).collect();
-                }
+            if let Ok(val) = env::var(env_vars::JWT_AUDIENCE)
+                && !val.is_empty()
+            {
+                info!(env_var = env_vars::JWT_AUDIENCE, value = %val, "overriding jwt.audience");
+                jwt.audience = val.split(',').map(|s| s.trim().to_string()).collect();
             }
 
-            if let Ok(val) = env::var(env_vars::JWT_KEY_PATH) {
-                if !val.is_empty() {
-                    info!(env_var = env_vars::JWT_KEY_PATH, value = %val, "overriding jwt.key_path");
-                    jwt.key_path = Some(PathBuf::from(val));
-                }
+            if let Ok(val) = env::var(env_vars::JWT_KEY_PATH)
+                && !val.is_empty()
+            {
+                info!(env_var = env_vars::JWT_KEY_PATH, value = %val, "overriding jwt.key_path");
+                jwt.key_path = Some(PathBuf::from(val));
             }
 
             if let Ok(val) = env::var(env_vars::JWT_TTL_SECS) {
                 if let Ok(parsed) = val.parse::<u64>() {
-                    info!(env_var = env_vars::JWT_TTL_SECS, value = parsed, "overriding jwt.ttl_secs");
+                    info!(
+                        env_var = env_vars::JWT_TTL_SECS,
+                        value = parsed,
+                        "overriding jwt.ttl_secs"
+                    );
                     jwt.ttl_secs = parsed;
                 } else {
                     warn!(env_var = env_vars::JWT_TTL_SECS, value = %val, "failed to parse JWT TTL as integer");
@@ -787,7 +795,11 @@ impl MisogiConfig {
 
             if let Ok(val) = env::var(env_vars::JWT_REFRESH_TTL_SECS) {
                 if let Ok(parsed) = val.parse::<u64>() {
-                    info!(env_var = env_vars::JWT_REFRESH_TTL_SECS, value = parsed, "overriding jwt.refresh_ttl_secs");
+                    info!(
+                        env_var = env_vars::JWT_REFRESH_TTL_SECS,
+                        value = parsed,
+                        "overriding jwt.refresh_ttl_secs"
+                    );
                     jwt.refresh_ttl_secs = parsed;
                 } else {
                     warn!(env_var = env_vars::JWT_REFRESH_TTL_SECS, value = %val, "failed to parse JWT refresh TTL as integer");
@@ -801,23 +813,27 @@ impl MisogiConfig {
         }
 
         if let Some(ref mut storage) = self.storage {
-            if let Ok(val) = env::var(env_vars::STORAGE_BACKEND) {
-                if !val.is_empty() {
-                    info!(env_var = env_vars::STORAGE_BACKEND, value = %val, "overriding storage.backend");
-                    storage.backend = val;
-                }
+            if let Ok(val) = env::var(env_vars::STORAGE_BACKEND)
+                && !val.is_empty()
+            {
+                info!(env_var = env_vars::STORAGE_BACKEND, value = %val, "overriding storage.backend");
+                storage.backend = val;
             }
 
-            if let Ok(val) = env::var(env_vars::STORAGE_BASE_PATH) {
-                if !val.is_empty() {
-                    info!(env_var = env_vars::STORAGE_BASE_PATH, value = %val, "overriding storage.base_path");
-                    storage.base_path = PathBuf::from(val);
-                }
+            if let Ok(val) = env::var(env_vars::STORAGE_BASE_PATH)
+                && !val.is_empty()
+            {
+                info!(env_var = env_vars::STORAGE_BASE_PATH, value = %val, "overriding storage.base_path");
+                storage.base_path = PathBuf::from(val);
             }
 
             if let Ok(val) = env::var(env_vars::STORAGE_MAX_FILE_SIZE_MB) {
                 if let Ok(parsed) = val.parse::<u64>() {
-                    info!(env_var = env_vars::STORAGE_MAX_FILE_SIZE_MB, value = parsed, "overriding storage.max_file_size_mb");
+                    info!(
+                        env_var = env_vars::STORAGE_MAX_FILE_SIZE_MB,
+                        value = parsed,
+                        "overriding storage.max_file_size_mb"
+                    );
                     storage.max_file_size_mb = parsed;
                 } else {
                     warn!(env_var = env_vars::STORAGE_MAX_FILE_SIZE_MB, value = %val, "failed to parse max file size as integer");
@@ -831,16 +847,20 @@ impl MisogiConfig {
         }
 
         if let Some(ref mut transport) = self.transport {
-            if let Ok(val) = env::var(env_vars::TRANSPORT_MODE) {
-                if !val.is_empty() {
-                    info!(env_var = env_vars::TRANSPORT_MODE, value = %val, "overriding transport.mode");
-                    transport.mode = val;
-                }
+            if let Ok(val) = env::var(env_vars::TRANSPORT_MODE)
+                && !val.is_empty()
+            {
+                info!(env_var = env_vars::TRANSPORT_MODE, value = %val, "overriding transport.mode");
+                transport.mode = val;
             }
 
             if let Ok(val) = env::var(env_vars::TRANSPORT_BUFFER_SIZE_KB) {
                 if let Ok(parsed) = val.parse::<u32>() {
-                    info!(env_var = env_vars::TRANSPORT_BUFFER_SIZE_KB, value = parsed, "overriding transport.buffer_size_kb");
+                    info!(
+                        env_var = env_vars::TRANSPORT_BUFFER_SIZE_KB,
+                        value = parsed,
+                        "overriding transport.buffer_size_kb"
+                    );
                     transport.buffer_size_kb = parsed;
                 } else {
                     warn!(env_var = env_vars::TRANSPORT_BUFFER_SIZE_KB, value = %val, "failed to parse buffer size as integer");
@@ -849,7 +869,11 @@ impl MisogiConfig {
 
             if let Ok(val) = env::var(env_vars::TRANSPORT_CHUNK_SIZE_MB) {
                 if let Ok(parsed) = val.parse::<u32>() {
-                    info!(env_var = env_vars::TRANSPORT_CHUNK_SIZE_MB, value = parsed, "overriding transport.chunk_size_mb");
+                    info!(
+                        env_var = env_vars::TRANSPORT_CHUNK_SIZE_MB,
+                        value = parsed,
+                        "overriding transport.chunk_size_mb"
+                    );
                     transport.chunk_size_mb = parsed;
                 } else {
                     warn!(env_var = env_vars::TRANSPORT_CHUNK_SIZE_MB, value = %val, "failed to parse chunk size as integer");
@@ -863,18 +887,18 @@ impl MisogiConfig {
         }
 
         if let Some(ref mut parsers) = self.parsers {
-            if let Ok(val) = env::var(env_vars::PARSERS_DEFAULT_POLICY) {
-                if !val.is_empty() {
-                    info!(env_var = env_vars::PARSERS_DEFAULT_POLICY, value = %val, "overriding parsers.default_policy");
-                    parsers.default_policy = val;
-                }
+            if let Ok(val) = env::var(env_vars::PARSERS_DEFAULT_POLICY)
+                && !val.is_empty()
+            {
+                info!(env_var = env_vars::PARSERS_DEFAULT_POLICY, value = %val, "overriding parsers.default_policy");
+                parsers.default_policy = val;
             }
 
-            if let Ok(val) = env::var(env_vars::PARSERS_WASM_PLUGINS_DIR) {
-                if !val.is_empty() {
-                    info!(env_var = env_vars::PARSERS_WASM_PLUGINS_DIR, value = %val, "overriding parsers.wasm_plugins_dir");
-                    parsers.wasm_plugins_dir = PathBuf::from(val);
-                }
+            if let Ok(val) = env::var(env_vars::PARSERS_WASM_PLUGINS_DIR)
+                && !val.is_empty()
+            {
+                info!(env_var = env_vars::PARSERS_WASM_PLUGINS_DIR, value = %val, "overriding parsers.wasm_plugins_dir");
+                parsers.wasm_plugins_dir = PathBuf::from(val);
             }
         }
     }

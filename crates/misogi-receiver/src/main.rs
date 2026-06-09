@@ -1,19 +1,19 @@
 mod cli;
 mod config;
+mod daemon;
+mod grpc_service;
+mod http_routes;
+mod router;
 mod state;
 mod storage;
-mod http_routes;
-mod grpc_service;
-mod router;
-mod daemon;
 mod tunnel_handler;
 
-use std::sync::Arc;
-use tracing_subscriber::{fmt, EnvFilter};
-use clap::Parser;
 use crate::cli::CommandLine;
 use crate::config::ReceiverConfig;
 use crate::state::AppState;
+use clap::Parser;
+use std::sync::Arc;
+use tracing_subscriber::{EnvFilter, fmt};
 
 #[tokio::main]
 async fn main() {
@@ -80,9 +80,8 @@ async fn run_server(config: ReceiverConfig) {
         // Tonic's multiplexing allows v1 and v2 clients (using different
         // proto packages: misogi.file_transfer.v1 vs .v2) to coexist
         // on a single port without conflict.
-        let builder = tonic::transport::Server::builder()
-            .add_service(v1_svc);
-            // .add_service(v2_svc.into_server());  // Enable when V2 is implemented
+        let builder = tonic::transport::Server::builder().add_service(v1_svc);
+        // .add_service(v2_svc.into_server());  // Enable when V2 is implemented
 
         if let Err(e) = builder.serve(grpc_addr.parse().unwrap()).await {
             tracing::error!(error = %e, "Multi-version gRPC server crashed");
@@ -90,9 +89,7 @@ async fn run_server(config: ReceiverConfig) {
     });
     tracing::info!(grpc_addr = %grpc_addr_log, "gRPC listening (v1+v2 multiplexed)");
 
-    axum::serve(listener, app)
-        .await
-        .expect("Server error");
+    axum::serve(listener, app).await.expect("Server error");
 }
 
 async fn run_daemon_mode(config: ReceiverConfig) {

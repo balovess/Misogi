@@ -43,9 +43,9 @@ pub mod session;
 pub mod transport;
 
 // New runtime engine modules (Tasks 6.16-6.18).
-pub mod verifier;
-pub mod session_manager;
 pub mod repair;
+pub mod session_manager;
+pub mod verifier;
 
 // Test modules (compiled only under cfg(test)).
 #[cfg(test)]
@@ -53,20 +53,18 @@ mod config_tests;
 
 // Re-export primary types at module level for ergonomic imports.
 pub use config::{
-    IntegrityConfig, IntegrityConfigError, RepairConfig, ResumeConfig,
-    VerificationConfig,
+    IntegrityConfig, IntegrityConfigError, RepairConfig, ResumeConfig, VerificationConfig,
 };
 pub use envelope::{
-    HashAlgorithm, IntegrityAck, IntegrityEnvelope, IntegrityEnvelopeBuilder,
-    IntegrityError,
+    HashAlgorithm, IntegrityAck, IntegrityEnvelope, IntegrityEnvelopeBuilder, IntegrityError,
 };
 pub use session::{
-    RepairProgress, SessionHandle, SessionMetadata, TransportCapabilities,
-    TransportState, VerificationReport,
+    RepairProgress, SessionHandle, SessionMetadata, TransportCapabilities, TransportState,
+    VerificationReport,
 };
 pub use transport::HealingTransport;
 
 // Re-export new engine types.
-pub use verifier::IntegrityVerifier;
-pub use session_manager::SessionManager;
 pub use repair::RepairEngine;
+pub use session_manager::SessionManager;
+pub use verifier::IntegrityVerifier;

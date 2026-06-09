@@ -48,7 +48,8 @@
 
 pub(crate) mod decoder;
 pub(crate) mod driver;
-#[cfg(test)] mod driver_tests;
+#[cfg(test)]
+mod driver_tests;
 pub(crate) mod encoder;
 pub(crate) mod packet;
 

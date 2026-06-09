@@ -206,7 +206,7 @@ impl ZipScanner {
     /// Uses `tempfile::TempDir` which guarantees automatic cleanup on drop,
     /// preventing residual data leaks even on panic paths.
     async fn create_temp_dir(&self) -> Result<TempDir> {
-        TempDir::new().map_err(|e| MisogiError::Io(e))
+        TempDir::new().map_err(MisogiError::Io)
     }
 
     /// Validate security constraints for a single ZIP entry before processing.
@@ -284,7 +284,7 @@ impl ZipScanner {
                 .to_string();
 
             let mut data = Vec::with_capacity(uncompressed_size as usize);
-            std::io::copy(&mut entry, &mut data).map_err(|e| MisogiError::Io(e))?;
+            std::io::copy(&mut entry, &mut data).map_err(MisogiError::Io)?;
 
             entries.push(PendingEntry {
                 entry_name,
@@ -434,7 +434,7 @@ impl ZipScanner {
         // We detect encrypted entries from ZIP local file header flags (bit 0 of GPBF)
         // WITHOUT extracting or decrypting anything, then delegate to PpapHandler if found.
         {
-            let data = fs::read(input_path).await.map_err(|e| MisogiError::Io(e))?;
+            let data = fs::read(input_path).await.map_err(MisogiError::Io)?;
             if self.has_encrypted_entries(&data) {
                 return Err(MisogiError::SecurityViolation(format!(
                     "PPAP detected: encrypted ZIP entries in '{}'. \
@@ -446,7 +446,7 @@ impl ZipScanner {
         // === END PPAP Pre-Check ===
 
         // Phase 1: Synchronous extraction (no awaits while ZipArchive is borrowed)
-        let file = std::fs::File::open(input_path).map_err(|e| MisogiError::Io(e))?;
+        let file = std::fs::File::open(input_path).map_err(MisogiError::Io)?;
         let mut archive = ZipArchive::new(file)
             .map_err(|e| MisogiError::Protocol(format!("Invalid ZIP archive: {}", e)))?;
 
@@ -518,7 +518,7 @@ impl ZipScanner {
             writer
                 .start_file(entry_name, options)
                 .map_err(|e| MisogiError::Io(e.into()))?;
-            writer.write_all(&data).map_err(|e| MisogiError::Io(e))?;
+            writer.write_all(&data).map_err(MisogiError::Io)?;
         }
 
         let finished = writer

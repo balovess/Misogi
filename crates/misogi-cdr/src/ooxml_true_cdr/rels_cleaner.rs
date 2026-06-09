@@ -44,7 +44,8 @@ pub fn clean_relationships(
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Decl(decl)) => {
-                writer.write_event(Event::Decl(decl))
+                writer
+                    .write_event(Event::Decl(decl))
                     .map_err(|e| MisogiError::Io(xml_write_error(e)))?;
                 break;
             }
@@ -102,19 +103,23 @@ pub fn clean_relationships(
                         new_rel.push_attribute((key.as_str(), value.as_str()));
                     }
 
-                    writer.write_event(Event::Empty(new_rel))
+                    writer
+                        .write_event(Event::Empty(new_rel))
                         .map_err(|e| MisogiError::Io(xml_write_error(e)))?;
                 } else {
-                    writer.write_event(Event::Start(e.to_owned()))
+                    writer
+                        .write_event(Event::Start(e.to_owned()))
                         .map_err(|e| MisogiError::Io(xml_write_error(e)))?;
                 }
             }
             Ok(Event::End(e)) => {
-                writer.write_event(Event::End(e))
+                writer
+                    .write_event(Event::End(e))
                     .map_err(|e| MisogiError::Io(xml_write_error(e)))?;
             }
             Ok(Event::Text(e)) => {
-                writer.write_event(Event::Text(e))
+                writer
+                    .write_event(Event::Text(e))
                     .map_err(|e| MisogiError::Io(xml_write_error(e)))?;
             }
             Ok(Event::Eof) => break,
@@ -152,7 +157,8 @@ pub fn validate_output(output: &[u8]) -> Result<bool> {
     match ZipArchive::new(cursor) {
         Ok(mut archive) => {
             let has_content_types = (0..archive.len()).any(|i| {
-                archive.by_index(i)
+                archive
+                    .by_index(i)
                     .map(|e| e.name() == "[Content_Types].xml")
                     .unwrap_or(false)
             });
@@ -176,5 +182,5 @@ pub fn validate_output(output: &[u8]) -> Result<bool> {
 // =============================================================================
 
 fn xml_write_error(e: quick_xml::Error) -> std::io::Error {
-    std::io::Error::new(std::io::ErrorKind::Other, format!("XML write error: {}", e))
+    std::io::Error::other(format!("XML write error: {}", e))
 }

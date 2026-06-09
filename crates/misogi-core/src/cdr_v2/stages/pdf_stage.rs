@@ -27,9 +27,7 @@ use async_trait::async_trait;
 use crate::cdr_v2::ast::{AstNode, DocumentAst};
 use crate::cdr_v2::config::PdfConfig;
 use crate::cdr_v2::pipeline::{CdrContext, CdrStage, SanitizationReport};
-use crate::cdr_v2::types::{
-    ActiveContentType, CdrError, DocumentFormat, SanitizeAction,
-};
+use crate::cdr_v2::types::{ActiveContentType, CdrError, DocumentFormat, SanitizeAction};
 
 /// PDF document sanitization stage.
 ///
@@ -375,46 +373,31 @@ impl CdrStage for PdfSanitizeStage {
         let js_count = self.strip_javascript(&mut ast);
         total_items += js_count;
         if js_count > 0 {
-            actions_taken.push((
-                "/javascript/*".to_string(),
-                SanitizeAction::Removed,
-            ));
+            actions_taken.push(("/javascript/*".to_string(), SanitizeAction::Removed));
         }
 
         let oa_count = self.strip_open_actions(&mut ast);
         total_items += oa_count;
         if oa_count > 0 {
-            actions_taken.push((
-                "/open_actions/*".to_string(),
-                SanitizeAction::Removed,
-            ));
+            actions_taken.push(("/open_actions/*".to_string(), SanitizeAction::Removed));
         }
 
         let ef_count = self.strip_embedded_files(&mut ast);
         total_items += ef_count;
         if ef_count > 0 {
-            actions_taken.push((
-                "/embedded_files/*".to_string(),
-                SanitizeAction::Extracted,
-            ));
+            actions_taken.push(("/embedded_files/*".to_string(), SanitizeAction::Extracted));
         }
 
         let ff_count = self.flatten_form_fields(&mut ast);
         total_items += ff_count;
         if ff_count > 0 {
-            actions_taken.push((
-                "/form_fields/*".to_string(),
-                SanitizeAction::Flattened,
-            ));
+            actions_taken.push(("/form_fields/*".to_string(), SanitizeAction::Flattened));
         }
 
         let uk_count = self.remove_unknown_elements(&mut ast);
         total_items += uk_count;
         if uk_count > 0 {
-            actions_taken.push((
-                "/unknown/*".to_string(),
-                SanitizeAction::Removed,
-            ));
+            actions_taken.push(("/unknown/*".to_string(), SanitizeAction::Removed));
         }
 
         // Build sanitization report (stored implicitly via action_taken markers)
@@ -471,11 +454,7 @@ mod tests {
         path: &str,
         severity: ThreatSeverity,
     ) {
-        let ref_item = ActiveContentRef::new(
-            content_type,
-            ContentLocation::new(path),
-            severity,
-        );
+        let ref_item = ActiveContentRef::new(content_type, ContentLocation::new(path), severity);
         let node = AstNode::ActiveContent {
             ref_item,
             raw_data: None,
@@ -598,9 +577,11 @@ mod tests {
         let count = stage.strip_open_actions(&mut ast);
 
         assert_eq!(count, 1);
-        assert!(!ast.active_contents.iter().any(|ac| {
-            ac.content_type == ActiveContentType::ActionForm
-        }));
+        assert!(
+            !ast.active_contents
+                .iter()
+                .any(|ac| { ac.content_type == ActiveContentType::ActionForm })
+        );
     }
 
     #[tokio::test]

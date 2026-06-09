@@ -38,9 +38,7 @@ use std::path::{Path, PathBuf};
 use async_trait::async_trait;
 use tracing::{debug, info, warn};
 
-use super::jtd_converter::{
-    JtdConversionError, JtdConversionResult, JtdConverter,
-};
+use super::jtd_converter::{JtdConversionError, JtdConversionResult, JtdConverter};
 
 /// Default timeout for conversion operations in seconds.
 ///
@@ -140,7 +138,7 @@ const COMMAND_TEMPLATE: &str = r#"{viewer} /S /P /O"{output}" {input}"#;
 /// let converter = IchitaroViewerConverter::new()
 ///     .with_path(r"C:\Tools\Ichitaro\JVVIEW.EXE")
 ///     .with_timeout(120);
- ///
+///
 /// if converter.is_available().await? {
 ///     let result = converter.convert_to_pdf(
 ///         &PathBuf::from("C:\\data\\document.jtd"),
@@ -775,9 +773,10 @@ mod tests {
         // This test runs on whatever platform the CI uses.
         // On non-Windows, it verifies the graceful degradation path.
         // On Windows, it may return true/false depending on installation.
-        let available = converter.is_available().await.expect(
-            "is_available() should never return Err for platform check",
-        );
+        let available = converter
+            .is_available()
+            .await
+            .expect("is_available() should never return Err for platform check");
 
         // On non-Windows platforms, this MUST be false.
         // On Windows, we don't assert a value (depends on installed software).
@@ -807,9 +806,9 @@ mod tests {
                         "Error message should mention Windows: {msg}"
                     );
                 }
-                other => panic!(
-                    "Expected PlatformNotSupported error on non-Windows, got: {other:?}"
-                ),
+                other => {
+                    panic!("Expected PlatformNotSupported error on non-Windows, got: {other:?}")
+                }
             }
         }
     }
@@ -844,9 +843,9 @@ mod tests {
     #[test]
     fn test_known_viewer_paths_contain_common_locations() {
         // Verify that the most common installation path is included.
-        let has_program_files_x86 = KNOWN_VIEWER_PATHS.iter().any(|p| {
-            p.contains("Program Files (x86)") && p.contains("JustSystems")
-        });
+        let has_program_files_x86 = KNOWN_VIEWER_PATHS
+            .iter()
+            .any(|p| p.contains("Program Files (x86)") && p.contains("JustSystems"));
 
         assert!(
             has_program_files_x86,

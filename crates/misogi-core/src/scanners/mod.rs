@@ -190,14 +190,9 @@ impl std::fmt::Display for ScanResult {
                 "Infected [threat={}, severity={:?}]",
                 threat_name, severity
             ),
-            ScanResult::Error {
-                message,
-                transient,
-            } => write!(
-                f,
-                "Error [message={}, transient={}]",
-                message, transient
-            ),
+            ScanResult::Error { message, transient } => {
+                write!(f, "Error [message={}, transient={}]", message, transient)
+            }
             ScanResult::Timeout { timeout_secs } => {
                 write!(f, "Timeout [timeout={}s]", timeout_secs)
             }
@@ -213,7 +208,9 @@ impl std::fmt::Display for ScanResult {
 /// # Ordering
 /// Implements `PartialOrd`/`Ord` to enable comparison-based policy decisions
 /// (e.g., "block only High+Critical threats, quarantine Medium").
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(
+    Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash, Default,
+)]
 pub enum ThreatSeverity {
     /// Informational finding (e.g., suspicious but not malicious).
     Info,
@@ -222,6 +219,7 @@ pub enum ThreatSeverity {
     Low,
 
     /// Medium-risk detection (e.g., trojan variant, exploit kit).
+    #[default]
     Medium,
 
     /// High-risk detection (e.g., ransomware, banking trojan).
@@ -240,12 +238,6 @@ impl std::fmt::Display for ThreatSeverity {
             ThreatSeverity::High => write!(f, "HIGH"),
             ThreatSeverity::Critical => write!(f, "CRITICAL"),
         }
-    }
-}
-
-impl Default for ThreatSeverity {
-    fn default() -> Self {
-        Self::Medium
     }
 }
 
@@ -465,7 +457,7 @@ impl std::fmt::Display for ScannerMetadata {
 /// | `ConsensusRequired` | High | Slow | Medium | Multi-vendor defense-in-depth |
 /// | `FirstResponder` | Medium | Fastest | Low | Latency-sensitive pipelines |
 /// | `AggregateAll` | Highest | Slowest | High | Forensic/compliance needs |
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash, Default)]
 pub enum ChainMode {
     /// Any scanner reporting infected blocks the file (strictest).
     ///
@@ -474,6 +466,7 @@ pub enum ChainMode {
     /// behavior depends on `fail_open_on_error` setting.
     ///
     /// **Security posture:** Most conservative — one infected verdict is enough.
+    #[default]
     AnyInfectedBlocks,
 
     /// All scanners must agree on infection (consensus).
@@ -511,12 +504,6 @@ impl std::fmt::Display for ChainMode {
             ChainMode::FirstResponder => write!(f, "FirstResponder"),
             ChainMode::AggregateAll => write!(f, "AggregateAll"),
         }
-    }
-}
-
-impl Default for ChainMode {
-    fn default() -> Self {
-        Self::AnyInfectedBlocks
     }
 }
 
@@ -760,15 +747,10 @@ impl ScannerChain {
                             "Scanner reports clean"
                         );
                     }
-                    ScanResult::Error {
-                        message,
-                        transient,
-                    } => {
+                    ScanResult::Error { message, transient } => {
                         has_error = true;
-                        error_messages.push(format!(
-                            "[{}] {} (transient: {})",
-                            id, message, transient
-                        ));
+                        error_messages
+                            .push(format!("[{}] {} (transient: {})", id, message, transient));
                         tracing::error!(
                             scanner_id = %id,
                             scanner_name = %name,
@@ -815,10 +797,7 @@ impl ScannerChain {
                     "Scanners had errors and fail_close=false — blocking file"
                 );
                 Ok(ScanResult::Error {
-                    message: format!(
-                        "One or more scanners failed: {}",
-                        error_messages.join("; ")
-                    ),
+                    message: format!("One or more scanners failed: {}", error_messages.join("; ")),
                     transient: true,
                 })
             }
@@ -864,7 +843,9 @@ impl ScannerChain {
                         total_responding += 1;
 
                         // Track most severe threat seen
-                        if most_severe_threat.is_none() || Some(*severity) > most_severe_threat.as_ref().map(|(_, s)| *s) {
+                        if most_severe_threat.is_none()
+                            || Some(*severity) > most_severe_threat.as_ref().map(|(_, s)| *s)
+                        {
                             most_severe_threat = Some((threat_name.clone(), *severity));
                         }
 
@@ -1015,9 +996,7 @@ impl ScannerChain {
         // All scanners failed or errored
         if let Some(result) = last_error {
             if self.fail_open_on_error {
-                tracing::warn!(
-                    "All first-responders failed but fail_open=true — allowing file"
-                );
+                tracing::warn!("All first-responders failed but fail_open=true — allowing file");
                 Ok(ScanResult::Clean)
             } else {
                 result
@@ -1074,33 +1053,31 @@ impl ScannerChain {
         }
 
         // Find most severe result
-        let most_severe = findings
-            .iter()
-            .max_by_key(|r| match r {
-                ScanResult::Clean => 0u8,
-                ScanResult::Timeout { .. } => 1,
-                ScanResult::Error { .. } => 2,
-                ScanResult::Infected {
-                    severity: ThreatSeverity::Info,
-                    ..
-                } => 3,
-                ScanResult::Infected {
-                    severity: ThreatSeverity::Low,
-                    ..
-                } => 4,
-                ScanResult::Infected {
-                    severity: ThreatSeverity::Medium,
-                    ..
-                } => 5,
-                ScanResult::Infected {
-                    severity: ThreatSeverity::High,
-                    ..
-                } => 6,
-                ScanResult::Infected {
-                    severity: ThreatSeverity::Critical,
-                    ..
-                } => 7,
-            });
+        let most_severe = findings.iter().max_by_key(|r| match r {
+            ScanResult::Clean => 0u8,
+            ScanResult::Timeout { .. } => 1,
+            ScanResult::Error { .. } => 2,
+            ScanResult::Infected {
+                severity: ThreatSeverity::Info,
+                ..
+            } => 3,
+            ScanResult::Infected {
+                severity: ThreatSeverity::Low,
+                ..
+            } => 4,
+            ScanResult::Infected {
+                severity: ThreatSeverity::Medium,
+                ..
+            } => 5,
+            ScanResult::Infected {
+                severity: ThreatSeverity::High,
+                ..
+            } => 6,
+            ScanResult::Infected {
+                severity: ThreatSeverity::Critical,
+                ..
+            } => 7,
+        });
 
         match most_severe {
             Some(severity) => {
@@ -1301,8 +1278,14 @@ mod tests {
 
     #[test]
     fn test_chain_mode_display() {
-        assert_eq!(format!("{}", ChainMode::AnyInfectedBlocks), "AnyInfectedBlocks");
-        assert_eq!(format!("{}", ChainMode::ConsensusRequired), "ConsensusRequired");
+        assert_eq!(
+            format!("{}", ChainMode::AnyInfectedBlocks),
+            "AnyInfectedBlocks"
+        );
+        assert_eq!(
+            format!("{}", ChainMode::ConsensusRequired),
+            "ConsensusRequired"
+        );
         assert_eq!(format!("{}", ChainMode::FirstResponder), "FirstResponder");
         assert_eq!(format!("{}", ChainMode::AggregateAll), "AggregateAll");
     }
@@ -1723,7 +1706,7 @@ impl ScannerRegistry {
 
         Ok(Self {
             scanner_configs: config.scanners,
-            chain_mode: chain_mode,
+            chain_mode,
             fail_open_on_error: fail_open,
         })
     }
@@ -1955,7 +1938,9 @@ timeout_secs = 30
         let err_msg = result.unwrap_err().to_string();
         // Serde reports unknown enum variants with specific phrasing
         assert!(
-            err_msg.contains("Unknown") || err_msg.contains("unknown") || err_msg.contains("InvalidMode"),
+            err_msg.contains("Unknown")
+                || err_msg.contains("unknown")
+                || err_msg.contains("InvalidMode"),
             "Error should mention invalid mode, got: {err_msg}"
         );
     }
@@ -2009,13 +1994,21 @@ timeout_secs = 30
         struct TestCleanScanner;
         #[async_trait]
         impl ExternalScanner for TestCleanScanner {
-            fn name(&self) -> &str { "TestClean" }
-            fn id(&self) -> &str { "test-clean" }
+            fn name(&self) -> &str {
+                "TestClean"
+            }
+            fn id(&self) -> &str {
+                "test-clean"
+            }
             async fn scan_stream(&self, _data: &[u8]) -> Result<ScanResult> {
                 Ok(ScanResult::Clean)
             }
-            async fn health_check(&self) -> bool { true }
-            async fn metadata(&self) -> Option<ScannerMetadata> { None }
+            async fn health_check(&self) -> bool {
+                true
+            }
+            async fn metadata(&self) -> Option<ScannerMetadata> {
+                None
+            }
         }
 
         chain.add_scanner(Box::new(TestCleanScanner));

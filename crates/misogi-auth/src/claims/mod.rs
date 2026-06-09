@@ -112,7 +112,6 @@ pub struct MisogiClaims {
     // ------------------------------------------------------------------
     // Required Fields
     // ------------------------------------------------------------------
-
     /// Unique identifier of the applicant (authenticated subject).
     ///
     /// Typically an employee number, UPN, UUID, or other stable identifier.
@@ -138,7 +137,6 @@ pub struct MisogiClaims {
     // ------------------------------------------------------------------
     // Standard Fields
     // ------------------------------------------------------------------
-
     /// Human-readable display name of the authenticated subject.
     ///
     /// Intended for UI presentation only — NOT for authorization decisions.
@@ -160,7 +158,6 @@ pub struct MisogiClaims {
     // ------------------------------------------------------------------
     // Audit Fields
     // ------------------------------------------------------------------
-
     /// Original subject identifier from the upstream identity provider.
     ///
     /// Preserves the raw subject value BEFORE any mapping/transformation.
@@ -177,7 +174,6 @@ pub struct MisogiClaims {
     // ------------------------------------------------------------------
     // Extension Field (flattened)
     // ------------------------------------------------------------------
-
     /// Arbitrary extension claims, serialized as top-level JSON fields.
     ///
     /// Uses `#[serde(flatten)]` so entries become sibling fields alongside
@@ -262,11 +258,7 @@ impl MisogiClaims {
     }
 
     /// Builder-style method: insert a key-value pair into extra extensions.
-    pub fn with_extra(
-        mut self,
-        key: impl Into<String>,
-        value: serde_json::Value,
-    ) -> Self {
+    pub fn with_extra(mut self, key: impl Into<String>, value: serde_json::Value) -> Self {
         self.extra.insert(key.into(), value);
         self
     }

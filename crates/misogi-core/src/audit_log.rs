@@ -1,13 +1,13 @@
-use std::sync::Arc;
-use std::path::PathBuf;
-use tokio::sync::RwLock;
-use tokio::io::AsyncWriteExt;
-use serde::{Deserialize, Serialize};
-use chrono::{DateTime, Local, Utc};
-use uuid::Uuid;
 use crate::error::Result;
-use crate::traits::LogFormatter;
 use crate::log_engine::{JsonLogFormatter, SyslogCefFormatter};
+use crate::traits::LogFormatter;
+use chrono::{DateTime, Local, Utc};
+use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
+use std::sync::Arc;
+use tokio::io::AsyncWriteExt;
+use tokio::sync::RwLock;
+use uuid::Uuid;
 
 /// Audit event types covering the complete Misogi lifecycle.
 ///
@@ -306,7 +306,11 @@ impl AuditLogEntry {
         self
     }
 
-    pub fn with_hashes(mut self, original: impl Into<String>, sanitized: impl Into<String>) -> Self {
+    pub fn with_hashes(
+        mut self,
+        original: impl Into<String>,
+        sanitized: impl Into<String>,
+    ) -> Self {
         self.original_hash = Some(original.into());
         self.sanitized_hash = Some(sanitized.into());
         self
@@ -585,7 +589,7 @@ impl AuditLogManager {
     ///
     /// # Arguments
     /// * `log_dir` - Directory where daily log files will be written.
-    ///               Created automatically if it does not exist.
+    ///   Created automatically if it does not exist.
     ///
     /// # Returns
     /// `Arc<Self>` for shared ownership across async tasks.
@@ -610,11 +614,11 @@ impl AuditLogManager {
     /// # Arguments
     /// * `log_dir` - Directory for persistent log file storage.
     /// * `max_memory_entries` - Maximum entries in in-memory ring buffer.
-    ///                          Older entries are evicted when exceeded.
+    ///   Older entries are evicted when exceeded.
     /// * `retention_days` - Number of days to retain log files on disk.
-    ///                      LGWAN: 365 minimum, ZTA: up to 2555 (7 years).
+    ///   LGWAN: 365 minimum, ZTA: up to 2555 (7 years).
     /// * `formatter` - Optional custom [`LogFormatter`] implementation.
-    ///                 If `None`, defaults to [`JsonLogFormatter`].
+    ///   If `None`, defaults to [`JsonLogFormatter`].
     ///
     /// # Returns
     /// `Arc<Self>` for shared ownership across async tasks.
@@ -719,7 +723,7 @@ impl AuditLogManager {
     /// Returns [`MisogiError::Io`] if:
     /// - Log directory cannot be created
     /// - Log file cannot be opened or written
-    /// Returns [`MisogiError::Serialization`] if formatting fails.
+    ///   Returns [`MisogiError::Serialization`] if formatting fails.
     ///
     /// # Example
     ///
@@ -773,6 +777,7 @@ impl AuditLogManager {
 
     /// Query entries from memory with optional filters.
     /// Supports pagination for large result sets.
+    #[allow(clippy::too_many_arguments)]
     pub async fn query(
         &self,
         event_type: Option<&AuditEventType>,
@@ -788,38 +793,36 @@ impl AuditLogManager {
         let filtered: Vec<AuditLogEntry> = entries
             .iter()
             .filter(|entry| {
-                if let Some(et) = event_type {
-                    if &entry.event_type != et {
-                        return false;
-                    }
+                if let Some(et) = event_type
+                    && &entry.event_type != et
+                {
+                    return false;
                 }
 
-                if let Some(aid) = actor_id {
-                    if entry.actor_id != aid {
-                        return false;
-                    }
+                if let Some(aid) = actor_id
+                    && entry.actor_id != aid
+                {
+                    return false;
                 }
 
-                if let Some(fid) = file_id {
-                    if entry.file_id != fid {
-                        return false;
-                    }
+                if let Some(fid) = file_id
+                    && entry.file_id != fid
+                {
+                    return false;
                 }
 
-                if let Some(from_dt) = from {
-                    if let Ok(entry_dt) = DateTime::parse_from_rfc3339(&entry.timestamp) {
-                        if entry_dt.with_timezone(&Utc) < from_dt {
-                            return false;
-                        }
-                    }
+                if let Some(from_dt) = from
+                    && let Ok(entry_dt) = DateTime::parse_from_rfc3339(&entry.timestamp)
+                    && entry_dt.with_timezone(&Utc) < from_dt
+                {
+                    return false;
                 }
 
-                if let Some(to_dt) = to {
-                    if let Ok(entry_dt) = DateTime::parse_from_rfc3339(&entry.timestamp) {
-                        if entry_dt.with_timezone(&Utc) > to_dt {
-                            return false;
-                        }
-                    }
+                if let Some(to_dt) = to
+                    && let Ok(entry_dt) = DateTime::parse_from_rfc3339(&entry.timestamp)
+                    && entry_dt.with_timezone(&Utc) > to_dt
+                {
+                    return false;
                 }
 
                 true
@@ -846,7 +849,9 @@ impl AuditLogManager {
         from: Option<DateTime<Utc>>,
         to: Option<DateTime<Utc>>,
     ) -> Result<String> {
-        let entries = self.query(event_type, actor_id, None, from, to, 0, u32::MAX).await;
+        let entries = self
+            .query(event_type, actor_id, None, from, to, 0, u32::MAX)
+            .await;
 
         let mut csv = AuditLogEntry::csv_header().to_string();
         for entry in &entries {
@@ -913,7 +918,9 @@ impl AuditLogManager {
         to: Option<DateTime<Utc>>,
     ) -> Result<String> {
         // Query entries matching the filter criteria
-        let entries = self.query(event_type, actor_id, None, from, to, 0, u32::MAX).await;
+        let entries = self
+            .query(event_type, actor_id, None, from, to, 0, u32::MAX)
+            .await;
 
         // Create a temporary CEF formatter for this export
         let cef_formatter = SyslogCefFormatter::new();
@@ -965,7 +972,9 @@ impl AuditLogManager {
 
         let uploads_today = entries
             .iter()
-            .filter(|e| e.timestamp.starts_with(&today) && e.event_type == AuditEventType::FileUploaded)
+            .filter(|e| {
+                e.timestamp.starts_with(&today) && e.event_type == AuditEventType::FileUploaded
+            })
             .count() as u64;
 
         let approvals_today = entries
@@ -1066,8 +1075,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_audit_entry_failure() {
-        let entry = AuditLogEntry::new(AuditEventType::SystemError)
-            .failure("Disk full error");
+        let entry = AuditLogEntry::new(AuditEventType::SystemError).failure("Disk full error");
 
         assert!(!entry.success);
         assert_eq!(entry.error_message.as_deref(), Some("Disk full error"));
@@ -1113,7 +1121,15 @@ mod tests {
         manager.record(entry2).await.unwrap();
 
         let results = manager
-            .query(Some(&AuditEventType::FileUploaded), None, None, None, None, 0, 10)
+            .query(
+                Some(&AuditEventType::FileUploaded),
+                None,
+                None,
+                None,
+                None,
+                0,
+                10,
+            )
             .await;
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].event_type, AuditEventType::FileUploaded);
@@ -1215,9 +1231,15 @@ mod tests {
         // Verify FILE_PROCESSED extended fields
         assert_eq!(entry.transfer_id.as_deref(), Some("tx_987654321"));
         assert_eq!(entry.applicant_id.as_deref(), Some("applicant-001"));
-        assert_eq!(entry.policy_applied.as_deref(), Some("REMOVE_ACTIVE_CONTENT"));
+        assert_eq!(
+            entry.policy_applied.as_deref(),
+            Some("REMOVE_ACTIVE_CONTENT")
+        );
         assert_eq!(entry.sanitize_status.as_deref(), Some("SUCCESS"));
-        assert_eq!(entry.new_file_name.as_deref(), Some("confidential_sanitized.docx"));
+        assert_eq!(
+            entry.new_file_name.as_deref(),
+            Some("confidential_sanitized.docx")
+        );
         assert_eq!(entry.new_size_bytes, Some(2048));
         assert_eq!(entry.contains_personal_info, Some(true));
     }
@@ -1245,8 +1267,11 @@ mod tests {
         assert_eq!(deserialized.policy_applied, original.policy_applied);
         assert_eq!(deserialized.sanitize_status, original.sanitize_status);
         assert_eq!(deserialized.new_size_bytes, original.new_size_bytes);
-        assert_eq!(deserialized.contains_personal_info, original.contains_personal_info);
-        assert_eq!(deserialized.event_id, original.event_id);  // UUID preserved
+        assert_eq!(
+            deserialized.contains_personal_info,
+            original.contains_personal_info
+        );
+        assert_eq!(deserialized.event_id, original.event_id); // UUID preserved
     }
 
     #[test]
@@ -1272,7 +1297,7 @@ mod tests {
             .with_contains_personal_info(true);
 
         // If we got here without compiler errors, chaining works
-        assert!(!entry.success);  // failure() was called last in chain
+        assert!(!entry.success); // failure() was called last in chain
         assert_eq!(entry.transfer_id.as_deref(), Some("tx_001"));
     }
 
@@ -1300,12 +1325,8 @@ mod tests {
 
         // Create manager with CEF formatter
         let cef_formatter: Arc<dyn LogFormatter> = Arc::new(SyslogCefFormatter::new());
-        let manager = AuditLogManager::with_config(
-            test_dir("audit_custom"),
-            100,
-            30,
-            Some(cef_formatter),
-        );
+        let manager =
+            AuditLogManager::with_config(test_dir("audit_custom"), 100, 30, Some(cef_formatter));
 
         let entry = AuditLogEntry::new(AuditEventType::SecurityViolation)
             .with_actor("intruder-001", "攻撃者", "external")
@@ -1316,15 +1337,17 @@ mod tests {
         manager.record(entry).await.unwrap();
 
         // Verify entry was stored (formatting doesn't affect storage)
-        let results = manager.query(
-            Some(&AuditEventType::SecurityViolation),
-            None,
-            None,
-            None,
-            None,
-            0,
-            10,
-        ).await;
+        let results = manager
+            .query(
+                Some(&AuditEventType::SecurityViolation),
+                None,
+                None,
+                None,
+                None,
+                0,
+                10,
+            )
+            .await;
 
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].actor_id, "intruder-001");
@@ -1339,7 +1362,10 @@ mod tests {
             AuditEventType::FileUploaded,
             AuditEventType::SecurityViolation,
             AuditEventType::TransferCompleted,
-        ].iter().enumerate() {
+        ]
+        .iter()
+        .enumerate()
+        {
             let entry = AuditLogEntry::new(event_type.clone())
                 .with_actor(format!("user-{}", i), "テストユーザー", "staff")
                 .with_file(format!("file-{}", i), "test.txt")
@@ -1360,18 +1386,13 @@ mod tests {
                 "Each line must start with 'CEF:0|': {}",
                 line
             );
-            assert!(
-                line.contains("|Misogi|"),
-                "Must contain vendor name"
-            );
-            assert!(
-                line.contains("|CDR Engine|"),
-                "Must contain product name"
-            );
+            assert!(line.contains("|Misogi|"), "Must contain vendor name");
+            assert!(line.contains("|CDR Engine|"), "Must contain product name");
         }
 
         // Verify SecurityViolation has severity 10
-        let sec_violation_line = lines.iter()
+        let sec_violation_line = lines
+            .iter()
             .find(|l| l.contains("security_violation"))
             .expect("Should have security_violation entry");
         assert!(
@@ -1427,7 +1448,11 @@ mod tests {
             .unwrap();
 
         let sec_lines: Vec<&str> = sec_only.lines().collect();
-        assert_eq!(sec_lines.len(), 1, "Should only export 1 security violation");
+        assert_eq!(
+            sec_lines.len(),
+            1,
+            "Should only export 1 security violation"
+        );
         assert!(sec_lines[0].contains("security_violation"));
 
         // Export all events

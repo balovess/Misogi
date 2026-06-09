@@ -39,8 +39,7 @@ fn test_parse_valid_full_toml_config() {
         zero_tolerance = true
     "#;
 
-    let config =
-        IntegrityConfig::from_toml_str(toml_str).expect("valid TOML must parse");
+    let config = IntegrityConfig::from_toml_str(toml_str).expect("valid TOML must parse");
 
     assert!(config.enabled);
     assert_eq!(config.hash_algorithm, "sha256");
@@ -74,21 +73,17 @@ fn test_parse_minimal_config_defaults_fallback() {
         enabled = true
     "#;
 
-    let config =
-        IntegrityConfig::from_toml_str(toml_str).expect("minimal TOML must parse");
+    let config = IntegrityConfig::from_toml_str(toml_str).expect("minimal TOML must parse");
 
     // Explicitly set field.
     assert!(config.enabled);
 
     // Default-fallback fields.
     assert_eq!(config.hash_algorithm, "sha256"); // DefaultImpl value
-    assert!(config.chunk_linking);               // DefaultImpl value
-    assert!(config.anti_replay_nonce);           // DefaultImpl value
+    assert!(config.chunk_linking); // DefaultImpl value
+    assert!(config.anti_replay_nonce); // DefaultImpl value
     assert_eq!(config.repair.max_repair_attempts, 3); // RepairConfig default
-    assert_eq!(
-        config.resume.checkpoint_interval_chunks,
-        50
-    ); // ResumeConfig default
+    assert_eq!(config.resume.checkpoint_interval_chunks, 50); // ResumeConfig default
 }
 
 /// When `hash_algorithm` is omitted entirely, it must fall back to the
@@ -100,8 +95,7 @@ fn test_missing_hash_algorithm_falls_back_to_sha256() {
         chunk_linking = true
     "#;
 
-    let config =
-        IntegrityConfig::from_toml_str(toml_str).expect("missing algo => default");
+    let config = IntegrityConfig::from_toml_str(toml_str).expect("missing algo => default");
 
     assert_eq!(config.hash_algorithm, "sha256");
 }
@@ -192,15 +186,20 @@ fn test_high_throughput_factory_has_relaxed_settings() {
 
     assert_eq!(config.hash_algorithm, "blake3");
     assert!(!config.chunk_linking, "chunk linking disabled for speed");
-    assert!(config.repair.parallel_repair, "parallel repair for throughput");
+    assert!(
+        config.repair.parallel_repair,
+        "parallel repair for throughput"
+    );
     assert_eq!(config.repair.max_repair_attempts, 2, "fewer retries");
     assert_eq!(config.repair.repair_timeout_secs, 15, "shorter timeout");
     assert_eq!(
-        config.resume.checkpoint_interval_chunks,
-        100,
+        config.resume.checkpoint_interval_chunks, 100,
         "less frequent checkpoints"
     );
-    assert!(!config.verification.zero_tolerance, "tolerate issues for speed");
+    assert!(
+        !config.verification.zero_tolerance,
+        "tolerate issues for speed"
+    );
 
     // Must still be valid.
     config.validate().expect("high_throughput must be valid");
@@ -220,8 +219,7 @@ fn test_maximum_security_factory_has_strictest_settings() {
     assert_eq!(config.repair.max_repair_attempts, 5, "more retry attempts");
     assert_eq!(config.repair.repair_timeout_secs, 60, "longer timeout");
     assert_eq!(
-        config.resume.checkpoint_interval_chunks,
-        10,
+        config.resume.checkpoint_interval_chunks, 10,
         "frequent checkpoints"
     );
     assert!(config.verification.zero_tolerance, "any corruption = abort");
@@ -240,8 +238,7 @@ fn test_maximum_security_factory_has_strictest_settings() {
 fn test_serialize_deserialize_roundtrip_produces_equal_config() {
     let original = IntegrityConfig::maximum_security();
 
-    let toml_str =
-        toml::to_string(&original).expect("serialization must succeed");
+    let toml_str = toml::to_string(&original).expect("serialization must succeed");
     let restored: IntegrityConfig =
         toml::from_str(&toml_str).expect("deserialization must succeed");
 
@@ -249,10 +246,7 @@ fn test_serialize_deserialize_roundtrip_produces_equal_config() {
     assert_eq!(restored.hash_algorithm, original.hash_algorithm);
     assert_eq!(restored.chunk_linking, original.chunk_linking);
     assert_eq!(restored.anti_replay_nonce, original.anti_replay_nonce);
-    assert_eq!(
-        restored.repair.auto_repair,
-        original.repair.auto_repair
-    );
+    assert_eq!(restored.repair.auto_repair, original.repair.auto_repair);
     assert_eq!(
         restored.repair.max_repair_attempts,
         original.repair.max_repair_attempts
@@ -321,8 +315,7 @@ fn test_load_from_file_success() {
     let path = dir.path().join("integrity_test.toml");
     std::fs::write(&path, toml_content).expect("write temp config file");
 
-    let config = IntegrityConfig::load_from_file(&path)
-        .expect("loading valid file must succeed");
+    let config = IntegrityConfig::load_from_file(&path).expect("loading valid file must succeed");
 
     assert!(config.enabled);
     assert_eq!(config.hash_algorithm, "blake3");
@@ -340,10 +333,7 @@ fn test_load_from_file_not_found_returns_io_error() {
     let nonexistent = PathBuf::from("/tmp/misogi_nonexistent_config_99999.toml");
 
     let result = IntegrityConfig::load_from_file(&nonexistent);
-    assert!(
-        result.is_err(),
-        "nonexistent file must produce an error"
-    );
+    assert!(result.is_err(), "nonexistent file must produce an error");
 
     // Verify it is specifically an IoError variant.
     match result.unwrap_err() {
@@ -401,8 +391,7 @@ fn test_resume_disabled_allows_empty_persistence_path() {
     "#;
 
     // Should succeed: resume is off so checkpoint/path constraints are not checked.
-    let config =
-        IntegrityConfig::from_toml_str(toml_str).expect("disabled resume must pass");
+    let config = IntegrityConfig::from_toml_str(toml_str).expect("disabled resume must pass");
     assert!(!config.resume.resume_from_checkpoint);
 }
 
@@ -419,8 +408,8 @@ fn test_auto_repair_disabled_allows_zero_timeout() {
         repair_timeout_secs = 0
     "#;
 
-    let config = IntegrityConfig::from_toml_str(toml_str)
-        .expect("disabled auto_repair allows zero timeout");
+    let config =
+        IntegrityConfig::from_toml_str(toml_str).expect("disabled auto_repair allows zero timeout");
     assert!(!config.repair.auto_repair);
     assert_eq!(config.repair.repair_timeout_secs, 0);
 }
@@ -431,8 +420,10 @@ fn test_auto_repair_disabled_allows_zero_timeout() {
 #[test]
 fn test_hash_algorithm_case_insensitive() {
     for algo in &["SHA-256", "Sha256", "SHA512", "sha512", "BLAKE3", "blake3"] {
-        let toml_str = format!(r#"enabled = true
-hash_algorithm = "{algo}""#);
+        let toml_str = format!(
+            r#"enabled = true
+hash_algorithm = "{algo}""#
+        );
         let result = IntegrityConfig::from_toml_str(&toml_str);
         if let Err(e) = result {
             panic!("{algo} must be accepted, but got error: {e}");

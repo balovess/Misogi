@@ -29,8 +29,8 @@
 //! Total header: 55 bytes | Payload: ≤ (MTU - 59) | Trailer: 4 bytes
 //! ```
 
-use crate::fec::FecConfig;
 use crate::error::{MisogiError, Result};
+use crate::fec::FecConfig;
 
 use bitflags::bitflags;
 use bytes::{BufMut, BytesMut};
@@ -196,9 +196,8 @@ impl BlastPacket {
     ///
     /// A `BytesMut` buffer containing the complete on-wire representation.
     pub fn encode(&self) -> BytesMut {
-        let mut buf = BytesMut::with_capacity(
-            BLAST_HEADER_SIZE + self.payload.len() + BLAST_TRAILER_SIZE,
-        );
+        let mut buf =
+            BytesMut::with_capacity(BLAST_HEADER_SIZE + self.payload.len() + BLAST_TRAILER_SIZE);
 
         // Header
         buf.put_slice(&self.header.magic);
@@ -262,12 +261,12 @@ impl BlastPacket {
 
         // Extract header fields
         let flags = BlastFlags::from_bits_truncate(data[5]);
-        let session_id: [u8; 16] = data[6..22].try_into().map_err(|_| {
-            MisogiError::Protocol("Failed to extract session_id".to_string())
-        })?;
-        let file_id: [u8; 16] = data[22..38].try_into().map_err(|_| {
-            MisogiError::Protocol("Failed to extract file_id".to_string())
-        })?;
+        let session_id: [u8; 16] = data[6..22]
+            .try_into()
+            .map_err(|_| MisogiError::Protocol("Failed to extract session_id".to_string()))?;
+        let file_id: [u8; 16] = data[22..38]
+            .try_into()
+            .map_err(|_| MisogiError::Protocol("Failed to extract file_id".to_string()))?;
         let shard_index = u32::from_be_bytes(data[38..42].try_into().unwrap());
         let total_shards = u32::from_be_bytes(data[42..46].try_into().unwrap());
 
@@ -288,9 +287,9 @@ impl BlastPacket {
 
         // Verify CRC32
         let stored_crc = u32::from_be_bytes(
-            data[payload_end..].try_into().map_err(|_| {
-                MisogiError::Protocol("Failed to extract CRC32".to_string())
-            })?,
+            data[payload_end..]
+                .try_into()
+                .map_err(|_| MisogiError::Protocol("Failed to extract CRC32".to_string()))?,
         );
         let computed_crc = crc32fast::hash(&data[..payload_end]);
         if stored_crc != computed_crc {
@@ -350,17 +349,11 @@ impl BlastPacket {
     /// The manifest is serialized as JSON into the payload field.
     /// Sent after all data/parity shards, repeated for redundancy.
     pub fn manifest(session_id: &str, file_id: &str, metadata: &BlastManifest) -> Result<Self> {
-        let payload =
-            serde_json::to_vec(metadata).map_err(|e| MisogiError::Protocol(format!("Manifest serialization failed: {}", e)))?;
+        let payload = serde_json::to_vec(metadata)
+            .map_err(|e| MisogiError::Protocol(format!("Manifest serialization failed: {}", e)))?;
 
-        let mut pkt = Self::build_packet(
-            session_id,
-            file_id,
-            0,
-            0,
-            &payload,
-            BlastFlags::IS_MANIFEST,
-        );
+        let mut pkt =
+            Self::build_packet(session_id, file_id, 0, 0, &payload, BlastFlags::IS_MANIFEST);
         pkt.crc32 = crc32fast::hash(&(pkt.encode()[..pkt.encode().len() - 4]));
         Ok(pkt)
     }
@@ -369,14 +362,7 @@ impl BlastPacket {
     ///
     /// Has empty payload. Sent multiple times to ensure delivery.
     pub fn eof_marker(session_id: &str) -> Self {
-        Self::build_packet(
-            session_id,
-            "",
-            0,
-            0,
-            &[],
-            BlastFlags::IS_EOF_MARKER,
-        )
+        Self::build_packet(session_id, "", 0, 0, &[], BlastFlags::IS_EOF_MARKER)
     }
 
     /// Internal builder for all packet types.
@@ -401,10 +387,17 @@ impl BlastPacket {
             total_shards: total,
         };
 
-        let full = [&header.magic, &[header.version][..], &[header.flags.bits()],
-            &header.session_id, &header.file_id,
-            &index.to_be_bytes(), &total.to_be_bytes(), data]
-            .concat();
+        let full = [
+            &header.magic,
+            &[header.version][..],
+            &[header.flags.bits()],
+            &header.session_id,
+            &header.file_id,
+            &index.to_be_bytes(),
+            &total.to_be_bytes(),
+            data,
+        ]
+        .concat();
         let crc = crc32fast::hash(&full);
 
         Self {
@@ -588,10 +581,7 @@ mod tests {
     #[test]
     fn test_wire_size_calculation() {
         let pkt = BlastPacket::data_shard("s", "f", 0, 1, b"data");
-        assert_eq!(
-            pkt.wire_size(),
-            BLAST_HEADER_SIZE + 4 + BLAST_TRAILER_SIZE
-        );
+        assert_eq!(pkt.wire_size(), BLAST_HEADER_SIZE + 4 + BLAST_TRAILER_SIZE);
     }
 
     #[test]

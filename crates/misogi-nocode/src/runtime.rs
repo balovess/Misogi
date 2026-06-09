@@ -17,12 +17,12 @@
 //! +-----------------------------------------------------+
 //! ```
 
+use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::collections::VecDeque;
 
-use tokio::sync::{mpsc, RwLock};
-use tracing::{info, warn, error};
+use tokio::sync::{RwLock, mpsc};
+use tracing::{error, info, warn};
 
 use crate::compiler::{self, MisogiConfig};
 use crate::error::RuntimeError;
@@ -100,7 +100,10 @@ impl ReloadEvent {
 
     /// Check if this event indicates a failure.
     pub fn is_failure(&self) -> bool {
-        matches!(self, Self::ReloadFailed { .. } | Self::ValidationFailed { .. })
+        matches!(
+            self,
+            Self::ReloadFailed { .. } | Self::ValidationFailed { .. }
+        )
     }
 }
 
@@ -345,21 +348,25 @@ impl NoCodeRuntime {
 
         // Log compilation report
         for info_msg in &report.info {
-            self.log_buffer.push(LogEntry {
-                timestamp: chrono::Utc::now().to_rfc3339(),
-                level: "info".to_string(),
-                message: info_msg.clone(),
-                context: None,
-            }).await;
+            self.log_buffer
+                .push(LogEntry {
+                    timestamp: chrono::Utc::now().to_rfc3339(),
+                    level: "info".to_string(),
+                    message: info_msg.clone(),
+                    context: None,
+                })
+                .await;
         }
 
         for warning in &report.warnings {
-            self.log_buffer.push(LogEntry {
-                timestamp: chrono::Utc::now().to_rfc3339(),
-                level: "warning".to_string(),
-                message: warning.clone(),
-                context: None,
-            }).await;
+            self.log_buffer
+                .push(LogEntry {
+                    timestamp: chrono::Utc::now().to_rfc3339(),
+                    level: "warning".to_string(),
+                    message: warning.clone(),
+                    context: None,
+                })
+                .await;
         }
 
         info!(
@@ -454,12 +461,14 @@ impl NoCodeRuntime {
             report_summary: "Configuration applied successfully".to_string(),
         });
 
-        self.log_buffer.push(LogEntry {
-            timestamp: chrono::Utc::now().to_rfc3339(),
-            level: "info".to_string(),
-            message: "Configuration applied successfully".to_string(),
-            context: None,
-        }).await;
+        self.log_buffer
+            .push(LogEntry {
+                timestamp: chrono::Utc::now().to_rfc3339(),
+                level: "info".to_string(),
+                message: "Configuration applied successfully".to_string(),
+                context: None,
+            })
+            .await;
 
         info!("New configuration applied successfully");
         Ok(())
@@ -490,23 +499,34 @@ impl NoCodeRuntime {
         let (tx, mut rx) = mpsc::channel::<notify::Result<notify::Event>>(100);
 
         // Initialize file watcher
-        let mut watcher = notify::recommended_watcher(move |res: Result<notify::Event, notify::Error>| {
-            // Ignore send errors — if receiver is dropped, we're shutting down
-            let _ = tx.blocking_send(res);
-        }).map_err(|e| {
-            RuntimeError::WatcherError(format!("Failed to create file watcher: {}", e))
-        })?;
+        let mut watcher =
+            notify::recommended_watcher(move |res: Result<notify::Event, notify::Error>| {
+                // Ignore send errors — if receiver is dropped, we're shutting down
+                let _ = tx.blocking_send(res);
+            })
+            .map_err(|e| {
+                RuntimeError::WatcherError(format!("Failed to create file watcher: {}", e))
+            })?;
 
         // Watch the specific file's parent directory for modifications
-        let watch_dir = path.parent()
-            .ok_or_else(|| RuntimeError::WatcherError(
-                "Cannot determine parent directory for watching".to_string()
-            ))?
+        let watch_dir = path
+            .parent()
+            .ok_or_else(|| {
+                RuntimeError::WatcherError(
+                    "Cannot determine parent directory for watching".to_string(),
+                )
+            })?
             .to_path_buf();
 
-        watcher.watch(&watch_dir, notify::RecursiveMode::NonRecursive).map_err(|e| {
-            RuntimeError::WatcherError(format!("Failed to start watching '{}': {}", watch_dir.display(), e))
-        })?;
+        watcher
+            .watch(&watch_dir, notify::RecursiveMode::NonRecursive)
+            .map_err(|e| {
+                RuntimeError::WatcherError(format!(
+                    "Failed to start watching '{}': {}",
+                    watch_dir.display(),
+                    e
+                ))
+            })?;
 
         // Store watcher and path
         {
@@ -525,7 +545,7 @@ impl NoCodeRuntime {
         let current_config = self.current_config.clone();
         let previous_config = self.previous_config.clone();
         let source_yaml = self.source_yaml.clone();
-        
+
         // Clone path for use in async block (original path used for logging below)
         let path_clone = path.clone();
 
@@ -551,7 +571,9 @@ impl NoCodeRuntime {
                                     &stats,
                                     &log_buffer,
                                     &reload_tx,
-                                ).await {
+                                )
+                                .await
+                                {
                                     Ok(_) => {}
                                     Err(e) => {
                                         error!(error = %e, "File reload failed");
@@ -590,8 +612,8 @@ impl NoCodeRuntime {
         info!(path = %path.display(), "Reloading configuration from file");
 
         // Read file
-        let content = std::fs::read_to_string(path).map_err(|_e| {
-            RuntimeError::ConfigNotFound { path: path.to_path_buf() }
+        let content = std::fs::read_to_string(path).map_err(|_e| RuntimeError::ConfigNotFound {
+            path: path.to_path_buf(),
         })?;
 
         // Parse YAML
@@ -612,14 +634,16 @@ impl NoCodeRuntime {
                     timestamp: chrono::Utc::now().to_rfc3339(),
                     errors_summary: e.message.clone(),
                 });
-                return Err(RuntimeError::ApplyFailed(format!("Validation failed: {}", e.message)));
+                return Err(RuntimeError::ApplyFailed(format!(
+                    "Validation failed: {}",
+                    e.message
+                )));
             }
         }
 
         // Compile
-        let (config, report) = compiler::compile(&yaml).map_err(|e| {
-            RuntimeError::ApplyFailed(format!("Compilation failed: {:?}", e))
-        })?;
+        let (config, report) = compiler::compile(&yaml)
+            .map_err(|e| RuntimeError::ApplyFailed(format!("Compilation failed: {:?}", e)))?;
 
         // Save current as previous for rollback
         {
@@ -653,7 +677,9 @@ impl NoCodeRuntime {
         let summary = format!(
             "{} provider(s), {} rule(s), {} warning(s)",
             // These would be extracted from config/report in production
-            0, 0, report.warnings.len()
+            0,
+            0,
+            report.warnings.len()
         );
 
         let _ = reload_tx.send(ReloadEvent::Reloaded {
@@ -662,12 +688,14 @@ impl NoCodeRuntime {
             report_summary: summary,
         });
 
-        log_buffer.push(LogEntry {
-            timestamp: chrono::Utc::now().to_rfc3339(),
-            level: "info".to_string(),
-            message: format!("Configuration reloaded from {}", path.display()),
-            context: None,
-        }).await;
+        log_buffer
+            .push(LogEntry {
+                timestamp: chrono::Utc::now().to_rfc3339(),
+                level: "info".to_string(),
+                message: format!("Configuration reloaded from {}", path.display()),
+                context: None,
+            })
+            .await;
 
         info!(path = %path.display(), "Configuration reloaded successfully");
         Ok(())
@@ -700,7 +728,9 @@ impl NoCodeRuntime {
         let path = {
             let wp = self.watch_path.read().await;
             (*wp).clone().ok_or_else(|| {
-                RuntimeError::WatcherError("No configuration file path set. Use watch_file() first.".to_string())
+                RuntimeError::WatcherError(
+                    "No configuration file path set. Use watch_file() first.".to_string(),
+                )
             })?
         };
 
@@ -713,7 +743,8 @@ impl NoCodeRuntime {
             &self.stats,
             &self.log_buffer,
             &self.reload_tx,
-        ).await
+        )
+        .await
     }
 
     /// Get the source YAML configuration for diff operations.
@@ -751,7 +782,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_runtime_initialization_with_valid_config() {
-        let yaml = YamlConfig::from_yaml_str(r#"
+        let yaml = YamlConfig::from_yaml_str(
+            r#"
 version: "1.0"
 environment: production
 authentication:
@@ -767,7 +799,9 @@ routing:
     - source_pattern: "*"
       require_auth: false
       rate_limit: 100/min
-"#).unwrap();
+"#,
+        )
+        .unwrap();
 
         let runtime = NoCodeRuntime::new(yaml);
 
@@ -787,7 +821,8 @@ routing:
 
     #[tokio::test]
     async fn test_current_config_returns_applied_config() {
-        let yaml = YamlConfig::from_yaml_str(r#"
+        let yaml = YamlConfig::from_yaml_str(
+            r#"
 version: "1.0"
 environment: staging
 authentication:
@@ -803,7 +838,9 @@ routing:
     - source_pattern: "*"
       require_auth: true
       rate_limit: 50/min
-"#).unwrap();
+"#,
+        )
+        .unwrap();
 
         let runtime = NoCodeRuntime::new(yaml);
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
@@ -813,7 +850,10 @@ routing:
 
         let config = config.unwrap();
         assert_eq!(config.environment, "staging");
-        assert_eq!(config.authentication.jwt_issuer, "https://staging.misogi.jp");
+        assert_eq!(
+            config.authentication.jwt_issuer,
+            "https://staging.misogi.jp"
+        );
         assert_eq!(config.sanitization.default_policy, "strict");
     }
 
@@ -823,7 +863,8 @@ routing:
 
     #[tokio::test]
     async fn test_status_reports_correct_state() {
-        let yaml = YamlConfig::from_yaml_str(r#"
+        let yaml = YamlConfig::from_yaml_str(
+            r#"
 version: "1.0"
 environment: production
 authentication:
@@ -839,13 +880,15 @@ routing:
     - source_pattern: "*"
       require_auth: false
       rate_limit: 100/min
-"#).unwrap();
+"#,
+        )
+        .unwrap();
 
         let runtime = NoCodeRuntime::new(yaml);
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
         let status = runtime.status().await;
-        
+
         assert!(!status.watching); // Not watching any file yet
         assert!(status.config_path.is_none()); // No file path set
         assert!(status.initialized);
@@ -858,7 +901,8 @@ routing:
 
     #[tokio::test]
     async fn test_apply_config_updates_successfully() {
-        let yaml = YamlConfig::from_yaml_str(r#"
+        let yaml = YamlConfig::from_yaml_str(
+            r#"
 version: "1.0"
 environment: production
 authentication:
@@ -874,13 +918,17 @@ routing:
     - source_pattern: "*"
       require_auth: false
       rate_limit: 100/min
-"#).unwrap();
+"#,
+        )
+        .unwrap();
 
         let runtime = NoCodeRuntime::new(yaml);
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
         // Create and apply new config
-        let (new_config, _report) = compiler::compile(&YamlConfig::from_yaml_str(r#"
+        let (new_config, _report) = compiler::compile(
+            &YamlConfig::from_yaml_str(
+                r#"
 version: "1.0"
 environment: development
 authentication:
@@ -896,7 +944,11 @@ routing:
     - source_pattern: "*"
       require_auth: false
       rate_limit: 1000/min
-"#).unwrap()).unwrap();
+"#,
+            )
+            .unwrap(),
+        )
+        .unwrap();
 
         let result = runtime.apply_config(&new_config).await;
         assert!(result.is_ok());
@@ -944,12 +996,14 @@ routing:
 
         // Push more entries than capacity
         for i in 0..150 {
-            buffer.push(LogEntry {
-                timestamp: chrono::Utc::now().to_rfc3339(),
-                level: "info".to_string(),
-                message: format!("Log entry {}", i),
-                context: None,
-            }).await;
+            buffer
+                .push(LogEntry {
+                    timestamp: chrono::Utc::now().to_rfc3339(),
+                    level: "info".to_string(),
+                    message: format!("Log entry {}", i),
+                    context: None,
+                })
+                .await;
         }
 
         // Should only have LOG_BUFFER_CAPACITY entries
@@ -967,7 +1021,8 @@ routing:
 
     #[tokio::test]
     async fn test_watch_file_sets_state() {
-        let yaml = YamlConfig::from_yaml_str(r#"
+        let yaml = YamlConfig::from_yaml_str(
+            r#"
 version: "1.0"
 environment: production
 authentication:
@@ -983,7 +1038,9 @@ routing:
     - source_pattern: "*"
       require_auth: false
       rate_limit: 100/min
-"#).unwrap();
+"#,
+        )
+        .unwrap();
 
         let runtime = NoCodeRuntime::new(yaml);
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
@@ -995,7 +1052,7 @@ routing:
 
         // Note: This may fail in CI environments without proper FS notification support
         let result = runtime.watch_file(&config_path).await;
-        
+
         // If watching succeeded, verify state
         if result.is_ok() {
             let status = runtime.status().await;

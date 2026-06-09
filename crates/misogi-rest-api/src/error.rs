@@ -47,7 +47,6 @@ pub enum ApiError {
     // ------------------------------------------------------------------
     // 4xx — Client Errors
     // ------------------------------------------------------------------
-
     /// Resource not found (HTTP 404).
     #[error("{message}")]
     NotFound {
@@ -102,7 +101,6 @@ pub enum ApiError {
     // ------------------------------------------------------------------
     // 5xx — Server Errors
     // ------------------------------------------------------------------
-
     /// Internal server error (HTTP 500).
     #[error("{message}")]
     Internal {
@@ -167,38 +165,90 @@ impl ApiError {
     /// * `code` — stable error identifier from constants above
     /// * `message` — human-readable description
     /// * `details` — optional structured context (field errors, IDs, etc.)
-    pub fn not_found(code: &'static str, message: impl Into<String>, details: Option<serde_json::Value>) -> Self {
-        Self::NotFound { code, message: message.into(), details }
+    pub fn not_found(
+        code: &'static str,
+        message: impl Into<String>,
+        details: Option<serde_json::Value>,
+    ) -> Self {
+        Self::NotFound {
+            code,
+            message: message.into(),
+            details,
+        }
     }
 
     /// Create a 400 Bad Request error.
-    pub fn bad_request(code: &'static str, message: impl Into<String>, details: Option<serde_json::Value>) -> Self {
-        Self::BadRequest { code, message: message.into(), details }
+    pub fn bad_request(
+        code: &'static str,
+        message: impl Into<String>,
+        details: Option<serde_json::Value>,
+    ) -> Self {
+        Self::BadRequest {
+            code,
+            message: message.into(),
+            details,
+        }
     }
 
     /// Create a 401 Unauthorized error.
-    pub fn unauthorized(code: &'static str, message: impl Into<String>, details: Option<serde_json::Value>) -> Self {
-        Self::Unauthorized { code, message: message.into(), details }
+    pub fn unauthorized(
+        code: &'static str,
+        message: impl Into<String>,
+        details: Option<serde_json::Value>,
+    ) -> Self {
+        Self::Unauthorized {
+            code,
+            message: message.into(),
+            details,
+        }
     }
 
     /// Create a 403 Forbidden error.
-    pub fn forbidden(code: &'static str, message: impl Into<String>, details: Option<serde_json::Value>) -> Self {
-        Self::Forbidden { code, message: message.into(), details }
+    pub fn forbidden(
+        code: &'static str,
+        message: impl Into<String>,
+        details: Option<serde_json::Value>,
+    ) -> Self {
+        Self::Forbidden {
+            code,
+            message: message.into(),
+            details,
+        }
     }
 
     /// Create a 409 Conflict error.
-    pub fn conflict(code: &'static str, message: impl Into<String>, details: Option<serde_json::Value>) -> Self {
-        Self::Conflict { code, message: message.into(), details }
+    pub fn conflict(
+        code: &'static str,
+        message: impl Into<String>,
+        details: Option<serde_json::Value>,
+    ) -> Self {
+        Self::Conflict {
+            code,
+            message: message.into(),
+            details,
+        }
     }
 
     /// Create a 429 Too Many Requests error.
     pub fn rate_limited(message: impl Into<String>, details: Option<serde_json::Value>) -> Self {
-        Self::TooManyRequests { code: Self::RATE_LIMITED, message: message.into(), details }
+        Self::TooManyRequests {
+            code: Self::RATE_LIMITED,
+            message: message.into(),
+            details,
+        }
     }
 
     /// Create a 500 Internal Server Error.
-    pub fn internal(code: &'static str, message: impl Into<String>, details: Option<serde_json::Value>) -> Self {
-        Self::Internal { code, message: message.into(), details }
+    pub fn internal(
+        code: &'static str,
+        message: impl Into<String>,
+        details: Option<serde_json::Value>,
+    ) -> Self {
+        Self::Internal {
+            code,
+            message: message.into(),
+            details,
+        }
     }
 
     /// Return the machine-readable error code for this variant.
@@ -207,13 +257,13 @@ impl ApiError {
     /// programmatic client-side error handling (switch/case).
     pub fn error_code(&self) -> &'static str {
         match self {
-            Self::NotFound { code, .. } => *code,
-            Self::BadRequest { code, .. } => *code,
-            Self::Unauthorized { code, .. } => *code,
-            Self::Forbidden { code, .. } => *code,
-            Self::Conflict { code, .. } => *code,
-            Self::TooManyRequests { code, .. } => *code,
-            Self::Internal { code, .. } => *code,
+            Self::NotFound { code, .. } => code,
+            Self::BadRequest { code, .. } => code,
+            Self::Unauthorized { code, .. } => code,
+            Self::Forbidden { code, .. } => code,
+            Self::Conflict { code, .. } => code,
+            Self::TooManyRequests { code, .. } => code,
+            Self::Internal { code, .. } => code,
         }
     }
 

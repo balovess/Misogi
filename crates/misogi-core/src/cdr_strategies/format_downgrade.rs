@@ -20,9 +20,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::{MisogiError, Result};
 use crate::hash::compute_file_md5;
-use crate::traits::{
-    CDRStrategy, SanitizeContext, SanitizationReport, StrategyDecision,
-};
+use crate::traits::{CDRStrategy, SanitizationReport, SanitizeContext, StrategyDecision};
 
 // =============================================================================
 // Types
@@ -82,14 +80,16 @@ impl FormatDowngradeStrategy {
                 FormatDowngradeRule {
                     from_extension: ".xlsm".to_string(),
                     to_extension: ".xlsx".to_string(),
-                    reason: "Macro-enabled Excel workbook downgraded to safe format per MIC guidelines"
-                        .to_string(),
+                    reason:
+                        "Macro-enabled Excel workbook downgraded to safe format per MIC guidelines"
+                            .to_string(),
                 },
                 FormatDowngradeRule {
                     from_extension: ".docm".to_string(),
                     to_extension: ".docx".to_string(),
-                    reason: "Macro-enabled Word document downgraded to safe format per MIC guidelines"
-                        .to_string(),
+                    reason:
+                        "Macro-enabled Word document downgraded to safe format per MIC guidelines"
+                            .to_string(),
                 },
                 FormatDowngradeRule {
                     from_extension: ".pptm".to_string(),
@@ -109,9 +109,7 @@ impl FormatDowngradeStrategy {
 
     /// Find matching rule for the given file extension.
     fn find_rule(&self, extension: &str) -> Option<&FormatDowngradeRule> {
-        self.rules
-            .iter()
-            .find(|r| r.from_extension == extension)
+        self.rules.iter().find(|r| r.from_extension == extension)
     }
 
     /// Attempt to remove macro-related content from an OOXML file.
@@ -243,25 +241,19 @@ impl CDRStrategy for FormatDowngradeStrategy {
         );
 
         let rule = self.find_rule(&dot_ext).ok_or_else(|| {
-            MisogiError::Protocol(format!(
-                "No downgrade rule for extension '{}'",
-                dot_ext
-            ))
+            MisogiError::Protocol(format!("No downgrade rule for extension '{}'", dot_ext))
         })?;
 
         tokio::fs::copy(&context.file_path, &context.output_path).await?;
 
-        if matches!(
-            dot_ext.as_str(),
-            ".xlsm" | ".docm" | ".pptm" | ".xlsb"
-        ) {
-            if let Err(e) = self.strip_macro_references(&context.output_path).await {
-                tracing::warn!(
-                    error = %e,
-                    path = %context.output_path.display(),
-                    "Failed to strip macro references; file copied without modification"
-                );
-            }
+        if matches!(dot_ext.as_str(), ".xlsm" | ".docm" | ".pptm" | ".xlsb")
+            && let Err(e) = self.strip_macro_references(&context.output_path).await
+        {
+            tracing::warn!(
+                error = %e,
+                path = %context.output_path.display(),
+                "Failed to strip macro references; file copied without modification"
+            );
         }
 
         let sanitized_hash = compute_file_md5(&context.output_path).await?;
@@ -300,9 +292,12 @@ mod tests {
         assert_eq!(strategy.name(), "format-downgrade-strategy");
         assert!(!strategy.rules.is_empty());
 
-        assert!(strategy.rules.iter().any(|r| {
-            r.from_extension == ".xlsm" && r.to_extension == ".xlsx"
-        }));
+        assert!(
+            strategy
+                .rules
+                .iter()
+                .any(|r| { r.from_extension == ".xlsm" && r.to_extension == ".xlsx" })
+        );
     }
 
     #[test]
@@ -368,7 +363,9 @@ mod tests {
         let strategy = FormatDowngradeStrategy::jp_government_defaults();
 
         let input_path = tmp_dir.path().join("input.xlsm");
-        tokio::fs::write(&input_path, b"dummy xlsm content").await.unwrap();
+        tokio::fs::write(&input_path, b"dummy xlsm content")
+            .await
+            .unwrap();
 
         let context = SanitizeContext {
             filename: "input.xlsm".to_string(),

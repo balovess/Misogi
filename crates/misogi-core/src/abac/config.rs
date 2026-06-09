@@ -12,7 +12,6 @@
 /// 2. Configuration is loaded and deserialized into this struct.
 /// 3. [`validate()`](AbacConfig::validate) checks structural integrity.
 /// 4. Validated config is passed to the ABAC engine for evaluation.
-
 mod tests;
 
 use serde::{Deserialize, Serialize};
@@ -162,10 +161,7 @@ impl AbacConfig {
         if self.default_effect != "permit" && self.default_effect != "deny" {
             errors.push(ConfigValidationError {
                 path: "default_effect".to_string(),
-                message: format!(
-                    "must be 'permit' or 'deny', got '{}'",
-                    self.default_effect
-                ),
+                message: format!("must be 'permit' or 'deny', got '{}'", self.default_effect),
             });
         }
 

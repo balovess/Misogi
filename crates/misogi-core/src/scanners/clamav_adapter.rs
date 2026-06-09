@@ -57,8 +57,8 @@ use tokio::net::TcpStream;
 use tokio::time::timeout;
 
 use super::{
-    ExternalScanner, Result as ScannerResult, ScanResult, ScannerError,
-    ScannerMetadata, ThreatSeverity,
+    ExternalScanner, Result as ScannerResult, ScanResult, ScannerError, ScannerMetadata,
+    ThreatSeverity,
 };
 
 // =============================================================================
@@ -252,13 +252,9 @@ impl ClamAvAdapter {
 
         // Establish connection based on configuration
         let mut stream = match &self.config.connection {
-            ClamAvConnection::Tcp { host, port } => {
-                self.connect_tcp(host, *port).await?
-            }
+            ClamAvConnection::Tcp { host, port } => self.connect_tcp(host, *port).await?,
             #[cfg(unix)]
-            ClamAvConnection::Unix { path } => {
-                self.connect_unix(path).await?
-            }
+            ClamAvConnection::Unix { path } => self.connect_unix(path).await?,
         };
 
         // Send INSTREAM command
@@ -278,11 +274,7 @@ impl ClamAvAdapter {
     }
 
     /// Establish TCP connection to clamd with timeout.
-    async fn connect_tcp(
-        &self,
-        host: &str,
-        port: u16,
-    ) -> ScannerResult<TcpStream> {
+    async fn connect_tcp(&self, host: &str, port: u16) -> ScannerResult<TcpStream> {
         let addr = format!("{}:{}", host, port);
 
         tracing::debug!(
@@ -298,12 +290,10 @@ impl ClamAvAdapter {
                 tracing::debug!(addr = %addr, "TCP connection established");
                 Ok(stream)
             }
-            Ok(Err(e)) => {
-                Err(ScannerError::Connection(format!(
-                    "Failed to connect to {}: {}",
-                    addr, e
-                )))
-            }
+            Ok(Err(e)) => Err(ScannerError::Connection(format!(
+                "Failed to connect to {}: {}",
+                addr, e
+            ))),
             Err(_) => Err(ScannerError::Timeout {
                 timeout_secs: self.config.connect_timeout_secs,
             }),
@@ -328,12 +318,10 @@ impl ClamAvAdapter {
                 tracing::debug!(socket_path = path, "UNIX socket connected");
                 Ok(stream)
             }
-            Ok(Err(e)) => {
-                Err(ScannerError::Connection(format!(
-                    "Failed to connect to UNIX socket {}: {}",
-                    path, e
-                )))
-            }
+            Ok(Err(e)) => Err(ScannerError::Connection(format!(
+                "Failed to connect to UNIX socket {}: {}",
+                path, e
+            ))),
             Err(_) => Err(ScannerError::Timeout {
                 timeout_secs: self.config.connect_timeout_secs,
             }),
@@ -349,15 +337,13 @@ impl ClamAvAdapter {
 
         tracing::trace!("Sending INSTREAM command");
 
-        stream
-            .write_all(INSTREAM_COMMAND)
-            .await
-            .map_err(|e| ScannerError::Protocol(format!("Failed to send INSTREAM command: {}", e)))?;
+        stream.write_all(INSTREAM_COMMAND).await.map_err(|e| {
+            ScannerError::Protocol(format!("Failed to send INSTREAM command: {}", e))
+        })?;
 
-        stream
-            .flush()
-            .await
-            .map_err(|e| ScannerError::Protocol(format!("Failed to flush INSTREAM command: {}", e)))?;
+        stream.flush().await.map_err(|e| {
+            ScannerError::Protocol(format!("Failed to flush INSTREAM command: {}", e))
+        })?;
 
         Ok(())
     }
@@ -372,7 +358,7 @@ impl ClamAvAdapter {
         data: &[u8],
     ) -> ScannerResult<()> {
         let chunk_size = self.config.stream_chunk_size;
-        let total_chunks = (data.len() + chunk_size - 1) / chunk_size;
+        let total_chunks = data.len().div_ceil(chunk_size);
 
         tracing::debug!(
             total_data = data.len(),
@@ -384,23 +370,14 @@ impl ClamAvAdapter {
         for (i, chunk) in data.chunks(chunk_size).enumerate() {
             // Send 4-byte big-endian length prefix
             let len_bytes = (chunk.len() as u32).to_be_bytes();
-            stream
-                .write_all(&len_bytes)
-                .await
-                .map_err(|e| {
-                    ScannerError::Protocol(format!(
-                        "Failed to send chunk {} length: {}",
-                        i, e
-                    ))
-                })?;
+            stream.write_all(&len_bytes).await.map_err(|e| {
+                ScannerError::Protocol(format!("Failed to send chunk {} length: {}", i, e))
+            })?;
 
             // Send chunk data
-            stream
-                .write_all(chunk)
-                .await
-                .map_err(|e| {
-                    ScannerError::Protocol(format!("Failed to send chunk {} data: {}", i, e))
-                })?;
+            stream.write_all(chunk).await.map_err(|e| {
+                ScannerError::Protocol(format!("Failed to send chunk {} data: {}", i, e))
+            })?;
 
             if (i + 1) % 100 == 0 || i == total_chunks - 1 {
                 tracing::trace!(
@@ -422,10 +399,7 @@ impl ClamAvAdapter {
     }
 
     /// Send zero-length chunk as EOF marker.
-    async fn send_eof_marker<T: AsyncWriteExt + Unpin>(
-        &self,
-        stream: &mut T,
-    ) -> ScannerResult<()> {
+    async fn send_eof_marker<T: AsyncWriteExt + Unpin>(&self, stream: &mut T) -> ScannerResult<()> {
         const EOF_MARKER: [u8; 4] = [0x00, 0x00, 0x00, 0x00];
 
         tracing::trace!("Sending EOF marker");
@@ -453,7 +427,10 @@ impl ClamAvAdapter {
     ) -> ScannerResult<String> {
         let scan_duration = std::time::Duration::from_secs(self.config.scan_timeout_secs);
 
-        tracing::trace!(timeout_secs = self.config.scan_timeout_secs, "Reading response");
+        tracing::trace!(
+            timeout_secs = self.config.scan_timeout_secs,
+            "Reading response"
+        );
 
         let read_result = timeout(scan_duration, async {
             let mut buffer = Vec::new();
@@ -550,10 +527,7 @@ impl ClamAvAdapter {
             }
             s if s.contains("Access denied") => {
                 tracing::error!("ClamAV reports: ACCESS DENIED");
-                Err(ScannerError::Auth(format!(
-                    "ClamAV access denied: {}",
-                    s
-                )))
+                Err(ScannerError::Auth(format!("ClamAV access denied: {}", s)))
             }
             s if s.contains("ERROR") => {
                 let error_msg = s.to_string();
@@ -588,9 +562,10 @@ impl ClamAvAdapter {
             .await
             .map_err(|e| ScannerError::Protocol(format!("Failed to send VERSION: {}", e)))?;
 
-        stream.flush().await.map_err(|e| {
-            ScannerError::Protocol(format!("Failed to flush VERSION: {}", e))
-        })?;
+        stream
+            .flush()
+            .await
+            .map_err(|e| ScannerError::Protocol(format!("Failed to flush VERSION: {}", e)))?;
 
         let mut buffer = Vec::new();
         let mut temp_buf = [0u8; 256];
@@ -604,7 +579,12 @@ impl ClamAvAdapter {
                         break;
                     }
                 }
-                Err(e) => return Err(ScannerError::Protocol(format!("VERSION read failed: {}", e))),
+                Err(e) => {
+                    return Err(ScannerError::Protocol(format!(
+                        "VERSION read failed: {}",
+                        e
+                    )));
+                }
             }
         }
 
@@ -649,10 +629,7 @@ impl ExternalScanner for ClamAvAdapter {
         match timeout(scan_duration, self.instream_scan(data)).await {
             Ok(result) => result,
             Err(_) => {
-                tracing::warn!(
-                    timeout = self.config.scan_timeout_secs,
-                    "Scan timed out"
-                );
+                tracing::warn!(timeout = self.config.scan_timeout_secs, "Scan timed out");
                 Ok(ScanResult::Timeout {
                     timeout_secs: self.config.scan_timeout_secs,
                 })
@@ -673,13 +650,9 @@ impl ExternalScanner for ClamAvAdapter {
         tracing::debug!(adapter_id = %self.client_id, "Performing health check");
 
         let result = match &self.config.connection {
-            ClamAvConnection::Tcp { host, port } => {
-                self.connect_tcp(host, *port).await
-            }
+            ClamAvConnection::Tcp { host, port } => self.connect_tcp(host, *port).await,
             #[cfg(unix)]
-            ClamAvConnection::Unix { path } => {
-                self.connect_unix(path).await
-            }
+            ClamAvConnection::Unix { path } => self.connect_unix(path).await,
         };
 
         match result {
@@ -728,7 +701,7 @@ impl ExternalScanner for ClamAvAdapter {
                     let parts: Vec<&str> = version_str.split('/').collect();
 
                     let engine_version = parts
-                        .get(0)
+                        .first()
                         .and_then(|s| s.split_whitespace().nth(1))
                         .unwrap_or("unknown")
                         .to_string();
@@ -797,8 +770,7 @@ mod tests {
 
     #[test]
     fn test_parse_infected_response() {
-        let result =
-            ClamAvAdapter::parse_response("stream: Eicar-Test-Signature FOUND").unwrap();
+        let result = ClamAvAdapter::parse_response("stream: Eicar-Test-Signature FOUND").unwrap();
         assert!(result.is_infected());
         assert_eq!(result.threat_name(), Some("Eicar-Test-Signature"));
         assert_eq!(result.severity(), Some(ThreatSeverity::Medium));
@@ -830,7 +802,9 @@ mod tests {
 
     #[test]
     fn test_parse_access_denied() {
-        let result = ClamAvAdapter::parse_response("stream: Access denied. ERROR level set to ForbiddenPath.");
+        let result = ClamAvAdapter::parse_response(
+            "stream: Access denied. ERROR level set to ForbiddenPath.",
+        );
         assert!(result.is_err());
         match result.unwrap_err() {
             ScannerError::Auth(msg) => {

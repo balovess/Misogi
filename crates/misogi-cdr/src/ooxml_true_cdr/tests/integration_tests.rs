@@ -1,11 +1,6 @@
 //! Integration tests and cross-cutting validation for OOXML True CDR.
 
-use super::super::{
-    config::*,
-    report::*,
-    types::*,
-    xml_filter::*,
-};
+use super::super::{config::*, report::*, types::*, xml_filter::*};
 
 #[test]
 fn test_ooxml_cdr_action_variants() {
@@ -62,10 +57,13 @@ fn test_ooxml_cdr_action_variants() {
     };
 
     // Verify equality works (for PartialEq derive)
-    assert_eq!(dde, OoxmlCdrAction::DdeAttackDetected {
-        location: "v element".to_string(),
-        pattern_matched: r"(?i)=CMD\|".to_string(),
-    });
+    assert_eq!(
+        dde,
+        OoxmlCdrAction::DdeAttackDetected {
+            location: "v element".to_string(),
+            pattern_matched: r"(?i)=CMD\|".to_string(),
+        }
+    );
     assert!(dde != link); // Different variants are not equal
 
     // Verify Debug output works
@@ -97,12 +95,24 @@ fn test_integration_excel_multiple_threats() {
     let result = filter_document_xml(xml, OoxmlDocumentType::Excel, &config, &mut report).unwrap();
 
     // Multiple threats should be detected
-    assert!(report.dde_attacks_detected > 0, "DDE attack should be detected");
-    assert!(report.excel_threats_neutralized >= 2, "At least 2 Excel threats (sheetProtection + dataValidation)");
-    assert!(report.has_modifications(), "Report should indicate modifications");
+    assert!(
+        report.dde_attacks_detected > 0,
+        "DDE attack should be detected"
+    );
+    assert!(
+        report.excel_threats_neutralized >= 2,
+        "At least 2 Excel threats (sheetProtection + dataValidation)"
+    );
+    assert!(
+        report.has_modifications(),
+        "Report should indicate modifications"
+    );
 
     let output = String::from_utf8_lossy(&result.filtered_bytes);
-    assert!(!output.contains("CMD|"), "DDE payload should be stripped from output");
+    assert!(
+        !output.contains("CMD|"),
+        "DDE payload should be stripped from output"
+    );
     assert!(!output.contains("calc.exe"), "DDE target should not appear");
 }
 
@@ -131,18 +141,30 @@ fn test_integration_word_multiple_threats() {
     let _result = filter_document_xml(xml, OoxmlDocumentType::Word, &config, &mut report).unwrap();
 
     // Multiple Word threats should be detected
-    assert!(report.word_threats_neutralized >= 3, "Should detect altChunk + hyperlink + IRM threats");
+    assert!(
+        report.word_threats_neutralized >= 3,
+        "Should detect altChunk + hyperlink + IRM threats"
+    );
     assert!(report.has_modifications());
 
-    let action_types: Vec<&str> = report.actions_taken.iter().map(|a| match a {
-        OoxmlCdrAction::AltChunkRemoved { .. } => "altChunk",
-        OoxmlCdrAction::HyperlinkBlocked { .. } => "hyperlink",
-        OoxmlCdrAction::IrmPermissionStripped { .. } => "irm",
-        OoxmlCdrAction::InstrTextScriptNeutralized { .. } => "instrText",
-        _ => "other",
-    }).collect();
+    let action_types: Vec<&str> = report
+        .actions_taken
+        .iter()
+        .map(|a| match a {
+            OoxmlCdrAction::AltChunkRemoved { .. } => "altChunk",
+            OoxmlCdrAction::HyperlinkBlocked { .. } => "hyperlink",
+            OoxmlCdrAction::IrmPermissionStripped { .. } => "irm",
+            OoxmlCdrAction::InstrTextScriptNeutralized { .. } => "instrText",
+            _ => "other",
+        })
+        .collect();
 
-    assert!(action_types.contains(&"altChunk"), "altChunk removal should be recorded");
-    assert!(action_types.contains(&"hyperlink") || action_types.contains(&"irm"),
-        "Hyperlink or IRM threat should be recorded");
+    assert!(
+        action_types.contains(&"altChunk"),
+        "altChunk removal should be recorded"
+    );
+    assert!(
+        action_types.contains(&"hyperlink") || action_types.contains(&"irm"),
+        "Hyperlink or IRM threat should be recorded"
+    );
 }

@@ -43,9 +43,9 @@
 
 #[cfg(feature = "axum")]
 use axum::{
-    http::{header, StatusCode},
-    response::{IntoResponse, Response},
     Json,
+    http::{StatusCode, header},
+    response::{IntoResponse, Response},
 };
 #[cfg(feature = "axum")]
 use serde_json::json;
@@ -157,10 +157,7 @@ impl ExtractionError {
 impl IntoResponse for ExtractionError {
     fn into_response(self) -> Response {
         let status = self.status_code();
-        (
-            status,
-            Json(self.error_body()),
-        ).into_response()
+        (status, Json(self.error_body())).into_response()
     }
 }
 
@@ -339,7 +336,9 @@ where
             }
             Err(crate::jwt::JwtError::MalformedToken(msg)) => {
                 warn!(error = %msg, "JwtAuthExtractor: malformed token");
-                Err(ExtractionError::ValidationFailed(format!("Malformed token: {msg}")))
+                Err(ExtractionError::ValidationFailed(format!(
+                    "Malformed token: {msg}"
+                )))
             }
             Err(e) => {
                 warn!(error = %e, "JwtAuthExtractor: unexpected validation error");
@@ -392,7 +391,10 @@ impl std::fmt::Debug for IdentityContext {
         f.debug_struct("IdentityContext")
             .field("provider_id", &self.provider_id)
             .field("source", &self.source)
-            .field("original_token", &self.original_token.as_ref().map(|_| "[REDACTED]"))
+            .field(
+                "original_token",
+                &self.original_token.as_ref().map(|_| "[REDACTED]"),
+            )
             .finish()
     }
 }
@@ -500,7 +502,10 @@ where
                 .headers
                 .get(header::AUTHORIZATION)
                 .and_then(|v| v.to_str().ok())
-                .and_then(|h| h.strip_prefix("Bearer ").or_else(|| h.strip_prefix("bearer ")))
+                .and_then(|h| {
+                    h.strip_prefix("Bearer ")
+                        .or_else(|| h.strip_prefix("bearer "))
+                })
                 .map(|t| t.trim().to_string())
                 .filter(|t| !t.is_empty());
 
@@ -529,7 +534,10 @@ where
                 .headers
                 .get(header::AUTHORIZATION)
                 .and_then(|v| v.to_str().ok())
-                .and_then(|h| h.strip_prefix("Bearer ").or_else(|| h.strip_prefix("bearer ")))
+                .and_then(|h| {
+                    h.strip_prefix("Bearer ")
+                        .or_else(|| h.strip_prefix("bearer "))
+                })
                 .map(|t| t.trim().to_string())
                 .filter(|t| !t.is_empty());
 

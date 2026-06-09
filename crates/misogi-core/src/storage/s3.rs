@@ -27,16 +27,16 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use aws_config::BehaviorVersion;
-use aws_sdk_s3::{Client, Config as S3ClientConfig, error::SdkError, primitives::ByteStream};
 use aws_sdk_s3::error::ProvideErrorMetadata;
+use aws_sdk_s3::{Client, Config as S3ClientConfig, error::SdkError, primitives::ByteStream};
 use aws_smithy_types::DateTime as SmithyDateTime;
 use aws_types::region::Region;
 use bytes::Bytes;
-use chrono::{Utc};
+use chrono::Utc;
 use tracing::{debug, error, info, instrument, warn};
 
-use crate::traits::storage::{StorageBackend, StorageError, StorageInfo};
 use super::s3_multipart::{S3MultipartConfig, execute_multipart_upload};
+use crate::traits::storage::{StorageBackend, StorageError, StorageInfo};
 
 // =============================================================================
 // S3Config — Configuration for S3-compatible storage backend
@@ -386,7 +386,10 @@ impl Debug for S3Storage {
             .field("endpoint", &self.config.endpoint)
             .field("access_key", &"[REDACTED]")
             .field("secret_key", &"[REDACTED]")
-            .field("presigned_url_ttl_secs", &self.config.presigned_url_ttl_secs)
+            .field(
+                "presigned_url_ttl_secs",
+                &self.config.presigned_url_ttl_secs,
+            )
             .field("path_style", &self.config.path_style)
             .finish()
     }
@@ -442,15 +445,15 @@ impl S3Storage {
         // - AWS_ACCESS_KEY_ID
         // - AWS_SECRET_ACCESS_KEY
         // We set them temporarily during client construction.
-        use std::sync::Arc;
         use aws_credential_types::Credentials;
+        use std::sync::Arc;
 
         // Create a shared credentials provider from static credentials
         let credentials = Credentials::new(
             &config.access_key,
             &config.secret_key,
-            None,  // session_token
-            None,  // expires_after
+            None,     // session_token
+            None,     // expires_after
             "static", // source
         );
 
@@ -461,7 +464,9 @@ impl S3Storage {
         let mut s3_config_builder = S3ClientConfig::builder()
             .region(Region::new(config.region.clone()))
             .force_path_style(config.path_style)
-            .credentials_provider(aws_credential_types::provider::SharedCredentialsProvider::new(credentials));
+            .credentials_provider(
+                aws_credential_types::provider::SharedCredentialsProvider::new(credentials),
+            );
 
         // Re-set endpoint for S3 client if custom endpoint provided
         if let Some(ref endpoint) = config.endpoint {
@@ -477,10 +482,7 @@ impl S3Storage {
             "S3Storage backend initialized successfully"
         );
 
-        Ok(Self {
-            client,
-            config,
-        })
+        Ok(Self { client, config })
     }
 
     /// Generate a presigned URL for downloading an object.
@@ -538,9 +540,11 @@ impl S3Storage {
                 aws_sdk_s3::presigning::PresigningConfig::builder()
                     .expires_in(expires_in)
                     .build()
-                    .map_err(|e| StorageError::InternalError(format!(
-                        "failed to build presigning config: {e}"
-                    )))?,
+                    .map_err(|e| {
+                        StorageError::InternalError(format!(
+                            "failed to build presigning config: {e}"
+                        ))
+                    })?,
             )
             .await
             .map_err(|e| self.map_sdk_error(&e, key))?;
@@ -611,7 +615,11 @@ impl S3Storage {
     ///
     /// # Returns
     /// Appropriate [`StorageError`] variant with contextual information.
-    fn map_sdk_error<E: ProvideErrorMetadata + std::fmt::Debug>(&self, error: &SdkError<E>, key: &str) -> StorageError {
+    fn map_sdk_error<E: ProvideErrorMetadata + std::fmt::Debug>(
+        &self,
+        error: &SdkError<E>,
+        key: &str,
+    ) -> StorageError {
         match error {
             SdkError::ServiceError(service_err) => {
                 let status = service_err.raw().status();
@@ -693,9 +701,7 @@ impl S3Storage {
                     key = %key,
                     "S3 operation timed out"
                 );
-                StorageError::NetworkError(format!(
-                    "S3 timeout for key '{key}: {timeout_err:?}'"
-                ))
+                StorageError::NetworkError(format!("S3 timeout for key '{key}: {timeout_err:?}'"))
             }
             other => {
                 error!(
@@ -703,9 +709,7 @@ impl S3Storage {
                     key = %key,
                     "Unexpected S3 SDK error"
                 );
-                StorageError::InternalError(format!(
-                    "Unexpected S3 error for key '{key}: {other}'"
-                ))
+                StorageError::InternalError(format!("Unexpected S3 error for key '{key}: {other}'"))
             }
         }
     }
@@ -842,9 +846,12 @@ impl StorageBackend for S3Storage {
             .body
             .collect()
             .await
-            .map_err(|e| StorageError::NetworkError(format!(
-                "failed to read S3 response body for key '{key}: {e}'
-            ")))?
+            .map_err(|e| {
+                StorageError::NetworkError(format!(
+                    "failed to read S3 response body for key '{key}: {e}'
+            "
+                ))
+            })?
             .into_bytes();
 
         debug!(
@@ -1061,8 +1068,8 @@ mod tests {
 
     #[test]
     fn test_config_validation_excessive_ttl() {
-        let config = S3Config::new("bucket", "region", "key", "secret")
-            .with_presigned_url_ttl(999_999); // Exceeds 604800 limit
+        let config =
+            S3Config::new("bucket", "region", "key", "secret").with_presigned_url_ttl(999_999); // Exceeds 604800 limit
 
         let result = config.validate();
         assert!(result.is_err());

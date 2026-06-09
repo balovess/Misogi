@@ -24,8 +24,8 @@
 use wasm_bindgen::prelude::*;
 
 use crate::wasm_compat::{
-    WasmOfficeSanitizer, WasmPdfSanitizer, WasmPiiMatch, WasmPiiScanResult as InnerPiiResult,
-    MAX_WASM_FILE_SIZE_BYTES,
+    MAX_WASM_FILE_SIZE_BYTES, WasmOfficeSanitizer, WasmPdfSanitizer, WasmPiiMatch,
+    WasmPiiScanResult as InnerPiiResult,
 };
 use misogi_cdr::{policy::SanitizationPolicy, report::SanitizationReport};
 
@@ -282,8 +282,7 @@ fn sanitize_pdf_inner(data: &[u8], policy_str: &str) -> SanitizeResult {
     match sanitizer.sanitize(data, &policy) {
         Ok(result) => {
             let threats_found = result.report.actions_taken.len() as u32;
-            let report_json =
-                serde_json::to_string_pretty(&result.report).unwrap_or_default();
+            let report_json = serde_json::to_string_pretty(&result.report).unwrap_or_default();
             SanitizeResult {
                 success: true,
                 output_data: result.output_data,
@@ -312,8 +311,7 @@ fn sanitize_office_inner(data: &[u8], policy_str: &str) -> SanitizeResult {
     match sanitizer.sanitize(data, &policy) {
         Ok(result) => {
             let threats_found = result.report.actions_taken.len() as u32;
-            let report_json =
-                serde_json::to_string_pretty(&result.report).unwrap_or_default();
+            let report_json = serde_json::to_string_pretty(&result.report).unwrap_or_default();
             SanitizeResult {
                 success: true,
                 output_data: result.output_data,
@@ -364,7 +362,10 @@ mod tests {
             parse_policy("StripActiveContent"),
             SanitizationPolicy::StripActiveContent
         );
-        assert_eq!(parse_policy("unknown"), SanitizationPolicy::StripActiveContent);
+        assert_eq!(
+            parse_policy("unknown"),
+            SanitizationPolicy::StripActiveContent
+        );
         assert_eq!(parse_policy(""), SanitizationPolicy::StripActiveContent);
     }
 
@@ -406,10 +407,16 @@ mod tests {
 
     #[test]
     fn test_sanitize_pdf_clean_document() {
-        let pdf_data = b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n".to_vec().into_boxed_slice();
+        let pdf_data = b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n"
+            .to_vec()
+            .into_boxed_slice();
         let result = sanitize_pdf(pdf_data, "StripActiveContent".to_string());
 
-        assert!(result.success, "Clean PDF should succeed: {}", result.error_message);
+        assert!(
+            result.success,
+            "Clean PDF should succeed: {}",
+            result.error_message
+        );
         assert_eq!(result.threats_found, 0, "Clean PDF should have no threats");
         assert!(!result.output_data.is_empty(), "Output should not be empty");
     }
@@ -444,7 +451,10 @@ mod tests {
         let result = scan_pii(binary_data);
 
         assert!(!result.found, "Binary content should yield no PII matches");
-        assert_eq!(result.bytes_scanned, 100, "Should report correct byte count");
+        assert_eq!(
+            result.bytes_scanned, 100,
+            "Should report correct byte count"
+        );
     }
 
     #[test]

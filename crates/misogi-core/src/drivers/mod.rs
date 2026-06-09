@@ -27,7 +27,7 @@
 // =============================================================================
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -42,11 +42,11 @@ use tokio::sync::Mutex;
 use crate::error::{MisogiError, Result};
 use crate::hash::compute_md5;
 use crate::traits::{
-    ChunkAck, DriverHealthStatus, TransferDriver, TransferDriverConfig,
-    IntegrityChunkAck, IntegrityEnvelope,
+    ChunkAck, DriverHealthStatus, IntegrityChunkAck, IntegrityEnvelope, TransferDriver,
+    TransferDriverConfig,
 };
-use crate::types::ChunkMeta;
 use crate::tunnel::TunnelClient;
+use crate::types::ChunkMeta;
 
 // =============================================================================
 // A. DirectTcpDriver
@@ -177,8 +177,7 @@ impl TransferDriver for DirectTcpDriver {
             return Ok(()); // Already initialized — idempotent
         }
 
-        let mut client =
-            TunnelClient::new(config.receiver_addr.clone(), config.node_id.clone());
+        let mut client = TunnelClient::new(config.receiver_addr.clone(), config.node_id.clone());
         client.connect().await?;
 
         *guard = Some(client);
@@ -201,16 +200,11 @@ impl TransferDriver for DirectTcpDriver {
     /// # Errors
     /// - [`MisogiError::Protocol`] if not initialized or ack frame type mismatch.
     /// - [`MisogiError::Io`] if the TCP write/read fails.
-    async fn send_chunk(
-        &self,
-        file_id: &str,
-        chunk_index: u32,
-        data: Bytes,
-    ) -> Result<ChunkAck> {
+    async fn send_chunk(&self, file_id: &str, chunk_index: u32, data: Bytes) -> Result<ChunkAck> {
         let mut guard = self.client.lock().await;
-        let client = guard.as_mut().ok_or_else(|| {
-            MisogiError::Protocol("DirectTcpDriver not initialized".to_string())
-        })?;
+        let client = guard
+            .as_mut()
+            .ok_or_else(|| MisogiError::Protocol("DirectTcpDriver not initialized".to_string()))?;
 
         let md5 = compute_md5(&data);
         let response = client.send_chunk(file_id, chunk_index, &data, &md5).await?;
@@ -245,9 +239,9 @@ impl TransferDriver for DirectTcpDriver {
         file_md5: &str,
     ) -> Result<ChunkAck> {
         let mut guard = self.client.lock().await;
-        let client = guard.as_mut().ok_or_else(|| {
-            MisogiError::Protocol("DirectTcpDriver not initialized".to_string())
-        })?;
+        let client = guard
+            .as_mut()
+            .ok_or_else(|| MisogiError::Protocol("DirectTcpDriver not initialized".to_string()))?;
 
         client.send_complete(file_id).await?;
 
@@ -285,9 +279,9 @@ impl TransferDriver for DirectTcpDriver {
         let start = SystemTime::now();
 
         let mut guard = self.client.lock().await;
-        let client = guard.as_mut().ok_or_else(|| {
-            MisogiError::Protocol("DirectTcpDriver not initialized".to_string())
-        })?;
+        let client = guard
+            .as_mut()
+            .ok_or_else(|| MisogiError::Protocol("DirectTcpDriver not initialized".to_string()))?;
 
         match client.send_heartbeat().await {
             Ok(()) => {
@@ -556,7 +550,7 @@ impl StorageRelayDriver {
     /// Write the manifest.json for a file transfer into its relay directory.
     async fn write_manifest(
         &self,
-        file_dir: &PathBuf,
+        file_dir: &Path,
         file_id: &str,
         filename: &str,
         total_chunks: u32,
@@ -569,7 +563,7 @@ impl StorageRelayDriver {
             total_size,
             total_chunks,
             file_md5: file_md5.to_string(),
-            source_dir: file_dir.clone(),
+            source_dir: file_dir.to_path_buf(),
         };
 
         let manifest_json = serde_json::to_string_pretty(&manifest)?;
@@ -626,12 +620,7 @@ impl TransferDriver for StorageRelayDriver {
     ///
     /// # Errors
     /// - [`MisogiError::Io`] if file write fails (disk full, permissions).
-    async fn send_chunk(
-        &self,
-        file_id: &str,
-        chunk_index: u32,
-        data: Bytes,
-    ) -> Result<ChunkAck> {
+    async fn send_chunk(&self, file_id: &str, chunk_index: u32, data: Bytes) -> Result<ChunkAck> {
         if !self.initialized.load(std::sync::atomic::Ordering::SeqCst) {
             return Err(MisogiError::Protocol(
                 "StorageRelayDriver not initialized".to_string(),
@@ -809,7 +798,10 @@ impl TransferDriver for StorageRelayDriver {
     /// StorageRelayDriver holds no open file handles or network connections,
     /// so shutdown simply marks the driver as inactive.
     async fn shutdown(&self) -> Result<()> {
-        if self.initialized.swap(false, std::sync::atomic::Ordering::SeqCst) {
+        if self
+            .initialized
+            .swap(false, std::sync::atomic::Ordering::SeqCst)
+        {
             tracing::info!(driver = %self.name(), "StorageRelayDriver shutdown");
         }
         Ok(())
@@ -821,8 +813,7 @@ impl StorageRelayDriver {
     fn check_sequence_inner(&self) -> &std::sync::atomic::AtomicU64 {
         // Re-use the initialized atomic's memory layout trick — actually use a separate field
         // For simplicity, we create a dummy sequence here. In production, add a dedicated field.
-        static DUMMY_SEQ: std::sync::atomic::AtomicU64 =
-            std::sync::atomic::AtomicU64::new(0);
+        static DUMMY_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         &DUMMY_SEQ
     }
 }
@@ -990,18 +981,18 @@ impl ExternalCommandDriver {
         }
 
         let mut child = cmd.spawn().map_err(|e| {
-            MisogiError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Failed to spawn command '{}': {}", command, e),
-            ))
+            MisogiError::Io(std::io::Error::other(format!(
+                "Failed to spawn command '{}': {}",
+                command, e
+            )))
         })?;
 
         // Write stdin data if provided
-        if !stdin_data.is_empty() {
-            if let Some(mut stdin) = child.stdin.take() {
-                stdin.write_all(stdin_data).await?;
-                drop(stdin); // Close stdin to signal EOF
-            }
+        if !stdin_data.is_empty()
+            && let Some(mut stdin) = child.stdin.take()
+        {
+            stdin.write_all(stdin_data).await?;
+            drop(stdin); // Close stdin to signal EOF
         }
 
         // Wait with timeout
@@ -1024,7 +1015,10 @@ impl ExternalCommandDriver {
                 child.kill().await.ok(); // Best-effort kill
                 return Err(MisogiError::Io(std::io::Error::new(
                     std::io::ErrorKind::TimedOut,
-                    format!("Command '{}' timed out after {}s", command, self.timeout_secs),
+                    format!(
+                        "Command '{}' timed out after {}s",
+                        command, self.timeout_secs
+                    ),
                 )));
             }
         }
@@ -1077,12 +1071,7 @@ impl TransferDriver for ExternalCommandDriver {
     /// # Errors
     /// - [`MisogiError::Io`] if command spawn/execution fails or times out.
     /// - [`MisogiError::Protocol`] if command exits non-zero or output is invalid JSON.
-    async fn send_chunk(
-        &self,
-        file_id: &str,
-        chunk_index: u32,
-        data: Bytes,
-    ) -> Result<ChunkAck> {
+    async fn send_chunk(&self, file_id: &str, chunk_index: u32, data: Bytes) -> Result<ChunkAck> {
         if !self.initialized.load(std::sync::atomic::Ordering::SeqCst) {
             return Err(MisogiError::Protocol(
                 "ExternalCommandDriver not initialized".to_string(),
@@ -1102,10 +1091,7 @@ impl TransferDriver for ExternalCommandDriver {
         ];
 
         // Convert to (&str, &str) for execute_command
-        let env_refs: Vec<(&str, &str)> = env_vars
-            .iter()
-            .map(|(k, v)| (*k, v.as_str()))
-            .collect();
+        let env_refs: Vec<(&str, &str)> = env_vars.iter().map(|(k, v)| (*k, v.as_str())).collect();
 
         let stdout = self
             .execute_command(&self.send_command, env_refs, &data)
@@ -1165,10 +1151,7 @@ impl TransferDriver for ExternalCommandDriver {
             ("MISOGI_ACTION", "complete".to_string()),
         ];
 
-        let env_refs: Vec<(&str, &str)> = env_vars
-            .iter()
-            .map(|(k, v)| (*k, v.as_str()))
-            .collect();
+        let env_refs: Vec<(&str, &str)> = env_vars.iter().map(|(k, v)| (*k, v.as_str())).collect();
 
         self.execute_command(&self.send_command, env_refs, &[])
             .await?;
@@ -1231,7 +1214,10 @@ impl TransferDriver for ExternalCommandDriver {
 
     /// Mark as uninitialized (no persistent resources to clean up).
     async fn shutdown(&self) -> Result<()> {
-        if self.initialized.swap(false, std::sync::atomic::Ordering::SeqCst) {
+        if self
+            .initialized
+            .swap(false, std::sync::atomic::Ordering::SeqCst)
+        {
             tracing::info!(driver = %self.name(), "ExternalCommandDriver shutdown");
         }
         Ok(())
@@ -1242,12 +1228,12 @@ impl TransferDriver for ExternalCommandDriver {
 // D. UdpBlastDriver (Air-Gap Data Diode Transport)
 // =============================================================================
 
+use crate::blast::{BlastReceiverConfig, BlastSenderConfig};
 use crate::fec::FecConfig;
-use crate::blast::{BlastSenderConfig, BlastReceiverConfig};
 
 /// Configuration for the [`UdpBlastDriver`] operating over unidirectional
 /// data diodes where no reverse communication is possible.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct UdpBlastDriverConfig {
     /// Target UDP address of the receiver's data diode input port.
     pub target_addr: String,
@@ -1266,18 +1252,6 @@ pub struct UdpBlastDriverConfig {
     /// Receiver-specific blast parameters.
     #[serde(default)]
     pub receiver: Option<BlastReceiverConfig>,
-}
-
-impl Default for UdpBlastDriverConfig {
-    fn default() -> Self {
-        Self {
-            target_addr: String::new(),
-            bind_addr: None,
-            fec: None,
-            sender: None,
-            receiver: None,
-        }
-    }
 }
 
 impl TransferDriverConfig for UdpBlastDriverConfig {
@@ -1354,12 +1328,16 @@ impl TransferDriver for UdpBlastDriver {
         let sender_config = self.config.sender.clone().unwrap_or_default();
         let fec_config = self.config.fec.clone().unwrap_or(FecConfig::standard());
 
-        let sender =
-            crate::blast::UdpBlastSender::with_fec_config(&self.config.target_addr, sender_config, fec_config)
-                .await?;
+        let sender = crate::blast::UdpBlastSender::with_fec_config(
+            &self.config.target_addr,
+            sender_config,
+            fec_config,
+        )
+        .await?;
 
         self.sender = Some(sender);
-        self.initialized.store(true, std::sync::atomic::Ordering::SeqCst);
+        self.initialized
+            .store(true, std::sync::atomic::Ordering::SeqCst);
 
         tracing::info!(
             driver = self.name(),
@@ -1370,22 +1348,20 @@ impl TransferDriver for UdpBlastDriver {
         Ok(())
     }
 
-    async fn send_chunk(
-        &self,
-        file_id: &str,
-        chunk_index: u32,
-        data: Bytes,
-    ) -> Result<ChunkAck> {
+    async fn send_chunk(&self, file_id: &str, chunk_index: u32, data: Bytes) -> Result<ChunkAck> {
         if !self.initialized.load(std::sync::atomic::Ordering::SeqCst) {
-            return Err(MisogiError::Protocol("UdpBlastDriver not initialized".to_string()));
+            return Err(MisogiError::Protocol(
+                "UdpBlastDriver not initialized".to_string(),
+            ));
         }
 
         let md5 = compute_md5(&data);
         let data_len = data.len();
 
         let mut chunks = self.pending_chunks.clone();
-        chunks.entry(file_id.to_string())
-            .or_insert_with(Vec::new)
+        chunks
+            .entry(file_id.to_string())
+            .or_default()
             .push((chunk_index, data, md5.clone()));
 
         let now = chrono::Utc::now();
@@ -1414,16 +1390,19 @@ impl TransferDriver for UdpBlastDriver {
         file_md5: &str,
     ) -> Result<ChunkAck> {
         if !self.initialized.load(std::sync::atomic::Ordering::SeqCst) {
-            return Err(MisogiError::Protocol("UdpBlastDriver not initialized".to_string()));
+            return Err(MisogiError::Protocol(
+                "UdpBlastDriver not initialized".to_string(),
+            ));
         }
 
-        let sender = self.sender.as_ref().ok_or_else(|| {
-            MisogiError::Protocol("UdpBlastSender not initialized".to_string())
-        })?;
+        let sender = self
+            .sender
+            .as_ref()
+            .ok_or_else(|| MisogiError::Protocol("UdpBlastSender not initialized".to_string()))?;
 
         if let Some(chunks) = self.pending_chunks.get(file_id) {
             let tmp_dir = tempfile::tempdir().map_err(|e| {
-                MisogiError::Io(std::io::Error::new(std::io::ErrorKind::Other, format!("Temp dir failed: {}", e)))
+                MisogiError::Io(std::io::Error::other(format!("Temp dir failed: {}", e)))
             })?;
 
             let mut chunks_sorted = chunks.clone();
@@ -1434,9 +1413,11 @@ impl TransferDriver for UdpBlastDriver {
             }
 
             let temp_file = tmp_dir.path().join(format!("{}_blast.bin", file_id));
-            tokio::fs::write(&temp_file, &file_data).await.map_err(|e| {
-                MisogiError::Io(std::io::Error::new(std::io::ErrorKind::Other, format!("Write failed: {}", e)))
-            })?;
+            tokio::fs::write(&temp_file, &file_data)
+                .await
+                .map_err(|e| {
+                    MisogiError::Io(std::io::Error::other(format!("Write failed: {}", e)))
+                })?;
 
             match sender.blast_file(&temp_file, Some(file_id)).await {
                 Ok(report) => {
@@ -1501,7 +1482,10 @@ impl TransferDriver for UdpBlastDriver {
     }
 
     async fn shutdown(&self) -> Result<()> {
-        if self.initialized.swap(false, std::sync::atomic::Ordering::SeqCst) {
+        if self
+            .initialized
+            .swap(false, std::sync::atomic::Ordering::SeqCst)
+        {
             tracing::info!(driver = %self.name(), "UdpBlastDriver shutdown");
         }
         Ok(())
@@ -1562,29 +1546,20 @@ mod tests {
 
     #[tokio::test]
     async fn test_direct_tcp_driver_new_and_name() {
-        let driver = DirectTcpDriver::new(
-            "127.0.0.1:9000".to_string(),
-            "test-node".to_string(),
-        );
+        let driver = DirectTcpDriver::new("127.0.0.1:9000".to_string(), "test-node".to_string());
         assert_eq!(driver.name(), "direct-tcp-driver");
     }
 
     #[tokio::test]
     async fn test_direct_tcp_shutdown_before_init() {
-        let driver = DirectTcpDriver::new(
-            "127.0.0.1:9000".to_string(),
-            "test-node".to_string(),
-        );
+        let driver = DirectTcpDriver::new("127.0.0.1:9000".to_string(), "test-node".to_string());
         // Should not panic even if never initialized
         assert!(driver.shutdown().await.is_ok());
     }
 
     #[tokio::test]
     async fn test_direct_tcp_send_chunk_not_initialized() {
-        let driver = DirectTcpDriver::new(
-            "127.0.0.1:9000".to_string(),
-            "test-node".to_string(),
-        );
+        let driver = DirectTcpDriver::new("127.0.0.1:9000".to_string(), "test-node".to_string());
         let result = driver
             .send_chunk("file-1", 0, Bytes::from_static(b"hello"))
             .await;
@@ -1660,7 +1635,11 @@ mod tests {
         assert!(!ack.received_md5.is_empty());
 
         // Verify chunk file was written
-        let chunk_path = tmp_dir.path().join("out").join(file_id).join("chunk_0000.bin");
+        let chunk_path = tmp_dir
+            .path()
+            .join("out")
+            .join(file_id)
+            .join("chunk_0000.bin");
         assert!(chunk_path.exists());
         let written = tokio::fs::read(&chunk_path).await.unwrap();
         assert_eq!(written, data.as_ref());
@@ -1673,7 +1652,11 @@ mod tests {
         assert_eq!(complete_ack.file_id, file_id);
 
         // Verify complete.flag exists
-        let flag_path = tmp_dir.path().join("out").join(file_id).join("complete.flag");
+        let flag_path = tmp_dir
+            .path()
+            .join("out")
+            .join(file_id)
+            .join("complete.flag");
         assert!(flag_path.exists());
     }
 

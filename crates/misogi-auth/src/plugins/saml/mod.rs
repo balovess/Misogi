@@ -221,11 +221,7 @@ impl SamlPluginConfig {
     /// Create a configuration optimized for Japan G-Cloud integration.
     ///
     /// Uses OID attribute names compatible with 総務省 G-Cloud IdP deployments.
-    pub fn gcloud_japan(
-        sp_entity_id: &str,
-        idp_sso_url: &str,
-        certificate_pem: &str,
-    ) -> Self {
+    pub fn gcloud_japan(sp_entity_id: &str, idp_sso_url: &str, certificate_pem: &str) -> Self {
         Self {
             sp_entity_id: sp_entity_id.to_string(),
             idp_sso_url: idp_sso_url.to_string(),
@@ -298,11 +294,10 @@ impl SamlIdentityProvider {
         // Build core SamlConfig from plugin config
         let core_config = self_build_core_config(&config)?;
 
-        let core =
-            saml_provider::SamlAuthProvider::new(core_config).map_err(|e| match e {
-                SamlError::ConfigInvalid(m) => IdentityError::ConfigurationError(m),
-                other => IdentityError::InternalError(other.to_string()),
-            })?;
+        let core = saml_provider::SamlAuthProvider::new(core_config).map_err(|e| match e {
+            SamlError::ConfigInvalid(m) => IdentityError::ConfigurationError(m),
+            other => IdentityError::InternalError(other.to_string()),
+        })?;
 
         info!(
             provider_id = %provider_id,
@@ -348,10 +343,7 @@ impl SamlIdentityProvider {
     // ---- Internal helpers ----
 
     /// Map extracted SAML attributes to [`MisogiIdentity`] using configured mappings.
-    fn map_to_identity(
-        attrs: &CoreSamlAttributes,
-        config: &SamlPluginConfig,
-    ) -> MisogiIdentity {
+    fn map_to_identity(attrs: &CoreSamlAttributes, config: &SamlPluginConfig) -> MisogiIdentity {
         let mappings = &config.attribute_mappings;
 
         // Resolve applicant_id: prefer mapped attribute, fall back to NameID
@@ -366,15 +358,12 @@ impl SamlIdentityProvider {
         };
 
         // Resolve display name from extra attributes using configured mapping
-        let display_name = attrs
-            .display_name
-            .clone()
-            .or_else(|| {
-                attrs
-                    .extra
-                    .get(&mappings.display_name_attribute)
-                    .and_then(|v| v.first().cloned())
-            });
+        let display_name = attrs.display_name.clone().or_else(|| {
+            attrs
+                .extra
+                .get(&mappings.display_name_attribute)
+                .and_then(|v| v.first().cloned())
+        });
 
         // Resolve email from extra attributes using configured mapping
         let email_from_extra = attrs
@@ -399,7 +388,10 @@ impl SamlIdentityProvider {
             );
         }
         if let Some(em) = attrs.email.as_ref().or(email_from_extra.as_ref()) {
-            extra.insert("saml_email".into(), serde_json::Value::String(em.to_string()));
+            extra.insert(
+                "saml_email".into(),
+                serde_json::Value::String(em.to_string()),
+            );
         }
         if let Some(ref org) = attrs.organization {
             extra.insert(
@@ -533,7 +525,8 @@ impl IdentityProvider for SamlIdentityProvider {
         }
 
         // At least one certificate source must be available for signature verification
-        let has_cert = self.config.certificate_path.is_some() || self.config.certificate_pem.is_some();
+        let has_cert =
+            self.config.certificate_path.is_some() || self.config.certificate_pem.is_some();
         if !has_cert && self.config.want_assertions_signed {
             warn!("want_assertions_signed=true but no certificate configured");
             return Err(IdentityError::ConfigurationError(
@@ -575,10 +568,7 @@ fn map_saml_error(err: SamlError) -> IdentityError {
             warn!(error = %err, "SAML assertion expired");
             IdentityError::AuthenticationFailed(format!("SAML assertion expired: {err}"))
         }
-        SamlError::AudienceMismatch {
-            expected,
-            actual,
-        } => {
+        SamlError::AudienceMismatch { expected, actual } => {
             warn!(expected = %expected, actual = %actual, "SAML audience mismatch");
             IdentityError::AuthenticationFailed(format!(
                 "Audience mismatch: expected={expected}, actual={actual}"
@@ -622,11 +612,7 @@ fn self_build_core_config(
         std::path::PathBuf::from("[none]")
     };
 
-    let idp_metadata_url = config
-        .idp_metadata_url
-        .as_deref()
-        .unwrap_or("")
-        .to_string();
+    let idp_metadata_url = config.idp_metadata_url.as_deref().unwrap_or("").to_string();
 
     Ok(saml_provider::SamlConfig {
         sp_entity_id: config.sp_entity_id.clone(),

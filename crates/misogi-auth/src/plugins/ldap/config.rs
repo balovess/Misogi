@@ -85,7 +85,6 @@ impl LdapAttributeMappings {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LdapPluginConfig {
     // ---- Connection Settings ----
-
     /// List of LDAP server URLs for failover with round-robin selection.
     pub urls: Vec<String>,
 
@@ -93,7 +92,6 @@ pub struct LdapPluginConfig {
     pub base_dn: String,
 
     // ---- Service Account Credentials ----
-
     /// DN of the service account used for initial binding and searching.
     pub bind_dn: String,
 
@@ -102,7 +100,6 @@ pub struct LdapPluginConfig {
     pub bind_password: String,
 
     // ---- User Search Configuration ----
-
     /// Base DN under which user entries are searched.
     pub user_search_base: String,
 
@@ -111,7 +108,6 @@ pub struct LdapPluginConfig {
     pub user_filter: String,
 
     // ---- Group Search Configuration ----
-
     /// Base DN under which group entries are searched for membership resolution.
     /// Set to `None` to skip group resolution.
     pub group_search_base: Option<String>,
@@ -120,13 +116,11 @@ pub struct LdapPluginConfig {
     pub group_filter: Option<String>,
 
     // ---- Attribute Mappings ----
-
     /// Configurable mapping from LDAP attributes to Misogi identity fields.
     #[serde(default)]
     pub attribute_mappings: LdapAttributeMappings,
 
     // ---- Performance & Reliability ----
-
     /// Connection timeout in seconds for each LDAP operation. Default: 10.
     #[serde(default = "default_timeout")]
     pub connection_timeout_secs: u64,
@@ -136,14 +130,17 @@ pub struct LdapPluginConfig {
     pub pool_size: usize,
 
     // ---- Japanese Government Compatibility ----
-
     /// Enable Shift-JIS encoding fallback for legacy JP gov directories.
     #[serde(default)]
     pub shift_jis_fallback: bool,
 }
 
-fn default_timeout() -> u64 { 10 }
-fn default_pool() -> usize { 5 }
+fn default_timeout() -> u64 {
+    10
+}
+fn default_pool() -> usize {
+    5
+}
 
 impl Default for LdapPluginConfig {
     fn default() -> Self {

@@ -102,9 +102,7 @@ impl ReedSolomonCodec {
         let original_len = data.len();
 
         if data.is_empty() {
-            return Err(MisogiError::Protocol(
-                "Cannot encode empty data".into(),
-            ));
+            return Err(MisogiError::Protocol("Cannot encode empty data".into()));
         }
 
         let mut data_shards: Vec<Vec<u8>> = Vec::with_capacity(n_data);
@@ -119,8 +117,7 @@ impl ReedSolomonCodec {
             data_shards.push(shard);
         }
 
-        let mut parity_shards_raw: Vec<Vec<u8>> =
-            vec![vec![0u8; shard_size]; n_par];
+        let mut parity_shards_raw: Vec<Vec<u8>> = vec![vec![0u8; shard_size]; n_par];
 
         // Build combined shard buffer: [data_shards... | parity_shards...]
         let mut all_shards: Vec<&mut [u8]> = Vec::with_capacity(n_data + n_par);
@@ -198,8 +195,8 @@ impl ReedSolomonCodec {
 
         // Concatenate reconstructed data shards into contiguous output buffer
         let mut result = Vec::with_capacity(original_len.max(shard_size * n_data));
-        for i in 0..n_data {
-            if let Some(ref shard) = shards[i] {
+        for (i, shard_opt) in shards.iter().enumerate().take(n_data) {
+            if let Some(shard) = shard_opt {
                 let start = i * shard_size;
                 let end = std::cmp::min(start + original_len, (i + 1) * shard_size);
                 if start < original_len {
@@ -218,8 +215,7 @@ impl ReedSolomonCodec {
     /// Purely diagnostic — does not attempt decoding.
     pub fn estimate_missing(&self, received_indices: &[usize]) -> usize {
         let total = self.config.total_shards();
-        let present: std::collections::HashSet<usize> =
-            received_indices.iter().copied().collect();
+        let present: std::collections::HashSet<usize> = received_indices.iter().copied().collect();
         total - present.intersection(&(0..total).collect()).count()
     }
 }
@@ -345,7 +341,10 @@ mod tests {
         }
 
         let decoded = codec.decode(&received, original.len()).unwrap();
-        assert_eq!(decoded, original, "Decoded data must match original after 15% loss");
+        assert_eq!(
+            decoded, original,
+            "Decoded data must match original after 15% loss"
+        );
     }
 
     #[test]
@@ -355,7 +354,7 @@ mod tests {
 
         let block = codec.encode(&original).unwrap();
 
-        let mut received: Vec<(usize, Vec<u8> )> = Vec::new();
+        let mut received: Vec<(usize, Vec<u8>)> = Vec::new();
         for (i, shard) in block.data_shards.iter().enumerate() {
             if i == 0 || i == 4 || i == 8 || i == 12 {
                 continue; // Drop 4 data shards (20% loss within parity capacity)
@@ -367,7 +366,10 @@ mod tests {
         }
 
         let decoded = codec.decode(&received, original.len()).unwrap();
-        assert_eq!(decoded, original, "Should recover at 20% loss (within parity capacity)");
+        assert_eq!(
+            decoded, original,
+            "Should recover at 20% loss (within parity capacity)"
+        );
     }
 
     #[test]
@@ -377,7 +379,7 @@ mod tests {
 
         let block = codec.encode(&original).unwrap();
 
-        let mut received: Vec<(usize, Vec<u8> )> = Vec::new();
+        let mut received: Vec<(usize, Vec<u8>)> = Vec::new();
         for (i, shard) in block.data_shards.iter().enumerate() {
             if i < 7 {
                 continue; // Drop 7 data shards (35% > 20% tolerance)
@@ -389,7 +391,10 @@ mod tests {
         }
 
         let result = codec.decode(&received, original.len());
-        assert!(result.is_err(), "Should fail when loss exceeds recovery capacity");
+        assert!(
+            result.is_err(),
+            "Should fail when loss exceeds recovery capacity"
+        );
     }
 
     #[test]

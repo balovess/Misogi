@@ -6,14 +6,14 @@
 //! - Error cases (invalid keys, zero TTL)
 //! - Token format validation
 
-use super::super::{JwtConfig, JwtIssuer, JwtError};
-use base64::Engine;
+use super::super::{JwtConfig, JwtError, JwtIssuer};
 use crate::claims::MisogiClaims;
+use base64::Engine;
 
 /// Helper: create test configuration with generated keypair.
 fn setup() -> (tempfile::TempDir, JwtConfig) {
     let dir = tempfile::tempdir().unwrap();
-    
+
     // Use authenticator's keypair generation (shared utility)
     super::super::authenticator::JwtAuthenticator::generate_keypair(dir.path()).unwrap();
 
@@ -33,7 +33,7 @@ fn setup() -> (tempfile::TempDir, JwtConfig) {
 fn test_issuer_initialization_succeeds_with_valid_key() {
     // Test that JwtIssuer can be initialized with a valid private key
     let (_dir, config) = setup();
-    
+
     let result = JwtIssuer::new(config);
     assert!(result.is_ok(), "Issuer should initialize with valid key");
 }
@@ -70,14 +70,19 @@ fn test_issue_produces_valid_jws_format() {
 
     // JWS Compact Serialization has 3 parts separated by dots
     let parts: Vec<&str> = token.split('.').collect();
-    assert_eq!(parts.len(), 3, "JWS should have 3 parts (header.payload.signature)");
+    assert_eq!(
+        parts.len(),
+        3,
+        "JWS should have 3 parts (header.payload.signature)"
+    );
 
     // Each part should be base64url-encoded (no padding)
     for (i, part) in parts.iter().enumerate() {
         assert!(!part.is_empty(), "JWS part {} should not be empty", i);
         // Basic check: should be valid base64url characters
         assert!(
-            part.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_'),
+            part.chars()
+                .all(|c| c.is_alphanumeric() || c == '-' || c == '_'),
             "JWS part {} should be base64url-encoded",
             i
         );
@@ -106,11 +111,12 @@ fn test_issue_with_custom_ttl_applies_correct_expiration() {
         str::repeat("=", (4 - payload_base64.len() % 4) % 4)
     );
 
-    let payload_json =
-        String::from_utf8(base64::engine::general_purpose::URL_SAFE_NO_PAD
+    let payload_json = String::from_utf8(
+        base64::engine::general_purpose::URL_SAFE_NO_PAD
             .decode(payload_base64)
-            .unwrap())
-        .unwrap();
+            .unwrap(),
+    )
+    .unwrap();
 
     let payload: serde_json::Value = serde_json::from_str(&payload_json).unwrap();
     let exp = payload["exp"].as_u64().unwrap();
@@ -118,7 +124,7 @@ fn test_issue_with_custom_ttl_applies_correct_expiration() {
 
     let lifetime = exp.saturating_sub(iat);
     assert!(
-        lifetime >= 118 && lifetime <= 122,
+        (118..=122).contains(&lifetime),
         "Custom TTL of 120s should produce ~120s lifetime, got {}s",
         lifetime
     );
@@ -142,11 +148,12 @@ fn test_issue_preserves_claims_content() {
 
     // Decode and verify payload contains all fields
     let parts: Vec<&str> = token.split('.').collect();
-    let payload_json =
-        String::from_utf8(base64::engine::general_purpose::URL_SAFE_NO_PAD
+    let payload_json = String::from_utf8(
+        base64::engine::general_purpose::URL_SAFE_NO_PAD
             .decode(parts[1])
-            .unwrap())
-        .unwrap();
+            .unwrap(),
+    )
+    .unwrap();
 
     let payload: serde_json::Value = serde_json::from_str(&payload_json).unwrap();
 
@@ -166,11 +173,12 @@ fn test_issue_preserves_claims_content() {
 /// Helper: decode JWS payload without verification for inspection.
 fn decode_payload(token: &str) -> serde_json::Value {
     let parts: Vec<&str> = token.split('.').collect();
-    let payload_json =
-        String::from_utf8(base64::engine::general_purpose::URL_SAFE_NO_PAD
+    let payload_json = String::from_utf8(
+        base64::engine::general_purpose::URL_SAFE_NO_PAD
             .decode(parts[1])
-            .unwrap())
-        .unwrap();
+            .unwrap(),
+    )
+    .unwrap();
     serde_json::from_str(&payload_json).unwrap()
 }
 
@@ -216,9 +224,14 @@ fn test_from_config_uses_defaults_for_optional_fields() {
     });
 
     let issuer = JwtIssuer::from_config(&config_value).unwrap();
-    assert_eq!(issuer.config().ttl_hours, 8, "Default TTL should be 8 hours");
     assert_eq!(
-        issuer.config().refresh_ttl_hours, 168,
+        issuer.config().ttl_hours,
+        8,
+        "Default TTL should be 8 hours"
+    );
+    assert_eq!(
+        issuer.config().refresh_ttl_hours,
+        168,
         "Default refresh TTL should be 168 hours (7 days)"
     );
 }
@@ -291,7 +304,10 @@ fn test_issue_identity_produces_valid_token() {
     assert_eq!(payload["display_name"], "Identity Test User");
     assert_eq!(payload["roles"], serde_json::json!(["admin", "staff"]));
     assert_eq!(payload["idp_source"], "test-idp");
-    assert_eq!(payload["original_subject"], "cn=Identity User,dc=example,dc=com");
+    assert_eq!(
+        payload["original_subject"],
+        "cn=Identity User,dc=example,dc=com"
+    );
     assert_eq!(payload["department"], "engineering");
 }
 
@@ -343,7 +359,7 @@ fn test_issue_with_ttl_identity_applies_custom_expiration() {
     let lifetime = exp.saturating_sub(iat);
 
     assert!(
-        lifetime >= 178 && lifetime <= 182,
+        (178..=182).contains(&lifetime),
         "Custom TTL of 180s should produce ~180s lifetime, got {}s",
         lifetime
     );

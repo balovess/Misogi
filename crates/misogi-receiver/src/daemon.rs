@@ -17,24 +17,24 @@ pub async fn run_daemon(config: ReceiverConfig, state: SharedState) {
         }
     };
 
-    if !output_dir.exists() {
-        if let Err(e) = tokio::fs::create_dir_all(&output_dir).await {
-            error!(path = %output_dir.display(), error = %e, "Failed to create output directory");
-            return;
-        }
+    if !output_dir.exists()
+        && let Err(e) = tokio::fs::create_dir_all(&output_dir).await
+    {
+        error!(path = %output_dir.display(), error = %e, "Failed to create output directory");
+        return;
     }
 
     let download_dir = PathBuf::from(&config.download_dir);
 
-    if !download_dir.exists() {
-        if let Err(e) = tokio::fs::create_dir_all(&download_dir).await {
-            error!(
-                path = %download_dir.display(),
-                error = %e,
-                "Failed to create download directory"
-            );
-            return;
-        }
+    if !download_dir.exists()
+        && let Err(e) = tokio::fs::create_dir_all(&download_dir).await
+    {
+        error!(
+            path = %download_dir.display(),
+            error = %e,
+            "Failed to create download directory"
+        );
+        return;
     }
 
     info!(
@@ -53,11 +53,7 @@ pub async fn run_daemon(config: ReceiverConfig, state: SharedState) {
     }
 }
 
-async fn scan_and_move_files(
-    download_dir: &Path,
-    output_dir: &Path,
-    state: &SharedState,
-) {
+async fn scan_and_move_files(download_dir: &Path, output_dir: &Path, state: &SharedState) {
     let mut entries = match tokio::fs::read_dir(download_dir).await {
         Ok(e) => e,
         Err(e) => {
@@ -187,9 +183,7 @@ async fn process_ready_directory(dir_path: &Path, output_dir: &Path, _state: &Sh
 }
 
 async fn copy_directory_recursive(source: &Path, destination: &Path) -> std::io::Result<u64> {
-    if let Err(e) = tokio::fs::create_dir_all(destination).await {
-        return Err(e);
-    }
+    tokio::fs::create_dir_all(destination).await?;
 
     let mut total_bytes = 0u64;
     let mut entries = tokio::fs::read_dir(source).await?;

@@ -3,11 +3,8 @@
 use std::collections::HashSet;
 
 use super::constants::{
-    DEFAULT_MAX_FILE_SIZE_BYTES,
-    MAX_ZIP_EXPANSION_RATIO,
-    DOCX_BODY_WHITELIST,
-    XLSX_SHEET_WHITELIST,
-    PPTX_SLIDE_WHITELIST,
+    DEFAULT_MAX_FILE_SIZE_BYTES, DOCX_BODY_WHITELIST, MAX_ZIP_EXPANSION_RATIO,
+    PPTX_SLIDE_WHITELIST, XLSX_SHEET_WHITELIST,
 };
 use super::types::ContentTypeFilterMode;
 use super::types::OoxmlDocumentType;

@@ -24,9 +24,9 @@ mod tests;
 
 use std::collections::HashMap;
 use std::sync::RwLock;
-use std::time::Instant;
 #[cfg(test)]
 use std::time::Duration;
+use std::time::Instant;
 
 use chrono::{Datelike, Timelike};
 
@@ -78,10 +78,19 @@ impl AttributeResolver {
         extra: HashMap<String, AbacValue>,
     ) -> HashMap<String, AbacValue> {
         let mut attrs = HashMap::with_capacity(9 + extra.len());
-        attrs.insert("user_id".to_string(), AbacValue::String(user_id.to_string()));
+        attrs.insert(
+            "user_id".to_string(),
+            AbacValue::String(user_id.to_string()),
+        );
         attrs.insert("role".to_string(), AbacValue::String(role.to_string()));
-        attrs.insert("department".to_string(), AbacValue::String(department.to_string()));
-        attrs.insert("clearance_level".to_string(), AbacValue::Integer(self.derive_clearance_level(role)));
+        attrs.insert(
+            "department".to_string(),
+            AbacValue::String(department.to_string()),
+        );
+        attrs.insert(
+            "clearance_level".to_string(),
+            AbacValue::Integer(self.derive_clearance_level(role)),
+        );
         attrs.insert(
             "group_membership".to_string(),
             AbacValue::List(vec![AbacValue::String(format!("{}/{}", department, role))]),
@@ -110,10 +119,22 @@ impl AttributeResolver {
         extra: HashMap<String, AbacValue>,
     ) -> HashMap<String, AbacValue> {
         let mut attrs = HashMap::with_capacity(5 + extra.len());
-        attrs.insert("data_classification".to_string(), AbacValue::String(classification.to_string()));
-        attrs.insert("file_type".to_string(), AbacValue::String(file_type.to_string()));
-        attrs.insert("file_size_bytes".to_string(), AbacValue::Integer(file_size as i64));
-        attrs.insert("destination_zone".to_string(), AbacValue::String(destination_zone.to_string()));
+        attrs.insert(
+            "data_classification".to_string(),
+            AbacValue::String(classification.to_string()),
+        );
+        attrs.insert(
+            "file_type".to_string(),
+            AbacValue::String(file_type.to_string()),
+        );
+        attrs.insert(
+            "file_size_bytes".to_string(),
+            AbacValue::Integer(file_size as i64),
+        );
+        attrs.insert(
+            "destination_zone".to_string(),
+            AbacValue::String(destination_zone.to_string()),
+        );
         attrs.insert("contains_pii".to_string(), AbacValue::Boolean(contains_pii));
         for (key, value) in extra {
             attrs.insert(key, value);
@@ -140,15 +161,33 @@ impl AttributeResolver {
     ) -> HashMap<String, AbacValue> {
         let mut attrs = HashMap::with_capacity(10 + extra.len());
         let now = chrono::Local::now();
-        attrs.insert("time_of_day".to_string(), AbacValue::String(format!("{:02}:{:02}", now.hour(), now.minute())));
+        attrs.insert(
+            "time_of_day".to_string(),
+            AbacValue::String(format!("{:02}:{:02}", now.hour(), now.minute())),
+        );
         let iso_weekday = (now.weekday().num_days_from_monday() + 1) as i64;
         attrs.insert("day_of_week".to_string(), AbacValue::Integer(iso_weekday));
-        attrs.insert("business_day".to_string(), AbacValue::Boolean((1..=5).contains(&iso_weekday)));
-        attrs.insert("source_network".to_string(), AbacValue::String(self.classify_source_network(ip_address)));
-        attrs.insert("ip_address".to_string(), AbacValue::String(ip_address.to_string()));
-        attrs.insert("geographic_region".to_string(), AbacValue::String(geographic_region.to_string()));
+        attrs.insert(
+            "business_day".to_string(),
+            AbacValue::Boolean((1..=5).contains(&iso_weekday)),
+        );
+        attrs.insert(
+            "source_network".to_string(),
+            AbacValue::String(self.classify_source_network(ip_address)),
+        );
+        attrs.insert(
+            "ip_address".to_string(),
+            AbacValue::String(ip_address.to_string()),
+        );
+        attrs.insert(
+            "geographic_region".to_string(),
+            AbacValue::String(geographic_region.to_string()),
+        );
         attrs.insert("mfa_verified".to_string(), AbacValue::Boolean(mfa_verified));
-        attrs.insert("device_compliant".to_string(), AbacValue::Boolean(device_compliant));
+        attrs.insert(
+            "device_compliant".to_string(),
+            AbacValue::Boolean(device_compliant),
+        );
         for (key, value) in extra {
             attrs.insert(key, value);
         }
@@ -176,7 +215,7 @@ impl AttributeResolver {
     #[cfg(test)]
     fn cache_get(&self, key: &str) -> Option<AbacValue> {
         let cache = self.cache.read().ok()?;
-        let &(ref value, ref inserted_at) = cache.get(key)?;
+        let (value, inserted_at) = cache.get(key)?;
         if inserted_at.elapsed() < self.cache_ttl {
             Some(value.clone())
         } else {
@@ -221,11 +260,17 @@ impl AttributeResolver {
     /// | other | 1 |
     fn derive_clearance_level(&self, role: &str) -> i64 {
         let lower = role.to_lowercase();
-        if lower.contains("admin") || lower.contains("administrator") { 5 }
-        else if lower.contains("security") { 4 }
-        else if lower.contains("manager") || lower.contains("director") { 3 }
-        else if lower.contains("operator") || lower.contains("staff") { 2 }
-        else { 1 }
+        if lower.contains("admin") || lower.contains("administrator") {
+            5
+        } else if lower.contains("security") {
+            4
+        } else if lower.contains("manager") || lower.contains("director") {
+            3
+        } else if lower.contains("operator") || lower.contains("staff") {
+            2
+        } else {
+            1
+        }
     }
 
     /// Classifies an IP address into a coarse network category using RFC 1918 prefix heuristics.
@@ -248,10 +293,10 @@ impl AttributeResolver {
     /// Checks whether an IP falls within RFC 1918 Class B range (`172.16.0.0/12`).
     fn is_rfc1918_class_b(ip: &str) -> bool {
         let parts: Vec<&str> = ip.split('.').collect();
-        if parts.len() >= 2 {
-            if let (Ok(first), Ok(second)) = (parts[0].parse::<u8>(), parts[1].parse::<u8>()) {
-                return first == 172 && (16..=31).contains(&second);
-            }
+        if parts.len() >= 2
+            && let (Ok(first), Ok(second)) = (parts[0].parse::<u8>(), parts[1].parse::<u8>())
+        {
+            return first == 172 && (16..=31).contains(&second);
         }
         false
     }

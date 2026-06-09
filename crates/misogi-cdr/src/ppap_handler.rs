@@ -235,13 +235,13 @@ impl PpapHandler {
         if let Some(parent) = quarantine_path.parent() {
             tokio::fs::create_dir_all(parent)
                 .await
-                .map_err(|e| MisogiError::Io(e))?;
+                .map_err(MisogiError::Io)?;
         }
 
         // Copy file to quarantine (preserve original for potential later release)
         tokio::fs::copy(file_path, &quarantine_path)
             .await
-            .map_err(|e| MisogiError::Io(e))?;
+            .map_err(MisogiError::Io)?;
 
         report.actions_taken.push(PpapAction::Quarantined {
             quarantine_path: quarantine_path.to_string_lossy().into_owned(),
@@ -370,7 +370,12 @@ mod tests {
         // For nonexistent files, the I/O error propagates before block logic runs
         let err_msg = format!("{}", report);
         assert!(
-            err_msg.contains("PPAP") || err_msg.contains("blocked") || err_msg.contains("could not") || err_msg.contains("not found") || err_msg.contains("error 2") || err_msg.contains("os error"),
+            err_msg.contains("PPAP")
+                || err_msg.contains("blocked")
+                || err_msg.contains("could not")
+                || err_msg.contains("not found")
+                || err_msg.contains("error 2")
+                || err_msg.contains("os error"),
             "Block policy returned error but message unexpected: {err_msg}"
         );
     }

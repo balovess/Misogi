@@ -17,7 +17,7 @@
 
 use thiserror::Error;
 
-use super::policy::{PolicyEffect, Obligation};
+use super::policy::{Obligation, PolicyEffect};
 
 // ===========================================================================
 // AbacDecision

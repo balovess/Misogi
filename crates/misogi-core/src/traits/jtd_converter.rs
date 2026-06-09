@@ -626,11 +626,8 @@ mod tests {
         );
         assert_eq!(JtdConversionError::Timeout(0).error_code(), "TIMEOUT");
         assert_eq!(
-            JtdConversionError::Io(std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                ""
-            ))
-            .error_code(),
+            JtdConversionError::Io(std::io::Error::new(std::io::ErrorKind::NotFound, ""))
+                .error_code(),
             "IO_ERROR"
         );
         assert_eq!(
@@ -644,8 +641,12 @@ mod tests {
         use std::fmt::Write;
 
         let mut buf = String::new();
-        write!(&mut buf, "{}", JtdConversionError::ConverterNotFound("tool".into()))
-            .unwrap();
+        write!(
+            &mut buf,
+            "{}",
+            JtdConversionError::ConverterNotFound("tool".into())
+        )
+        .unwrap();
         assert!(buf.contains("tool"));
 
         buf.clear();

@@ -1,4 +1,4 @@
-﻿// =============================================================================
+// =============================================================================
 // Misogi Core 鈥?CDR (Content Disarmament and Reconstruction) Strategy Engine
 // =============================================================================
 // This module provides concrete implementations of the [`CDRStrategy`] trait
@@ -20,11 +20,11 @@
 // - Malformed input returns errors, never panics.
 // - Each strategy documents its supported extensions explicitly.
 
+pub mod clamav_compat;
+pub mod external_scanner;
+pub mod format_downgrade;
 pub mod pdf;
 pub mod vba;
-pub mod format_downgrade;
-pub mod external_scanner;
-pub mod clamav_compat;
 
 // =============================================================================
 // Public Re-exports — preserves backward-compatible API surface

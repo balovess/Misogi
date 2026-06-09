@@ -21,10 +21,7 @@ pub enum MisogiError {
     InvalidFrameType(u8),
 
     #[error("Chunk missing: file_id={file_id}, chunk_index={chunk_index}")]
-    ChunkMissing {
-        file_id: String,
-        chunk_index: u32,
-    },
+    ChunkMissing { file_id: String, chunk_index: u32 },
 
     #[error("Serialization error: {0}")]
     Serialization(#[from] serde_json::Error),

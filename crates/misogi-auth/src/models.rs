@@ -1,6 +1,6 @@
-use serde::{Deserialize, Serialize};
 use super::role::UserRole;
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 
 /// Represents an authenticated user within the Misogi system.
 /// Designed for integration with external identity providers (LDAP, Active Directory, SAML).
@@ -69,7 +69,7 @@ impl SessionToken {
             user_id: user.user_id.clone(),
             user_name: user.display_name.clone(),
             role: user.role.clone(),
-            created_at: now.clone(),
+            created_at: now,
             expires_at: now + chrono::Duration::hours(ttl_hours),
         }
     }

@@ -16,12 +16,9 @@
 
 use bytes::Bytes;
 
-use crate::error::{MisogiError, Result};
-use crate::fec::{
-    FecConfig,
-    reed_solomon::ReedSolomonCodec,
-};
 use super::packet::FecPacket;
+use crate::error::{MisogiError, Result};
+use crate::fec::{FecConfig, reed_solomon::ReedSolomonCodec};
 
 /// Encodes arbitrary byte data into a sequence of FEC-protected packets.
 #[derive(Debug)]
@@ -67,9 +64,7 @@ impl BlindSendEncoder {
     /// - [`MisogiError::Protocol`] if data is empty or RS encoding fails.
     pub fn encode(&self, data: &[u8]) -> Result<Vec<FecPacket>> {
         if data.is_empty() {
-            return Err(MisogiError::Protocol(
-                "Cannot encode empty data".into(),
-            ));
+            return Err(MisogiError::Protocol("Cannot encode empty data".into()));
         }
 
         // Phase 1: Reed-Solomon encode into data + parity shards
@@ -118,8 +113,8 @@ impl BlindSendEncoder {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::driver::BlindSendConfig;
+    use super::*;
 
     #[test]
     fn test_encoder_creation() {
@@ -156,9 +151,8 @@ mod tests {
         let data: Vec<u8> = (0u32..5000).map(|i| i as u8).collect();
         let packets = enc.encode(&data).expect("Encode");
 
-        for i in 0..packets.len() {
-            assert_eq!(packets[i].sequence, i as u32,
-                "Packet {} has wrong sequence", i);
+        for (i, packet) in packets.iter().enumerate() {
+            assert_eq!(packet.sequence, i as u32, "Packet {} has wrong sequence", i);
         }
     }
 }

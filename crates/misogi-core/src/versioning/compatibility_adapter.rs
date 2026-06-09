@@ -218,45 +218,35 @@ mod tests {
         );
         assert_eq!(result.source_version, ApiVersion::V2);
         assert_eq!(result.target_version, ApiVersion::V1);
-        assert!(result.transformed_fields.contains(&"content_type_hint".to_string()));
+        assert!(
+            result
+                .transformed_fields
+                .contains(&"content_type_hint".to_string())
+        );
         assert_eq!(result.payload.file_id, "file-001");
         assert_eq!(result.payload.data, b"hello");
     }
 
     #[test]
     fn test_downgrade_no_extensions() {
-        let result = ChunkCompatAdapter::downgrade_chunk(
-            b"data",
-            "f1",
-            5,
-            "md5",
-            None,
-            false,
-        );
+        let result = ChunkCompatAdapter::downgrade_chunk(b"data", "f1", 5, "md5", None, false);
         assert!(result.transformed_fields.is_empty());
     }
 
     #[test]
     fn test_downgrade_drops_ai_flag() {
-        let result = ChunkCompatAdapter::downgrade_chunk(
-            b"data",
-            "f1",
-            0,
-            "md5",
-            None,
-            true,
+        let result = ChunkCompatAdapter::downgrade_chunk(b"data", "f1", 0, "md5", None, true);
+        assert!(
+            result
+                .transformed_fields
+                .contains(&"requires_ai_sanitization".to_string())
         );
-        assert!(result.transformed_fields.contains(&"requires_ai_sanitization".to_string()));
     }
 
     #[test]
     fn test_upgrade_fills_defaults() {
-        let result = ChunkCompatAdapter::upgrade_chunk(
-            b"legacy_data",
-            "legacy-file",
-            0,
-            "legacy-md5",
-        );
+        let result =
+            ChunkCompatAdapter::upgrade_chunk(b"legacy_data", "legacy-file", 0, "legacy-md5");
         assert_eq!(result.source_version, ApiVersion::V1);
         assert_eq!(result.target_version, ApiVersion::V2);
         assert_eq!(result.payload.content_type_hint, "application/octet-stream");

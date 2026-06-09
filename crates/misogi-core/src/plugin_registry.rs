@@ -34,8 +34,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use parking_lot::RwLock;
 use once_cell::sync::Lazy;
+use parking_lot::RwLock;
 
 use crate::traits::PluginMetadata;
 
@@ -225,9 +225,15 @@ mod tests {
     struct MockPlugin;
 
     impl PluginMetadata for MockPlugin {
-        fn name(&self) -> &'static str { "test_mock_plugin" }
-        fn version(&self) -> &'static str { "0.1.0" }
-        fn description(&self) -> Option<&'static str> { Some("A test mock plugin") }
+        fn name(&self) -> &'static str {
+            "test_mock_plugin"
+        }
+        fn version(&self) -> &'static str {
+            "0.1.0"
+        }
+        fn description(&self) -> Option<&'static str> {
+            Some("A test mock plugin")
+        }
         fn implemented_interfaces(&self) -> Vec<&'static str> {
             vec!["PluginMetadata", "CDRStrategy"]
         }
@@ -294,8 +300,8 @@ mod tests {
     fn test_global_registry_exists() {
         // Global registry should be initialized and accessible
         // (plugin count may be 0 if no plugins are registered at test time)
-        // Note: plugin_count() returns usize (unsigned), so >= 0 is always true
-        let _count = GLOBAL_REGISTRY.plugin_count();
-        assert!(_count <= usize::MAX);  // Trivially true, validates type system
+        let count = GLOBAL_REGISTRY.plugin_count();
+        // Basic sanity check: count is a valid usize
+        assert!(count < usize::MAX);
     }
 }

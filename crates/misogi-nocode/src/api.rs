@@ -23,20 +23,20 @@
 //! - Service account token (configured in environment)
 //! - Admin JWT token (issued by configured IdP)
 
-use std::sync::Arc;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use axum::{
-    extract::{Path, State, Query},
+    Json, Router,
+    extract::{Path, Query, State},
     http::HeaderMap,
     response::IntoResponse,
     routing::{get, post},
-    Json, Router,
 };
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
 use tower_http::cors::CorsLayer;
-use tracing::{info, warn, error};
+use tracing::{error, info, warn};
 
 use crate::error::ApiError;
 use crate::runtime::{NoCodeRuntime, RuntimeStatus};
@@ -131,7 +131,7 @@ impl<T: Serialize> ApiResponse<T> {
             data: None::<T>,
             error: Some(ApiErrorDetail {
                 code,
-                error_type: format!("{:?}", &err),
+                error_type: format!("{:?}", err),
                 message: err.to_string(),
                 suggestion: None,
             }),
@@ -391,10 +391,7 @@ pub fn create_admin_router(runtime: Arc<NoCodeRuntime>) -> Router {
         .route("/api/v1/config/reload", post(trigger_reload))
         .route("/api/v1/config/diff", get(config_diff))
         .route("/api/v1/providers", get(list_providers))
-        .route(
-            "/api/v1/providers/{id}/test",
-            post(test_provider),
-        )
+        .route("/api/v1/providers/{id}/test", post(test_provider))
         .route("/api/v1/logs/recent", get(recent_logs))
         .layer(CorsLayer::permissive())
         .with_state(state)
@@ -441,10 +438,7 @@ fn constant_time_eq(a: &str, b: &str) -> bool {
 // =============================================================================
 
 /// GET /api/v1/status — Return current system status and health.
-async fn get_status(
-    State(state): State<ApiState>,
-    headers: HeaderMap,
-) -> impl IntoResponse {
+async fn get_status(State(state): State<ApiState>, headers: HeaderMap) -> impl IntoResponse {
     if let Err(e) = authenticate(&state, &headers).await {
         return json_error(StatusCode::UNAUTHORIZED, e);
     }
@@ -458,7 +452,12 @@ async fn get_status(
         "config".to_string(),
         ComponentHealth {
             name: "Configuration".to_string(),
-            status: if runtime_status.initialized { "healthy" } else { "unhealthy" }.to_string(),
+            status: if runtime_status.initialized {
+                "healthy"
+            } else {
+                "unhealthy"
+            }
+            .to_string(),
             message: if runtime_status.initialized {
                 Some("Configuration loaded successfully".to_string())
             } else {
@@ -471,7 +470,12 @@ async fn get_status(
         "watcher".to_string(),
         ComponentHealth {
             name: "File Watcher".to_string(),
-            status: if runtime_status.watching { "healthy" } else { "idle" }.to_string(),
+            status: if runtime_status.watching {
+                "healthy"
+            } else {
+                "idle"
+            }
+            .to_string(),
             message: if runtime_status.watching {
                 Some(format!("Watching: {:?}", runtime_status.config_path))
             } else {
@@ -481,7 +485,12 @@ async fn get_status(
     );
 
     let response = StatusResponse {
-        status: if runtime_status.initialized { "operational" } else { "degraded" }.to_string(),
+        status: if runtime_status.initialized {
+            "operational"
+        } else {
+            "degraded"
+        }
+        .to_string(),
         runtime: runtime_status.clone(),
         uptime_secs: get_uptime_secs(),
         components,
@@ -491,10 +500,7 @@ async fn get_status(
 }
 
 /// GET /api/v1/config — Return current effective configuration (secrets masked).
-async fn get_config(
-    State(state): State<ApiState>,
-    headers: HeaderMap,
-) -> impl IntoResponse {
+async fn get_config(State(state): State<ApiState>, headers: HeaderMap) -> impl IntoResponse {
     if let Err(e) = authenticate(&state, &headers).await {
         return json_error(StatusCode::UNAUTHORIZED, e);
     }
@@ -502,9 +508,10 @@ async fn get_config(
     let config = match state.runtime.current_config().await {
         Some(cfg) => cfg,
         None => {
-            return json_error(StatusCode::SERVICE_UNAVAILABLE, ApiError::Unavailable(
-                "No configuration loaded".to_string(),
-            ));
+            return json_error(
+                StatusCode::SERVICE_UNAVAILABLE,
+                ApiError::Unavailable("No configuration loaded".to_string()),
+            );
         }
     };
 
@@ -533,15 +540,25 @@ async fn get_config(
         },
         sanitization: serde_json::to_value(&config.sanitization).unwrap_or(serde_json::Value::Null),
         routing: serde_json::to_value(&config.routing).unwrap_or(serde_json::Value::Null),
-        retention: config.retention.as_ref().map(|r| serde_json::to_value(r).unwrap_or(serde_json::Value::Null)),
-        notifications: config.notifications.as_ref().map(|n| MaskedNotificationConfig {
-            on_error: n.on_error.iter().map(|rule| MaskedNotificationRule {
-                channel: rule.channel.clone(),
-                recipients: rule.recipients.clone(),
-                has_url: rule.url.is_some(),
-                severity: rule.severity.clone(),
-            }).collect(),
-        }),
+        retention: config
+            .retention
+            .as_ref()
+            .map(|r| serde_json::to_value(r).unwrap_or(serde_json::Value::Null)),
+        notifications: config
+            .notifications
+            .as_ref()
+            .map(|n| MaskedNotificationConfig {
+                on_error: n
+                    .on_error
+                    .iter()
+                    .map(|rule| MaskedNotificationRule {
+                        channel: rule.channel.clone(),
+                        recipients: rule.recipients.clone(),
+                        has_url: rule.url.is_some(),
+                        severity: rule.severity.clone(),
+                    })
+                    .collect(),
+            }),
     };
 
     json_response(StatusCode::OK, ApiResponse::ok(response))
@@ -567,39 +584,39 @@ async fn update_config(
     let yaml = match crate::schema::YamlConfig::from_yaml_str(&body.yaml_content) {
         Ok(y) => y,
         Err(e) => {
-            return json_error(StatusCode::BAD_REQUEST, ApiError::BadRequest(format!(
-                "Invalid YAML: {}",
-                e
-            )));
+            return json_error(
+                StatusCode::BAD_REQUEST,
+                ApiError::BadRequest(format!("Invalid YAML: {}", e)),
+            );
         }
     };
 
     // Validate
     if let Err(e) = yaml.validate() {
-        return json_error(StatusCode::UNPROCESSABLE_ENTITY, ApiError::BadRequest(format!(
-            "Validation failed: {}",
-            e.message
-        )));
+        return json_error(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            ApiError::BadRequest(format!("Validation failed: {}", e.message)),
+        );
     }
 
     // Compile
     let (compiled, report) = match crate::compiler::compile(&yaml) {
         Ok(result) => result,
         Err(e) => {
-            return json_error(StatusCode::UNPROCESSABLE_ENTITY, ApiError::BadRequest(format!(
-                "Compilation failed: {:?}",
-                e
-            )));
+            return json_error(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                ApiError::BadRequest(format!("Compilation failed: {:?}", e)),
+            );
         }
     };
 
     // Apply
     if let Err(e) = state.runtime.apply_config(&compiled).await {
         error!(error = %e, "Failed to apply new configuration");
-        return json_error(StatusCode::INTERNAL_SERVER_ERROR, ApiError::Internal(format!(
-            "Failed to apply configuration: {}",
-            e
-        )));
+        return json_error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            ApiError::Internal(format!("Failed to apply configuration: {}", e)),
+        );
     }
 
     info!(
@@ -607,18 +624,18 @@ async fn update_config(
         "Configuration updated successfully"
     );
 
-    json_response(StatusCode::OK, ApiResponse::ok(serde_json::json!({
-        "message": "Configuration applied successfully",
-        "warnings_count": report.warnings.len(),
-        "report": report,
-    })))
+    json_response(
+        StatusCode::OK,
+        ApiResponse::ok(serde_json::json!({
+            "message": "Configuration applied successfully",
+            "warnings_count": report.warnings.len(),
+            "report": report,
+        })),
+    )
 }
 
 /// POST /api/v1/config/reload — Trigger file-based reload.
-async fn trigger_reload(
-    State(state): State<ApiState>,
-    headers: HeaderMap,
-) -> impl IntoResponse {
+async fn trigger_reload(State(state): State<ApiState>, headers: HeaderMap) -> impl IntoResponse {
     if let Err(e) = authenticate(&state, &headers).await {
         return json_error(StatusCode::UNAUTHORIZED, e);
     }
@@ -628,26 +645,26 @@ async fn trigger_reload(
     match state.runtime.trigger_reload().await {
         Ok(()) => {
             info!("Manual reload triggered successfully");
-            json_response(StatusCode::ACCEPTED, ApiResponse::ok(serde_json::json!({
-                "message": "Reload triggered",
-                "status": "reloading",
-            })))
+            json_response(
+                StatusCode::ACCEPTED,
+                ApiResponse::ok(serde_json::json!({
+                    "message": "Reload triggered",
+                    "status": "reloading",
+                })),
+            )
         }
         Err(e) => {
             error!(error = %e, "Reload trigger failed");
-            json_error(StatusCode::INTERNAL_SERVER_ERROR, ApiError::Internal(format!(
-                "Reload failed: {}",
-                e
-            )))
+            json_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                ApiError::Internal(format!("Reload failed: {}", e)),
+            )
         }
     }
 }
 
 /// GET /api/v1/config/diff — Compare running vs disk configuration.
-async fn config_diff(
-    State(state): State<ApiState>,
-    headers: HeaderMap,
-) -> impl IntoResponse {
+async fn config_diff(State(state): State<ApiState>, headers: HeaderMap) -> impl IntoResponse {
     if let Err(e) = authenticate(&state, &headers).await {
         return json_error(StatusCode::UNAUTHORIZED, e);
     }
@@ -659,9 +676,12 @@ async fn config_diff(
     let disk_path_str = match &disk_path {
         Some(p) => Some(p.to_string_lossy().to_string()),
         None => {
-            return json_error(StatusCode::BAD_REQUEST, ApiError::BadRequest(
-                "No configuration file path set. Cannot perform diff.".to_string(),
-            ));
+            return json_error(
+                StatusCode::BAD_REQUEST,
+                ApiError::BadRequest(
+                    "No configuration file path set. Cannot perform diff.".to_string(),
+                ),
+            );
         }
     };
 
@@ -670,17 +690,17 @@ async fn config_diff(
         Ok(content) => match crate::schema::YamlConfig::from_yaml_str(&content) {
             Ok(y) => y,
             Err(e) => {
-                return json_error(StatusCode::BAD_REQUEST, ApiError::BadRequest(format!(
-                    "Invalid YAML on disk: {}",
-                    e
-                )));
+                return json_error(
+                    StatusCode::BAD_REQUEST,
+                    ApiError::BadRequest(format!("Invalid YAML on disk: {}", e)),
+                );
             }
         },
         Err(e) => {
-            return json_error(StatusCode::NOT_FOUND, ApiError::NotFound(format!(
-                "Cannot read config file: {}",
-                e
-            )));
+            return json_error(
+                StatusCode::NOT_FOUND,
+                ApiError::NotFound(format!("Cannot read config file: {}", e)),
+            );
         }
     };
 
@@ -739,10 +759,7 @@ async fn config_diff(
 }
 
 /// GET /api/v1/providers — List registered identity providers.
-async fn list_providers(
-    State(state): State<ApiState>,
-    headers: HeaderMap,
-) -> impl IntoResponse {
+async fn list_providers(State(state): State<ApiState>, headers: HeaderMap) -> impl IntoResponse {
     if let Err(e) = authenticate(&state, &headers).await {
         return json_error(StatusCode::UNAUTHORIZED, e);
     }
@@ -750,9 +767,10 @@ async fn list_providers(
     let config = match state.runtime.current_config().await {
         Some(cfg) => cfg,
         None => {
-            return json_error(StatusCode::SERVICE_UNAVAILABLE, ApiError::Unavailable(
-                "No configuration loaded".to_string(),
-            ));
+            return json_error(
+                StatusCode::SERVICE_UNAVAILABLE,
+                ApiError::Unavailable("No configuration loaded".to_string()),
+            );
         }
     };
 
@@ -772,10 +790,13 @@ async fn list_providers(
         })
         .collect();
 
-    json_response(StatusCode::OK, ApiResponse::ok(serde_json::json!({
-        "providers": providers,
-        "count": providers.len(),
-    })))
+    json_response(
+        StatusCode::OK,
+        ApiResponse::ok(serde_json::json!({
+            "providers": providers,
+            "count": providers.len(),
+        })),
+    )
 }
 
 /// POST /api/v1/providers/{id}/test — Test authentication against specific provider.
@@ -795,19 +816,25 @@ async fn test_provider(
     let config = match state.runtime.current_config().await {
         Some(cfg) => cfg,
         None => {
-            return json_error(StatusCode::SERVICE_UNAVAILABLE, ApiError::Unavailable(
-                "No configuration loaded".to_string(),
-            ));
+            return json_error(
+                StatusCode::SERVICE_UNAVAILABLE,
+                ApiError::Unavailable("No configuration loaded".to_string()),
+            );
         }
     };
 
-    let provider = match config.authentication.identity_providers.iter().find(|p| p.name == provider_id) {
+    let provider = match config
+        .authentication
+        .identity_providers
+        .iter()
+        .find(|p| p.name == provider_id)
+    {
         Some(p) => p,
         None => {
-            return json_error(StatusCode::NOT_FOUND, ApiError::NotFound(format!(
-                "Provider '{}' not found",
-                provider_id
-            )));
+            return json_error(
+                StatusCode::NOT_FOUND,
+                ApiError::NotFound(format!("Provider '{}' not found", provider_id)),
+            );
         }
     };
 
@@ -841,10 +868,7 @@ async fn recent_logs(
     let entries = state.runtime.get_recent_logs(count).await;
     let total = state.runtime.get_recent_logs(0usize).await.len();
 
-    let response = LogsResponse {
-        total,
-        entries,
-    };
+    let response = LogsResponse { total, entries };
 
     json_response(StatusCode::OK, ApiResponse::ok(response))
 }
@@ -927,7 +951,7 @@ routing:
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
         let state = ApiState::with_token(Arc::clone(&runtime), "secret-token-12345");
-        
+
         let mut headers = HeaderMap::new();
         headers.insert("authorization", "Bearer wrong-token".parse().unwrap());
 
@@ -942,7 +966,7 @@ routing:
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
         let state = ApiState::with_token(Arc::clone(&runtime), "correct-token");
-        
+
         let mut headers = HeaderMap::new();
         headers.insert("authorization", "Bearer correct-token".parse().unwrap());
 
@@ -972,6 +996,6 @@ routing:
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
         let _router = create_admin_router(Arc::clone(&runtime));
-        assert!(true); // Router created successfully
+        // Router created successfully
     }
 }

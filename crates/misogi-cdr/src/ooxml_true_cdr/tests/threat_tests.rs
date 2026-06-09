@@ -1,13 +1,7 @@
 //! Threat detection tests: DDE, URL protocols, script injection, Excel/Word/PPT specific.
 
+use super::super::{config::*, constants::*, report::*, threat::*, types::*};
 use quick_xml::{Reader, events::Event};
-use super::super::{
-    config::*,
-    report::*,
-    threat::*,
-    types::*,
-    constants::*,
-};
 
 // =========================================================================
 // DDE Attack Prevention Tests
@@ -35,13 +29,13 @@ fn test_dde_detection_in_cell_value() {
 
 #[test]
 fn test_dde_detection_case_insensitive() {
-    assert!(contains_dde_payload("=cmd|/c test"));       // lowercase
-    assert!(contains_dde_payload("=Cmd|/c test"));        // mixed case
-    assert!(contains_dde_payload("=CMD|/c test"));        // uppercase
-    assert!(contains_dde_payload("=exec("));              // lowercase
-    assert!(contains_dde_payload("=EXEC("));              // uppercase
-    assert!(contains_dde_payload("=msquery"));            // lowercase
-    assert!(contains_dde_payload("=MSQUERY"));            // uppercase
+    assert!(contains_dde_payload("=cmd|/c test")); // lowercase
+    assert!(contains_dde_payload("=Cmd|/c test")); // mixed case
+    assert!(contains_dde_payload("=CMD|/c test")); // uppercase
+    assert!(contains_dde_payload("=exec(")); // lowercase
+    assert!(contains_dde_payload("=EXEC(")); // uppercase
+    assert!(contains_dde_payload("=msquery")); // lowercase
+    assert!(contains_dde_payload("=MSQUERY")); // uppercase
 }
 
 #[test]
@@ -62,20 +56,41 @@ fn test_dde_text_content_neutralized_in_filtering() {
 </worksheet>"#;
 
     let result = super::super::xml_filter::filter_document_xml(
-        xml, OoxmlDocumentType::Excel, &config, &mut report,
-    ).unwrap();
+        xml,
+        OoxmlDocumentType::Excel,
+        &config,
+        &mut report,
+    )
+    .unwrap();
     let output = String::from_utf8_lossy(&result.filtered_bytes);
 
-    assert!(report.dde_attacks_detected > 0, "DDE attacks should be detected");
-    assert!(report.has_modifications(), "Report should show modifications");
+    assert!(
+        report.dde_attacks_detected > 0,
+        "DDE attacks should be detected"
+    );
+    assert!(
+        report.has_modifications(),
+        "Report should show modifications"
+    );
 
-    let dde_actions: Vec<_> = report.actions_taken.iter()
+    let dde_actions: Vec<_> = report
+        .actions_taken
+        .iter()
         .filter(|a| matches!(a, OoxmlCdrAction::DdeAttackDetected { .. }))
         .collect();
-    assert!(!dde_actions.is_empty(), "DdeAttackDetected action should be recorded");
+    assert!(
+        !dde_actions.is_empty(),
+        "DdeAttackDetected action should be recorded"
+    );
 
-    assert!(!output.contains("CMD|"), "DDE command string should be stripped from output");
-    assert!(!output.contains("calc.exe"), "DDE target should not appear in output");
+    assert!(
+        !output.contains("CMD|"),
+        "DDE command string should be stripped from output"
+    );
+    assert!(
+        !output.contains("calc.exe"),
+        "DDE target should not appear in output"
+    );
 }
 
 // =========================================================================
@@ -85,10 +100,14 @@ fn test_dde_text_content_neutralized_in_filtering() {
 #[test]
 fn test_blocked_url_protocol_detection() {
     // Blocked protocols
-    assert!(has_blocked_url_protocol("file:///C:/Windows/System32/cmd.exe"));
+    assert!(has_blocked_url_protocol(
+        "file:///C:/Windows/System32/cmd.exe"
+    ));
     assert!(has_blocked_url_protocol("javascript:alert(1)"));
     assert!(has_blocked_url_protocol_static("vbscript:MsgBox"));
-    assert!(has_blocked_url_protocol_static("data:text/html,<script>alert(1)</script>"));
+    assert!(has_blocked_url_protocol_static(
+        "data:text/html,<script>alert(1)</script>"
+    ));
     assert!(has_blocked_url_protocol("FILE://server/payload"));
 
     // Safe URLs should pass
@@ -102,9 +121,9 @@ fn test_blocked_url_protocol_detection() {
 /// Helper to test blocked URL protocol with static method access.
 fn has_blocked_url_protocol_static(url: &str) -> bool {
     let url_lower = url.to_ascii_lowercase();
-    BLOCKED_URL_PROTOCOLS.iter().any(|proto| {
-        url_lower.starts_with(*proto) || url_lower.contains(*proto)
-    })
+    BLOCKED_URL_PROTOCOLS
+        .iter()
+        .any(|proto| url_lower.starts_with(*proto) || url_lower.contains(*proto))
 }
 
 #[test]
@@ -117,10 +136,7 @@ fn test_identify_blocked_protocol() {
         identify_blocked_protocol("file:///etc/passwd"),
         Some("file://".to_string())
     );
-    assert_eq!(
-        identify_blocked_protocol("https://safe.com"),
-        None
-    );
+    assert_eq!(identify_blocked_protocol("https://safe.com"), None);
 }
 
 // =========================================================================
@@ -145,7 +161,10 @@ fn test_excel_sheet_protection_password_detected() {
             &mut removed_targets,
         );
 
-        assert!(force_drop, "sheetProtection with password should be force-dropped");
+        assert!(
+            force_drop,
+            "sheetProtection with password should be force-dropped"
+        );
         assert_eq!(report.excel_threats_neutralized, 1);
         assert!(matches!(
             report.actions_taken.last(),
@@ -172,7 +191,10 @@ fn test_excel_sheet_protection_without_password_kept() {
             &mut removed_targets,
         );
 
-        assert!(!force_drop, "sheetProtection without password should NOT be dropped");
+        assert!(
+            !force_drop,
+            "sheetProtection without password should NOT be dropped"
+        );
         assert_eq!(report.excel_threats_neutralized, 0);
     }
 }
@@ -195,7 +217,10 @@ fn test_excel_data_validation_malicious_url() {
             &mut removed_targets,
         );
 
-        assert!(force_drop, "dataValidation with malicious URL should be force-dropped");
+        assert!(
+            force_drop,
+            "dataValidation with malicious URL should be force-dropped"
+        );
         assert_eq!(report.excel_threats_neutralized, 1);
         assert!(matches!(
             report.actions_taken.last(),
@@ -215,14 +240,13 @@ fn test_excel_custom_xml_mapping_script_injection() {
     let event = reader.read_event_into(&mut buf).unwrap();
 
     if let Event::Start(ref e) = event {
-        let force_drop = scan_excel_element_threats(
-            "Map",
-            e.attributes(),
-            &mut report,
-            &mut removed_targets,
-        );
+        let force_drop =
+            scan_excel_element_threats("Map", e.attributes(), &mut report, &mut removed_targets);
 
-        assert!(force_drop, "Map with script injection should be force-dropped");
+        assert!(
+            force_drop,
+            "Map with script injection should be force-dropped"
+        );
         assert!(matches!(
             report.actions_taken.last(),
             Some(OoxmlCdrAction::CustomXmlMappingStripped { .. })
@@ -248,7 +272,10 @@ fn test_excel_pivotcache_external_reference() {
             &mut removed_targets,
         );
 
-        assert!(force_drop, "PivotCache with external ref should be force-dropped");
+        assert!(
+            force_drop,
+            "PivotCache with external ref should be force-dropped"
+        );
         assert!(matches!(
             report.actions_taken.last(),
             Some(OoxmlCdrAction::PivotCacheExternalRefStripped { .. })
@@ -278,13 +305,19 @@ fn test_word_altchunk_removal() {
             &mut removed_targets,
         );
 
-        assert!(force_drop, "altChunk should always be force-dropped (major attack vector)");
+        assert!(
+            force_drop,
+            "altChunk should always be force-dropped (major attack vector)"
+        );
         assert_eq!(report.word_threats_neutralized, 1);
         assert!(matches!(
             report.actions_taken.last(),
             Some(OoxmlCdrAction::AltChunkRemoved { chunk_id }) if !chunk_id.is_empty()
         ));
-        assert!(!removed_targets.is_empty(), "altChunk ID should be added to removed targets");
+        assert!(
+            !removed_targets.is_empty(),
+            "altChunk ID should be added to removed targets"
+        );
     }
 }
 
@@ -359,12 +392,8 @@ fn test_word_irm_permission_stripping() {
 
         let mut report2 = OoxmlCdrReport::default();
         let mut targets2 = Vec::new();
-        let force_drop_end = scan_word_element_threats(
-            "permEnd",
-            e.attributes(),
-            &mut report2,
-            &mut targets2,
-        );
+        let force_drop_end =
+            scan_word_element_threats("permEnd", e.attributes(), &mut report2, &mut targets2);
         assert!(force_drop_end, "permEnd should be force-dropped");
 
         assert!(matches!(
@@ -382,31 +411,43 @@ fn test_word_instrtext_script_injection() {
 
     // Safe instrText content should return true (kept)
     let safe_result = scan_text_content_threats(
-        "normal field instruction", Some("instrText"),
-        OoxmlDocumentType::Word, &config, &mut report,
+        "normal field instruction",
+        Some("instrText"),
+        OoxmlDocumentType::Word,
+        &config,
+        &mut report,
     );
     assert!(safe_result, "Safe instrText should return true (keep)");
     assert_eq!(report.word_threats_neutralized, 0);
 
     // PowerShell pattern — should return false (dropped)
     let ps_result = scan_text_content_threats(
-        "powershell -encodedcommand XYZ", Some("instrText"),
-        OoxmlDocumentType::Word, &config, &mut report,
+        "powershell -encodedcommand XYZ",
+        Some("instrText"),
+        OoxmlDocumentType::Word,
+        &config,
+        &mut report,
     );
     assert!(!ps_result, "PowerShell in instrText should be dropped");
     assert!(report.word_threats_neutralized >= 1);
 
     // cmd.exe pattern — should return false (dropped)
     let cmd_result = scan_text_content_threats(
-        "cmd.exe /c whoami", Some("instrText"),
-        OoxmlDocumentType::Word, &config, &mut report,
+        "cmd.exe /c whoami",
+        Some("instrText"),
+        OoxmlDocumentType::Word,
+        &config,
+        &mut report,
     );
     assert!(!cmd_result, "cmd.exe in instrText should be dropped");
 
     // VBScript pattern — should return false (dropped)
     let vbs_result = scan_text_content_threats(
-        "vbscript:MsgBox \"XSS\"", Some("instrText"),
-        OoxmlDocumentType::Word, &config, &mut report,
+        "vbscript:MsgBox \"XSS\"",
+        Some("instrText"),
+        OoxmlDocumentType::Word,
+        &config,
+        &mut report,
     );
     assert!(!vbs_result, "VBScript in instrText should be dropped");
 }
@@ -479,13 +520,12 @@ fn test_powerpoint_external_sound_stripped() {
     let event2 = reader2.read_event_into(&mut buf2).unwrap();
 
     if let Event::Empty(ref e) | Event::Start(ref e) = event2 {
-        let force_drop_internal = scan_powerpoint_element_threats(
-            "snd",
-            e.attributes(),
-            &mut report2,
-            &mut targets2,
+        let force_drop_internal =
+            scan_powerpoint_element_threats("snd", e.attributes(), &mut report2, &mut targets2);
+        assert!(
+            !force_drop_internal,
+            "Internal sound name should be allowed"
         );
-        assert!(!force_drop_internal, "Internal sound name should be allowed");
     }
 }
 
@@ -507,7 +547,10 @@ fn test_powerpoint_extlst_removal() {
             &mut removed_targets,
         );
 
-        assert!(force_drop, "extLst should always be removed (zero-day attack vector)");
+        assert!(
+            force_drop,
+            "extLst should always be removed (zero-day attack vector)"
+        );
         assert_eq!(report.powerpoint_threats_neutralized, 1);
         assert!(matches!(
             report.actions_taken.last(),
@@ -573,7 +616,10 @@ fn test_powerpoint_cbhvr_malicious_action() {
             &mut removed_targets,
         );
 
-        assert!(force_drop, "cBhvr with javascript action should be force-dropped");
+        assert!(
+            force_drop,
+            "cBhvr with javascript action should be force-dropped"
+        );
         assert!(report.powerpoint_threats_neutralized >= 1);
     }
 }
@@ -597,9 +643,13 @@ fn test_script_injection_pattern_coverage() {
     assert!(contains_script_injection("document.write(xss)"));
 
     // Normal text should not trigger
-    assert!(!contains_script_injection("The document describes shell companies."));
+    assert!(!contains_script_injection(
+        "The document describes shell companies."
+    ));
     assert!(!contains_script_injection("Evaluation of the product."));
-    assert!(!contains_script_injection("Command line interface tutorial."));
+    assert!(!contains_script_injection(
+        "Command line interface tutorial."
+    ));
 }
 
 #[test]

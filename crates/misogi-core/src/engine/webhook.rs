@@ -34,9 +34,7 @@ use async_trait::async_trait;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 
-use crate::engine::state_machine::{
-    StateMachine, TransitionContext, TransitionResult,
-};
+use crate::engine::state_machine::{StateMachine, TransitionContext, TransitionResult};
 use crate::error::{MisogiError, Result};
 use crate::traits::{ApprovalTrigger, StateMachine as StateMachineTrait};
 
@@ -188,9 +186,9 @@ impl FileLifecycleState {
             Approved => vec![Transferring],
             Transferring => vec![Ready, Failed],
             Ready => vec![Downloaded, Failed],
-            Rejected => vec![], // Terminal
+            Rejected => vec![],   // Terminal
             Downloaded => vec![], // Terminal
-            Failed => vec![], // Terminal (requires manual reset)
+            Failed => vec![],     // Terminal (requires manual reset)
         }
     }
 }
@@ -366,13 +364,14 @@ impl HttpCallbackTrigger {
         }
 
         // Auth header should look like Bearer token if present
-        if let Some(ref auth) = self.auth_header {
-            if !auth.starts_with("Bearer ") && !auth.starts_with("Basic ") {
-                return Err(MisogiError::Protocol(format!(
-                    "Auth header should start with 'Bearer ' or 'Basic ', got: {}",
-                    &auth[..auth.len().min(10)]
-                )));
-            }
+        if let Some(ref auth) = self.auth_header
+            && !auth.starts_with("Bearer ")
+            && !auth.starts_with("Basic ")
+        {
+            return Err(MisogiError::Protocol(format!(
+                "Auth header should start with 'Bearer ' or 'Basic ', got: {}",
+                &auth[..auth.len().min(10)]
+            )));
         }
 
         Ok(())
@@ -400,13 +399,13 @@ impl HttpCallbackTrigger {
         state_machine: &StateMachine<FileLifecycleState>,
     ) -> Result<TransitionResult<FileLifecycleState>> {
         // Step 1: Verify required status if configured
-        if let Some(ref required) = self.require_payload_status {
-            if payload.status != *required {
-                return Err(MisogiError::Protocol(format!(
-                    "Payload status '{}' does not required status '{}'",
-                    payload.status, required
-                )));
-            }
+        if let Some(ref required) = self.require_payload_status
+            && payload.status != *required
+        {
+            return Err(MisogiError::Protocol(format!(
+                "Payload status '{}' does not required status '{}'",
+                payload.status, required
+            )));
         }
 
         // Step 2: Map status string to FileLifecycleState
@@ -424,10 +423,7 @@ impl HttpCallbackTrigger {
         // Step 3: Build transition context
         let ctx = TransitionContext::new(payload.actor_id.as_deref())
             .with_metadata("file_id", &payload.file_id)
-            .with_metadata(
-                "reason",
-                payload.reason.as_deref().unwrap_or(""),
-            );
+            .with_metadata("reason", payload.reason.as_deref().unwrap_or(""));
 
         // Step 4: Execute transition (idempotent: already in target state is ok)
         let current = state_machine.current_state();
@@ -546,7 +542,8 @@ impl ApprovalTrigger<FileLifecycleState> for HttpCallbackTrigger {
         }
 
         // Mark as inactive (in production, would deregister Axum route here)
-        self.active.store(false, std::sync::atomic::Ordering::SeqCst);
+        self.active
+            .store(false, std::sync::atomic::Ordering::SeqCst);
 
         tracing::info!(
             path = %self.path,
@@ -770,7 +767,8 @@ impl ApprovalTrigger<FileLifecycleState> for FilePollingTrigger {
         // 3. Calls state_machine.transition() for each match
         // 4. Loops back to step 1
 
-        self.running.store(true, std::sync::atomic::Ordering::SeqCst);
+        self.running
+            .store(true, std::sync::atomic::Ordering::SeqCst);
 
         tracing::info!(
             watch_dir = %self.watch_dir.display(),
@@ -793,7 +791,8 @@ impl ApprovalTrigger<FileLifecycleState> for FilePollingTrigger {
             handle.abort();
         }
 
-        self.running.store(false, std::sync::atomic::Ordering::SeqCst);
+        self.running
+            .store(false, std::sync::atomic::Ordering::SeqCst);
 
         tracing::info!(
             watch_dir = %self.watch_dir.display(),
@@ -886,7 +885,8 @@ impl ApprovalTrigger<FileLifecycleState> for GrpcCallTrigger {
     }
 
     async fn stop(&mut self) -> Result<()> {
-        self.active.store(false, std::sync::atomic::Ordering::SeqCst);
+        self.active
+            .store(false, std::sync::atomic::Ordering::SeqCst);
 
         tracing::info!(
             method = %self.method,
@@ -1005,7 +1005,10 @@ mod tests {
 
     #[test]
     fn test_display_implementation() {
-        assert_eq!(FileLifecycleState::PendingApproval.to_string(), "PendingApproval");
+        assert_eq!(
+            FileLifecycleState::PendingApproval.to_string(),
+            "PendingApproval"
+        );
         assert_eq!(FileLifecycleState::Approved.to_string(), "Approved");
         assert_eq!(FileLifecycleState::Rejected.to_string(), "Rejected");
         assert_eq!(FileLifecycleState::Transferring.to_string(), "Transferring");
@@ -1065,7 +1068,10 @@ mod tests {
 
         assert_eq!(trigger.path, "/secure/webhook");
         assert_eq!(trigger.require_payload_status, Some("Approved".to_string()));
-        assert_eq!(trigger.auth_header, Some("Bearer super-secret-token".to_string()));
+        assert_eq!(
+            trigger.auth_header,
+            Some("Bearer super-secret-token".to_string())
+        );
         assert_eq!(trigger.shared_secret, Some("hmac-signing-key".to_string()));
     }
 
@@ -1133,75 +1139,51 @@ mod tests {
     #[test]
     fn test_extract_file_id_basic_patterns() {
         // Standard approved pattern
-        let id = FilePollingTrigger::extract_file_id(
-            "abc123.approved",
-            "{file_id}.approved",
-        );
+        let id = FilePollingTrigger::extract_file_id("abc123.approved", "{file_id}.approved");
         assert_eq!(id, Some("abc123".to_string()));
 
         // Standard rejected pattern
-        let id = FilePollingTrigger::extract_file_id(
-            "def456.rejected",
-            "{file_id}.rejected",
-        );
+        let id = FilePollingTrigger::extract_file_id("def456.rejected", "{file_id}.rejected");
         assert_eq!(id, Some("def456".to_string()));
     }
 
     #[test]
     fn test_extract_file_id_complex_filenames() {
         // Filename with hyphens
-        let id = FilePollingTrigger::extract_file_id(
-            "my-document-v2.approved",
-            "{file_id}.approved",
-        );
+        let id =
+            FilePollingTrigger::extract_file_id("my-document-v2.approved", "{file_id}.approved");
         assert_eq!(id, Some("my-document-v2".to_string()));
 
         // Filename with underscores
-        let id = FilePollingTrigger::extract_file_id(
-            "file_20240115_001.rejected",
-            "{file_id}.rejected",
-        );
+        let id =
+            FilePollingTrigger::extract_file_id("file_20240115_001.rejected", "{file_id}.rejected");
         assert_eq!(id, Some("file_20240115_001".to_string()));
     }
 
     #[test]
     fn test_extract_file_id_non_matching() {
         // Wrong extension
-        let id = FilePollingTrigger::extract_file_id(
-            "abc123.pending",
-            "{file_id}.approved",
-        );
+        let id = FilePollingTrigger::extract_file_id("abc123.pending", "{file_id}.approved");
         assert_eq!(id, None);
 
         // Completely different format
-        let id = FilePollingTrigger::extract_file_id(
-            "other-file.txt",
-            "{file_id}.approved",
-        );
+        let id = FilePollingTrigger::extract_file_id("other-file.txt", "{file_id}.approved");
         assert_eq!(id, None);
     }
 
     #[test]
     fn test_extract_file_id_custom_patterns() {
         // Prefix pattern: "approved-{file_id}"
-        let id = FilePollingTrigger::extract_file_id(
-            "approved-xyz789",
-            "approved-{file_id}",
-        );
+        let id = FilePollingTrigger::extract_file_id("approved-xyz789", "approved-{file_id}");
         assert_eq!(id, Some("xyz789".to_string()));
 
         // Suffix pattern: "{file_id}-done"
-        let id = FilePollingTrigger::extract_file_id(
-            "myfile-done",
-            "{file_id}-done",
-        );
+        let id = FilePollingTrigger::extract_file_id("myfile-done", "{file_id}-done");
         assert_eq!(id, Some("myfile".to_string()));
 
         // Complex pattern: "status/{file_id}/result"
-        let id = FilePollingTrigger::extract_file_id(
-            "status/abc/result",
-            "status/{file_id}/result",
-        );
+        let id =
+            FilePollingTrigger::extract_file_id("status/abc/result", "status/{file_id}/result");
         assert_eq!(id, Some("abc".to_string()));
     }
 
@@ -1216,10 +1198,16 @@ mod tests {
         .unwrap();
 
         let result = trigger.classify_filename("doc1.approved");
-        assert_eq!(result, Some(("doc1".to_string(), FileLifecycleState::Approved)));
+        assert_eq!(
+            result,
+            Some(("doc1".to_string(), FileLifecycleState::Approved))
+        );
 
         let result = trigger.classify_filename("doc2.rejected");
-        assert_eq!(result, Some(("doc2".to_string(), FileLifecycleState::Rejected)));
+        assert_eq!(
+            result,
+            Some(("doc2".to_string(), FileLifecycleState::Rejected))
+        );
 
         let result = trigger.classify_filename("doc3.unknown");
         assert_eq!(result, None); // Doesn't match either pattern
@@ -1228,39 +1216,22 @@ mod tests {
     #[test]
     fn test_file_polling_trigger_validation() {
         // Valid configuration
-        let trigger = FilePollingTrigger::new(
-            PathBuf::from("/watch/dir"),
-            "{id}.ok",
-            "{id}.fail",
-            60,
-        );
+        let trigger =
+            FilePollingTrigger::new(PathBuf::from("/watch/dir"), "{id}.ok", "{id}.fail", 60);
         assert!(trigger.is_ok());
 
         // Invalid: zero interval
-        let result = FilePollingTrigger::new(
-            PathBuf::from("/watch"),
-            "{id}.ok",
-            "{id}.fail",
-            0,
-        );
+        let result = FilePollingTrigger::new(PathBuf::from("/watch"), "{id}.ok", "{id}.fail", 0);
         assert!(result.is_err());
 
         // Invalid: missing placeholder in approved pattern
-        let result = FilePollingTrigger::new(
-            PathBuf::from("/watch"),
-            "approved.txt",
-            "{id}.fail",
-            10,
-        );
+        let result =
+            FilePollingTrigger::new(PathBuf::from("/watch"), "approved.txt", "{id}.fail", 10);
         assert!(result.is_err());
 
         // Invalid: missing placeholder in rejected pattern
-        let result = FilePollingTrigger::new(
-            PathBuf::from("/watch"),
-            "{id}.ok",
-            "rejected.txt",
-            10,
-        );
+        let result =
+            FilePollingTrigger::new(PathBuf::from("/watch"), "{id}.ok", "rejected.txt", 10);
         assert!(result.is_err());
     }
 
@@ -1323,13 +1294,19 @@ mod tests {
         let r1 = sm.trigger("approve", TransitionContext::default()).unwrap();
         assert_eq!(r1.to, FileLifecycleState::Approved);
 
-        let r2 = sm.trigger("start_transfer", TransitionContext::default()).unwrap();
+        let r2 = sm
+            .trigger("start_transfer", TransitionContext::default())
+            .unwrap();
         assert_eq!(r2.to, FileLifecycleState::Transferring);
 
-        let r3 = sm.trigger("complete_transfer", TransitionContext::default()).unwrap();
+        let r3 = sm
+            .trigger("complete_transfer", TransitionContext::default())
+            .unwrap();
         assert_eq!(r3.to, FileLifecycleState::Ready);
 
-        let r4 = sm.trigger("confirm_download", TransitionContext::default()).unwrap();
+        let r4 = sm
+            .trigger("confirm_download", TransitionContext::default())
+            .unwrap();
         assert_eq!(r4.to, FileLifecycleState::Downloaded);
 
         // Verify terminal state

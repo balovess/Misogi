@@ -23,10 +23,10 @@
 //!                      └─ Pass ──────────> spawn_blocking(CDR)
 //! ```
 
-use base64::Engine;
 use crate::error::{Result, SmtpError};
 use crate::mime_handler::{DEFAULT_MIME_BOUNDARY, EmailAttachment, ParsedEmail};
 use crate::server::ZoneClassification;
+use base64::Engine;
 use md5::Digest;
 use misogi_cdr::SanitizationReport;
 use std::time::Instant;
@@ -179,8 +179,8 @@ impl Default for SmtpSanitizeConfig {
 
 /// Executable file extensions that are always blocked when `block_executables` is enabled.
 const EXECUTABLE_EXTENSIONS: &[&str] = &[
-    ".exe", ".dll", ".scr", ".bat", ".cmd", ".ps1", ".vbs", ".js", ".msi", ".com",
-    ".pif", ".hta", ".cpl", ".inf", ".wsf", ".jar", ".app", ".deb", ".rpm", ".sh",
+    ".exe", ".dll", ".scr", ".bat", ".cmd", ".ps1", ".vbs", ".js", ".msi", ".com", ".pif", ".hta",
+    ".cpl", ".inf", ".wsf", ".jar", ".app", ".deb", ".rpm", ".sh",
 ];
 
 // ─── Email Sanitizer Implementation ─────────────────────────────────
@@ -324,21 +324,17 @@ impl EmailSanitizer {
             if key.to_lowercase() == "content-type" || key.to_lowercase() == "mime-version" {
                 continue;
             }
-            writeln!(output, "{key}: {value}").map_err(|e| {
-                SmtpError::ReassemblyFailed {
-                    reason: format!("header write error: {e}"),
-                }
+            writeln!(output, "{key}: {value}").map_err(|e| SmtpError::ReassemblyFailed {
+                reason: format!("header write error: {e}"),
             })?;
         }
 
         // Step 2: Add Misogi-specific headers
         let sanitized_header = Self::build_sanitized_header(results);
-        writeln!(
-            output,
-            "X-Misogi-Sanitized: {sanitized_header}"
-        )
-        .map_err(|e| SmtpError::ReassemblyFailed {
-            reason: format!("misogi header error: {e}"),
+        writeln!(output, "X-Misogi-Sanitized: {sanitized_header}").map_err(|e| {
+            SmtpError::ReassemblyFailed {
+                reason: format!("misogi header error: {e}"),
+            }
         })?;
         writeln!(output, "X-Misogi-Version: misogi-smtp/0.1.0").map_err(|e| {
             SmtpError::ReassemblyFailed {
@@ -348,15 +344,14 @@ impl EmailSanitizer {
 
         // Determine if we need multipart structure
         let has_body = original.body_text.is_some() || original.body_html.is_some();
-        let has_sanitized_attachments: bool = results
-            .iter()
-            .any(|r| r.sanitized_data.is_some());
+        let has_sanitized_attachments: bool = results.iter().any(|r| r.sanitized_data.is_some());
         let has_blocked_or_quarantined: bool = results
             .iter()
             .any(|r| r.sanitized_data.is_none() && !r.original_filename.is_empty());
 
-        let needs_multipart =
-            (has_body && has_sanitized_attachments) || results.len() > 1 || has_blocked_or_quarantined;
+        let needs_multipart = (has_body && has_sanitized_attachments)
+            || results.len() > 1
+            || has_blocked_or_quarantined;
 
         if needs_multipart {
             // Generate boundary
@@ -390,10 +385,11 @@ impl EmailSanitizer {
 
             // Body part(s)
             if let Some(text) = &original.body_text {
-                writeln!(output, "Content-Type: text/plain; charset=utf-8")
-                    .map_err(|e| SmtpError::ReassemblyFailed {
+                writeln!(output, "Content-Type: text/plain; charset=utf-8").map_err(|e| {
+                    SmtpError::ReassemblyFailed {
                         reason: format!("body ct error: {e}"),
-                    })?;
+                    }
+                })?;
                 writeln!(output, "Content-Transfer-Encoding: 7bit").map_err(|e| {
                     SmtpError::ReassemblyFailed {
                         reason: format!("body cte error: {e}"),
@@ -408,14 +404,17 @@ impl EmailSanitizer {
                 writeln!(output).map_err(|e| SmtpError::ReassemblyFailed {
                     reason: format!("body newline error: {e}"),
                 })?;
-                writeln!(output, "--{unique_boundary}").map_err(|e| SmtpError::ReassemblyFailed {
-                    reason: format!("body boundary error: {e}"),
+                writeln!(output, "--{unique_boundary}").map_err(|e| {
+                    SmtpError::ReassemblyFailed {
+                        reason: format!("body boundary error: {e}"),
+                    }
                 })?;
             } else if let Some(html) = &original.body_html {
-                writeln!(output, "Content-Type: text/html; charset=utf-8")
-                    .map_err(|e| SmtpError::ReassemblyFailed {
+                writeln!(output, "Content-Type: text/html; charset=utf-8").map_err(|e| {
+                    SmtpError::ReassemblyFailed {
                         reason: format!("html ct error: {e}"),
-                    })?;
+                    }
+                })?;
                 writeln!(output, "Content-Transfer-Encoding: 7bit").map_err(|e| {
                     SmtpError::ReassemblyFailed {
                         reason: format!("html cte error: {e}"),
@@ -430,8 +429,10 @@ impl EmailSanitizer {
                 writeln!(output).map_err(|e| SmtpError::ReassemblyFailed {
                     reason: format!("html newline error: {e}"),
                 })?;
-                writeln!(output, "--{unique_boundary}").map_err(|e| SmtpError::ReassemblyFailed {
-                    reason: format!("html boundary error: {e}"),
+                writeln!(output, "--{unique_boundary}").map_err(|e| {
+                    SmtpError::ReassemblyFailed {
+                        reason: format!("html boundary error: {e}"),
+                    }
                 })?;
             }
 
@@ -481,10 +482,11 @@ impl EmailSanitizer {
                             _ => continue, // Skip clean/sanitized entries (should have data)
                         };
 
-                        writeln!(output, "Content-Type: text/plain; charset=utf-8")
-                            .map_err(|e| SmtpError::ReassemblyFailed {
+                        writeln!(output, "Content-Type: text/plain; charset=utf-8").map_err(
+                            |e| SmtpError::ReassemblyFailed {
                                 reason: format!("notice ct error: {e}"),
-                            })?;
+                            },
+                        )?;
                         writeln!(output, "Content-Transfer-Encoding: 7bit").map_err(|e| {
                             SmtpError::ReassemblyFailed {
                                 reason: format!("notice cte error: {e}"),
@@ -519,10 +521,11 @@ impl EmailSanitizer {
             })?;
 
             if let Some(text) = &original.body_text {
-                writeln!(output, "Content-Type: text/plain; charset=utf-8")
-                    .map_err(|e| SmtpError::ReassemblyFailed {
+                writeln!(output, "Content-Type: text/plain; charset=utf-8").map_err(|e| {
+                    SmtpError::ReassemblyFailed {
                         reason: format!("simple body ct error: {e}"),
-                    })?;
+                    }
+                })?;
                 writeln!(output).map_err(|e| SmtpError::ReassemblyFailed {
                     reason: format!("simple body sep error: {e}"),
                 })?;
@@ -531,10 +534,10 @@ impl EmailSanitizer {
                 })?;
             } else if !results.is_empty() {
                 // Single attachment
-                if let Some((first,)) = results.first().map(|r| (r,)) {
-                    if let Some(data) = &first.sanitized_data {
-                        Self::write_single_attachment(&mut output, first, data)?;
-                    }
+                if let Some((first,)) = results.first().map(|r| (r,))
+                    && let Some(data) = &first.sanitized_data
+                {
+                    Self::write_single_attachment(&mut output, first, data)?;
                 }
             }
         }
@@ -568,53 +571,53 @@ impl EmailSanitizer {
         );
 
         // Pre-filter check 1: Size limit
-        if let Some(max_size) = config.max_attachment_size {
-            if attachment.size > max_size {
-                warn!(
-                    filename = %filename,
-                    size = attachment.size,
-                    limit = max_size,
-                    "Attachment exceeds size limit"
+        if let Some(max_size) = config.max_attachment_size
+            && attachment.size > max_size
+        {
+            warn!(
+                filename = %filename,
+                size = attachment.size,
+                limit = max_size,
+                "Attachment exceeds size limit"
+            );
+            return AttachmentSanitizeResult {
+                original_filename: filename.to_string(),
+                mime_type: attachment.mime_type.clone(),
+                sanitized_data: None,
+                report: None,
+                action_taken: AttachmentAction::BlockedAndRemoved,
+                threat_count: 0,
+                processing_time_ms: start.elapsed().as_millis() as u64,
+                error: Some(format!(
+                    "Exceeds size limit ({} > {} bytes)",
+                    attachment.size, max_size
+                )),
+            };
+        }
+
+        // Pre-filter check 2: Executable file type
+        if config.block_executables
+            && let Some(fname) = &attachment.filename
+        {
+            let ext_lower = fname.to_lowercase();
+            if EXECUTABLE_EXTENSIONS
+                .iter()
+                .any(|ext| ext_lower.ends_with(ext))
+            {
+                info!(
+                    filename = %fname,
+                    "Executable attachment blocked by policy"
                 );
                 return AttachmentSanitizeResult {
-                    original_filename: filename.to_string(),
+                    original_filename: fname.clone(),
                     mime_type: attachment.mime_type.clone(),
                     sanitized_data: None,
                     report: None,
                     action_taken: AttachmentAction::BlockedAndRemoved,
                     threat_count: 0,
                     processing_time_ms: start.elapsed().as_millis() as u64,
-                    error: Some(format!(
-                        "Exceeds size limit ({} > {} bytes)",
-                        attachment.size, max_size
-                    )),
+                    error: Some("Executable file type blocked".to_string()),
                 };
-            }
-        }
-
-        // Pre-filter check 2: Executable file type
-        if config.block_executables {
-            if let Some(fname) = &attachment.filename {
-                let ext_lower = fname.to_lowercase();
-                if EXECUTABLE_EXTENSIONS
-                    .iter()
-                    .any(|ext| ext_lower.ends_with(ext))
-                {
-                    info!(
-                        filename = %fname,
-                        "Executable attachment blocked by policy"
-                    );
-                    return AttachmentSanitizeResult {
-                        original_filename: fname.clone(),
-                        mime_type: attachment.mime_type.clone(),
-                        sanitized_data: None,
-                        report: None,
-                        action_taken: AttachmentAction::BlockedAndRemoved,
-                        threat_count: 0,
-                        processing_time_ms: start.elapsed().as_millis() as u64,
-                        error: Some("Executable file type blocked".to_string()),
-                    };
-                }
             }
         }
 
@@ -622,10 +625,9 @@ impl EmailSanitizer {
         // Note: Full detection requires attempting to open the archive;
         // here we do a basic heuristic check on common patterns
         if config.block_password_protected {
-            let is_likely_password_protected =
-                attachment.mime_type == "application/zip"
-                    || attachment.mime_type == "application/x-rar-compressed"
-                    || attachment.mime_type == "application/x-7z-compressed";
+            let is_likely_password_protected = attachment.mime_type == "application/zip"
+                || attachment.mime_type == "application/x-rar-compressed"
+                || attachment.mime_type == "application/x-7z-compressed";
 
             if is_likely_password_protected {
                 // Heuristic: check for small size with known archive magic bytes
@@ -634,7 +636,8 @@ impl EmailSanitizer {
                     let header = &attachment.data[0..4];
                     // PKZIP traditional encryption flag detection
                     if (header[0] == 0x50 && header[1] == 0x4B) || // ZIP
-                       (header[0] == 0x52 && header[1] == 0x61 && header[2] == 0x72 && header[3] == 0x21) // RAR
+                       (header[0] == 0x52 && header[1] == 0x61 && header[2] == 0x72 && header[3] == 0x21)
+                    // RAR
                     {
                         info!(
                             filename = %filename,
@@ -701,17 +704,13 @@ impl EmailSanitizer {
     }
 
     /// Select the appropriate sanitization policy based on zone classification.
-    fn select_policy(
-        &self,
-        zone: &ZoneClassification,
-    ) -> misogi_cdr::SanitizationPolicy {
+    fn select_policy(&self, zone: &ZoneClassification) -> misogi_cdr::SanitizationPolicy {
         match zone {
-            ZoneClassification::InternalToExternal => {
-                self.config
-                    .outbound_policy
-                    .clone()
-                    .unwrap_or_else(|| self.config.default_policy.clone())
-            }
+            ZoneClassification::InternalToExternal => self
+                .config
+                .outbound_policy
+                .clone()
+                .unwrap_or_else(|| self.config.default_policy.clone()),
             _ => self.config.default_policy.clone(),
         }
     }

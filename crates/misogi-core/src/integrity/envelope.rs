@@ -47,10 +47,7 @@ pub enum IntegrityError {
     /// Carries both the expected hash (from envelope metadata) and the
     /// actual hash (recomputed from data) for diagnostic purposes.
     #[error("Hash mismatch: expected={expected}, actual={actual}")]
-    HashMismatch {
-        expected: String,
-        actual: String,
-    },
+    HashMismatch { expected: String, actual: String },
 
     /// JSON serialization/deserialization error.
     ///
@@ -297,8 +294,7 @@ impl IntegrityEnvelopeBuilder {
         };
 
         // Compute envelope_hash over the serialized partial envelope.
-        let serialized =
-            serde_json::to_string(&partial).map_err(IntegrityError::Serialization)?;
+        let serialized = serde_json::to_string(&partial).map_err(IntegrityError::Serialization)?;
         let envelope_hash = self.hash_algorithm.hash(serialized.as_bytes())?;
 
         Ok(IntegrityEnvelope {
@@ -347,10 +343,8 @@ impl IntegrityEnvelopeBuilder {
             previous_chunk_hash: envelope.previous_chunk_hash.clone(),
             timestamp_ms: envelope.timestamp_ms,
         };
-        let serialized =
-            serde_json::to_string(&partial).map_err(IntegrityError::Serialization)?;
-        let computed_envelope_hash =
-            self.hash_algorithm.hash(serialized.as_bytes())?;
+        let serialized = serde_json::to_string(&partial).map_err(IntegrityError::Serialization)?;
+        let computed_envelope_hash = self.hash_algorithm.hash(serialized.as_bytes())?;
         if computed_envelope_hash != envelope.envelope_hash {
             return Err(IntegrityError::HashMismatch {
                 expected: envelope.envelope_hash.clone(),

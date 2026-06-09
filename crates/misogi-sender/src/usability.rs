@@ -34,8 +34,18 @@ pub fn list_presets() {
         println!("│ {}", wrap_text(&preset.description, 63));
         println!("│");
         println!("│ Security Settings:");
-        println!("│   Approval Required: {}", if preset.approval_required { "Yes" } else { "No" });
-        println!("│   Reason Required:   {}", if preset.reason_required { "Yes" } else { "No" });
+        println!(
+            "│   Approval Required: {}",
+            if preset.approval_required {
+                "Yes"
+            } else {
+                "No"
+            }
+        );
+        println!(
+            "│   Reason Required:   {}",
+            if preset.reason_required { "Yes" } else { "No" }
+        );
         println!("│   Sanitization:      {:?}", preset.sanitization_policy);
         println!("│");
         println!("│ File Limits:");
@@ -45,7 +55,10 @@ pub fn list_presets() {
         println!("│");
         println!("│ Audit:");
         println!("│   Retention: {} days", preset.audit_retention_days);
-        println!("│   Log IP:    {}", if preset.log_ip_address { "Yes" } else { "No" });
+        println!(
+            "│   Log IP:    {}",
+            if preset.log_ip_address { "Yes" } else { "No" }
+        );
         println!("└─────────────────────────────────────────────────────────────────┘");
         println!();
     }
@@ -60,14 +73,18 @@ fn wrap_text(text: &str, max_width: usize) -> String {
     if text.len() <= max_width {
         return format!("{:<width$}", text, width = max_width);
     }
-    
+
     let mut result = String::new();
     let mut current_line = String::new();
-    
+
     for word in text.split_whitespace() {
         if current_line.len() + word.len() + 1 > max_width {
             if !current_line.is_empty() {
-                result.push_str(&format!("{:<width$}", current_line.trim(), width = max_width));
+                result.push_str(&format!(
+                    "{:<width$}",
+                    current_line.trim(),
+                    width = max_width
+                ));
                 result.push_str("\n│ ");
             }
             current_line = word.to_string();
@@ -78,11 +95,15 @@ fn wrap_text(text: &str, max_width: usize) -> String {
             current_line.push_str(word);
         }
     }
-    
+
     if !current_line.is_empty() {
-        result.push_str(&format!("{:<width$}", current_line.trim(), width = max_width));
+        result.push_str(&format!(
+            "{:<width$}",
+            current_line.trim(),
+            width = max_width
+        ));
     }
-    
+
     result
 }
 
@@ -139,7 +160,10 @@ pub fn check_dependencies() {
 
     // Check OpenSSL
     if let Some(version) = check_command("openssl", &["version"]) {
-        print_success(&format!("OpenSSL: {} (required for key generation)", version));
+        print_success(&format!(
+            "OpenSSL: {} (required for key generation)",
+            version
+        ));
     } else {
         print_warning("OpenSSL: not found");
         print_info("Install: apt install openssl (Linux)");
@@ -215,7 +239,9 @@ pub fn validate_config(config_path: &Option<PathBuf>) {
     println!("╚═══════════════════════════════════════════════════════════════╝");
     println!();
 
-    let path = config_path.clone().unwrap_or_else(|| PathBuf::from("misogi.toml"));
+    let path = config_path
+        .clone()
+        .unwrap_or_else(|| PathBuf::from("misogi.toml"));
 
     println!("Validating: {}", path.display());
     println!();
@@ -241,21 +267,21 @@ pub fn validate_config(config_path: &Option<PathBuf>) {
 
     // Parse TOML
     let parsed: Result<toml::Value, _> = toml::from_str(&content);
-    
+
     match parsed {
         Ok(value) => {
             print_success("TOML syntax: valid");
-            
+
             // Check required sections
             let has_server = value.get("server").is_some();
             let has_storage = value.get("storage").is_some();
-            
+
             if has_server {
                 print_success("[server] section: present");
             } else {
                 print_error("[server] section: missing (required)");
             }
-            
+
             if has_storage {
                 print_success("[storage] section: present");
             } else {
@@ -264,25 +290,36 @@ pub fn validate_config(config_path: &Option<PathBuf>) {
 
             // Check optional sections
             let optional_sections = [
-                "tunnel", "daemon", "approval_flow", "transfer_driver",
-                "cdr_strategies", "file_types", "pii_detector", "log",
-                "vendor_isolation", "calendar", "encoding", "external_sanitizers",
-                "ppap", "blast", "versioning"
+                "tunnel",
+                "daemon",
+                "approval_flow",
+                "transfer_driver",
+                "cdr_strategies",
+                "file_types",
+                "pii_detector",
+                "log",
+                "vendor_isolation",
+                "calendar",
+                "encoding",
+                "external_sanitizers",
+                "ppap",
+                "blast",
+                "versioning",
             ];
-            
+
             let mut found_optional = Vec::new();
             for section in &optional_sections {
                 if value.get(section).is_some() {
                     found_optional.push(*section);
                 }
             }
-            
+
             if !found_optional.is_empty() {
                 print_success(&format!("Optional sections: {}", found_optional.join(", ")));
             }
 
             println!();
-            
+
             if has_server && has_storage {
                 print_success("Configuration is valid and complete.");
                 println!();
@@ -325,7 +362,7 @@ pub async fn run_init_wizard() {
     println!("  2. Kubernetes / Helm");
     println!("  3. Bare metal (direct binary)");
     println!();
-    
+
     let mode = read_input("Select [1-3]", "1");
     let deployment_mode = match mode.as_str() {
         "2" => "kubernetes",
@@ -342,7 +379,7 @@ pub async fn run_init_wizard() {
     println!("  4. nist_zta         - US NIST Zero Trust");
     println!("  5. minimal          - Minimal (development/testing)");
     println!();
-    
+
     let preset_choice = read_input("Select [1-5]", "5");
     let preset = match preset_choice.as_str() {
         "1" => "lgwan",
@@ -391,7 +428,12 @@ pub async fn run_init_wizard() {
     }
 
     // Create data directories
-    let dirs = ["data/uploads", "data/staging", "data/chunks", "data/downloads"];
+    let dirs = [
+        "data/uploads",
+        "data/staging",
+        "data/chunks",
+        "data/downloads",
+    ];
     for dir in &dirs {
         if let Err(e) = std::fs::create_dir_all(dir) {
             print_warning(&format!("Could not create {}: {}", dir, e));
@@ -403,13 +445,12 @@ pub async fn run_init_wizard() {
     generate_keypair().await;
 
     // Create .env file
-    if !std::path::Path::new(".env").exists() {
-        if std::path::Path::new("docker/env.example").exists() {
-            if let Err(e) = std::fs::copy("docker/env.example", ".env") {
-                print_warning(&format!("Could not create .env: {}", e));
-            } else {
-                print_success("Created: .env");
-            }
+    if !std::path::Path::new(".env").exists() && std::path::Path::new("docker/env.example").exists()
+    {
+        if let Err(e) = std::fs::copy("docker/env.example", ".env") {
+            print_warning(&format!("Could not create .env: {}", e));
+        } else {
+            print_success("Created: .env");
         }
     }
 
@@ -420,7 +461,7 @@ pub async fn run_init_wizard() {
     println!();
     println!("Next steps:");
     println!();
-    
+
     match deployment_mode {
         "docker" => {
             println!("  docker compose up -d");
@@ -442,10 +483,10 @@ fn read_input(prompt: &str, default: &str) -> String {
     print!("{} [{}]: ", prompt, default);
     use std::io::{self, Write};
     io::stdout().flush().ok();
-    
+
     let mut input = String::new();
     io::stdin().read_line(&mut input).ok();
-    
+
     let trimmed = input.trim();
     if trimmed.is_empty() {
         default.to_string()
@@ -464,6 +505,7 @@ fn read_bool(prompt: &str, default: bool) -> bool {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn generate_config(
     mode: &str,
     preset: &str,
@@ -475,19 +517,28 @@ fn generate_config(
     cef_logging: bool,
 ) -> String {
     let log_format = if cef_logging { "cef" } else { "json" };
-    
+
     // Try to load from preset file
     let preset_path = format!("config/examples/{}.toml", preset);
-    if std::path::Path::new(&preset_path).exists() {
-        if let Ok(content) = std::fs::read_to_string(&preset_path) {
-            // Customize ports
-            return content
-                .replace("addr = \"0.0.0.0:3001\"", &format!("addr = \"0.0.0.0:{}\"", sender_port))
-                .replace("addr = \"0.0.0.0:3002\"", &format!("addr = \"0.0.0.0:{}\"", receiver_port))
-                .replace("local_port = 9000", &format!("local_port = {}", tunnel_port));
-        }
+    if std::path::Path::new(&preset_path).exists()
+        && let Ok(content) = std::fs::read_to_string(&preset_path)
+    {
+        // Customize ports
+        return content
+            .replace(
+                "addr = \"0.0.0.0:3001\"",
+                &format!("addr = \"0.0.0.0:{}\"", sender_port),
+            )
+            .replace(
+                "addr = \"0.0.0.0:3002\"",
+                &format!("addr = \"0.0.0.0:{}\"", receiver_port),
+            )
+            .replace(
+                "local_port = 9000",
+                &format!("local_port = {}", tunnel_port),
+            );
     }
-    
+
     // Generate minimal config
     format!(
         r#"# Misogi Configuration
@@ -520,13 +571,13 @@ enabled = {}
 
 async fn generate_keypair() {
     let keys_dir = PathBuf::from("keys");
-    
+
     if keys_dir.join("private.pem").exists() && keys_dir.join("public.pem").exists() {
         print_info("RSA keypair already exists, skipping");
         return;
     }
-    
-    if let Err(_) = std::fs::create_dir_all(&keys_dir) {
+
+    if std::fs::create_dir_all(&keys_dir).is_err() {
         print_warning("Could not create keys directory");
         return;
     }
@@ -534,13 +585,13 @@ async fn generate_keypair() {
     // Try openssl
     let private_path = keys_dir.join("private.pem");
     let public_path = keys_dir.join("public.pem");
-    
+
     let private_result = Command::new("openssl")
         .args(["genrsa", "-out"])
         .arg(&private_path)
         .arg("2048")
         .output();
-    
+
     match private_result {
         Ok(output) if output.status.success() => {
             let public_result = Command::new("openssl")
@@ -549,7 +600,7 @@ async fn generate_keypair() {
                 .args(["-pubout", "-out"])
                 .arg(&public_path)
                 .output();
-            
+
             match public_result {
                 Ok(_) => print_success("Generated RSA keypair in keys/"),
                 Err(_) => print_warning("Failed to generate public key"),
@@ -557,7 +608,9 @@ async fn generate_keypair() {
         }
         _ => {
             print_warning("OpenSSL not found, skipping key generation");
-            print_info("Generate keys: cargo run --package misogi-auth --example generate-keys -- ./keys");
+            print_info(
+                "Generate keys: cargo run --package misogi-auth --example generate-keys -- ./keys",
+            );
         }
     }
 }

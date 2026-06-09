@@ -5,12 +5,12 @@
 
 use std::collections::HashMap;
 
-use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use base64::Engine;
+use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 
 use super::{
-    build_stable_provider_id, map_saml_error, SamlAttributeMappings, SamlIdentityProvider,
-    SamlPluginConfig, NameIdFormat,
+    NameIdFormat, SamlAttributeMappings, SamlIdentityProvider, SamlPluginConfig,
+    build_stable_provider_id, map_saml_error,
 };
 use crate::provider::{AuthRequest, IdentityError, IdentityProvider};
 use crate::saml_provider::{SamlAttributes as CoreSamlAttributes, SamlError};
@@ -138,8 +138,14 @@ fn test_gcloud_japan_config_uses_oid_attributes() {
         "CERT-PEM-DATA",
     );
     assert_eq!(cfg.sp_entity_id, "https://sp.gcloud.go.jp");
-    assert_eq!(cfg.attribute_mappings.display_name_attribute, "urn:oid:2.5.4.42");
-    assert_eq!(cfg.attribute_mappings.email_attribute, "urn:oid:0.9.2342.19200300.100.1.3");
+    assert_eq!(
+        cfg.attribute_mappings.display_name_attribute,
+        "urn:oid:2.5.4.42"
+    );
+    assert_eq!(
+        cfg.attribute_mappings.email_attribute,
+        "urn:oid:0.9.2342.19200300.100.1.3"
+    );
     assert_eq!(
         cfg.attribute_mappings.department_attribute.as_deref(),
         Some("urn:oid:2.5.4.11")
@@ -205,7 +211,10 @@ fn test_map_identity_gcloud_oid_attributes() {
     assert_eq!(identity.display_name.as_deref(), Some("Taro"));
     // Department mapped from OID ou attribute
     assert_eq!(
-        identity.extra.get("saml_department").and_then(|v| v.as_str()),
+        identity
+            .extra
+            .get("saml_department")
+            .and_then(|v| v.as_str()),
         Some("IT Department")
     );
 }
@@ -278,13 +287,14 @@ fn test_err_map_replay_detected() {
 #[tokio::test]
 async fn test_reject_credentials_flow() {
     let p = SamlIdentityProvider::new(test_config()).unwrap();
-    assert!(p
-        .authenticate(AuthRequest::Credentials {
+    assert!(
+        p.authenticate(AuthRequest::Credentials {
             username: "u".into(),
             password: "p".into(),
         })
         .await
-        .is_err());
+        .is_err()
+    );
 }
 
 // ===================================================================

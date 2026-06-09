@@ -41,7 +41,7 @@ use std::time::Duration;
 
 use clap::{Parser, Subcommand};
 use colored::Colorize;
-use tracing::{info, error};
+use tracing::{error, info};
 
 use crate::compiler;
 use crate::schema::YamlConfig;
@@ -241,9 +241,11 @@ pub async fn execute(cli: Cli) -> i32 {
         Commands::Config { action } => execute_config_action(action, &cli).await,
         Commands::Status { detailed } => execute_status(detailed, &cli).await,
         Commands::Providers { action } => execute_provider_action(action, &cli).await,
-        Commands::Watch { path, count, poll_interval } => {
-            execute_watch(path, *count, *poll_interval, &cli).await
-        }
+        Commands::Watch {
+            path,
+            count,
+            poll_interval,
+        } => execute_watch(path, *count, *poll_interval, &cli).await,
     }
 }
 
@@ -254,17 +256,17 @@ pub async fn execute(cli: Cli) -> i32 {
 /// Execute configuration management subcommands.
 async fn execute_config_action(action: &ConfigAction, cli: &Cli) -> i32 {
     match action {
-        ConfigAction::Validate { file, format } => {
-            cmd_config_validate(file, format.as_str(), cli)
-        }
+        ConfigAction::Validate { file, format } => cmd_config_validate(file, format.as_str(), cli),
 
         ConfigAction::Compile { file, full, format } => {
             cmd_config_compile(file, *full, format.as_str(), cli)
         }
 
-        ConfigAction::Diff { file1, file2, format } => {
-            cmd_config_diff(file1, file2, format.as_str(), cli)
-        }
+        ConfigAction::Diff {
+            file1,
+            file2,
+            format,
+        } => cmd_config_diff(file1, file2, format.as_str(), cli),
 
         ConfigAction::GenerateExample { japanese_comments } => {
             cmd_generate_example(*japanese_comments, cli)
@@ -301,13 +303,13 @@ async fn execute_status(_detailed: &bool, cli: &Cli) -> i32 {
                     status = %response.status(),
                     "Server returned error status"
                 );
-                eprintln!("{} {}", "ERROR:".red(), format!("Server returned {}", response.status()));
+                eprintln!("{} Server returned {}", "ERROR:".red(), response.status());
                 1
             }
         }
         Err(e) => {
             error!(error = %e, "Failed to connect to server");
-            eprintln!("{} {}", "ERROR:".red(), format!("Cannot connect to {}: {}", server_url, e));
+            eprintln!("{} Cannot connect to {}: {}", "ERROR:".red(), server_url, e);
             1
         }
     }
@@ -322,9 +324,11 @@ async fn execute_provider_action(action: &ProviderAction, cli: &Cli) -> i32 {
             cmd_providers_list(&server_url, format.as_str(), cli).await
         }
 
-        ProviderAction::Test { id, username, password } => {
-            cmd_providers_test(&server_url, id, username, password, cli).await
-        }
+        ProviderAction::Test {
+            id,
+            username,
+            password,
+        } => cmd_providers_test(&server_url, id, username, password, cli).await,
     }
 }
 
@@ -342,9 +346,10 @@ async fn execute_watch(path: &PathBuf, max_events: u32, _poll_secs: u64, cli: &C
     loop {
         // Check if file exists
         if !path.exists() {
-            eprintln!("{} {}",
+            eprintln!(
+                "{} Configuration file not found: {}",
                 "ERROR:".red(),
-                format!("Configuration file not found: {}", path.display())
+                path.display()
             );
             return 1;
         }
@@ -353,7 +358,7 @@ async fn execute_watch(path: &PathBuf, max_events: u32, _poll_secs: u64, cli: &C
         let content = match std::fs::read_to_string(path) {
             Ok(c) => c,
             Err(e) => {
-                eprintln!("{} {}", "WARN:".yellow(), format!("Read error: {}", e));
+                eprintln!("{} Read error: {}", "WARN:".yellow(), e);
                 tokio::time::sleep(Duration::from_secs(2)).await;
                 continue;
             }
@@ -361,47 +366,51 @@ async fn execute_watch(path: &PathBuf, max_events: u32, _poll_secs: u64, cli: &C
 
         // Validate
         match YamlConfig::from_yaml_str(&content) {
-            Ok(yaml) => {
-                match yaml.validate() {
-                    Ok(warnings) => {
-                        event_count += 1;
-                        let timestamp = chrono::Local::now().format("%H:%M:%S");
+            Ok(yaml) => match yaml.validate() {
+                Ok(warnings) => {
+                    event_count += 1;
+                    let timestamp = chrono::Local::now().format("%H:%M:%S");
 
-                        println!(
-                            "[{}] {} File is valid{}",
-                            timestamp.to_string().dimmed(),
-                            "OK".green().bold(),
-                            if warnings.is_empty() {
-                                String::new()
-                            } else {
-                                format!(" ({} warning(s))", warnings.len()).yellow().to_string()
-                            }
-                        );
-
-                        if cli.verbose && !warnings.is_empty() {
-                            for w in &warnings {
-                                println!("  {} {}: {}", "!".yellow(), w.field, w.message);
-                            }
+                    println!(
+                        "[{}] {} File is valid{}",
+                        timestamp.to_string().dimmed(),
+                        "OK".green().bold(),
+                        if warnings.is_empty() {
+                            String::new()
+                        } else {
+                            format!(" ({} warning(s))", warnings.len())
+                                .yellow()
+                                .to_string()
                         }
+                    );
 
-                        if max_events > 0 && event_count >= max_events {
-                            println!("\n{} {} events received, exiting", "Info:".dimmed(), event_count);
-                            return 0;
+                    if cli.verbose && !warnings.is_empty() {
+                        for w in &warnings {
+                            println!("  {} {}: {}", "!".yellow(), w.field, w.message);
                         }
                     }
-                    Err(e) => {
-                        event_count += 1;
-                        let timestamp = chrono::Local::now().format("%H:%M:%S");
 
+                    if max_events > 0 && event_count >= max_events {
                         println!(
-                            "[{}] {} {}",
-                            timestamp.to_string().dimmed(),
-                            "INVALID".red().bold(),
-                            e.message.red()
+                            "\n{} {} events received, exiting",
+                            "Info:".dimmed(),
+                            event_count
                         );
+                        return 0;
                     }
                 }
-            }
+                Err(e) => {
+                    event_count += 1;
+                    let timestamp = chrono::Local::now().format("%H:%M:%S");
+
+                    println!(
+                        "[{}] {} {}",
+                        timestamp.to_string().dimmed(),
+                        "INVALID".red().bold(),
+                        e.message.red()
+                    );
+                }
+            },
             Err(e) => {
                 eprintln!("{} {}", "PARSE ERROR:".red(), e);
             }
@@ -451,7 +460,11 @@ fn cmd_config_validate(file: &PathBuf, format: &str, _cli: &Cli) -> i32 {
             if !warnings.is_empty() {
                 println!("\n{} ({} total)", "Warnings:".yellow(), warnings.len());
                 for w in &warnings {
-                    let icon = if w.is_error() { "X".red() } else { "!".yellow() };
+                    let icon = if w.is_error() {
+                        "X".red()
+                    } else {
+                        "!".yellow()
+                    };
                     println!("  {} [{}] {}", icon, w.field.white(), w.message);
                     if let Some(ref suggestion) = w.suggestion {
                         println!("    {} {}", "Suggestion:".dimmed(), suggestion.dimmed());
@@ -472,7 +485,10 @@ fn cmd_config_validate(file: &PathBuf, format: &str, _cli: &Cli) -> i32 {
                         "routing_rules": yaml.routing.incoming.len(),
                     }
                 });
-                println!("{}", serde_json::to_string_pretty(&output).unwrap_or_default());
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&output).unwrap_or_default()
+                );
             }
 
             0
@@ -487,7 +503,10 @@ fn cmd_config_validate(file: &PathBuf, format: &str, _cli: &Cli) -> i32 {
                     "valid": false,
                     "error": e.message,
                 });
-                println!("{}", serde_json::to_string_pretty(&output).unwrap_or_default());
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&output).unwrap_or_default()
+                );
             }
 
             1
@@ -530,20 +549,55 @@ fn cmd_config_compile(file: &PathBuf, full: bool, format: &str, _cli: &Cli) -> i
             println!("\n{}", "✓ Compilation successful".green().bold());
 
             // Print summary
-            println!("\n{}", "=== Compiled Configuration Summary ===".bold().cyan());
+            println!(
+                "\n{}",
+                "=== Compiled Configuration Summary ===".bold().cyan()
+            );
             println!("  {}: {}", "Version".white(), config.version);
             println!("  {}: {}", "Environment".white(), config.environment);
-            println!("  {}: {}", "JWT Issuer".white(), config.authentication.jwt_issuer);
-            println!("  {}: {}", "JWT TTL".white(), format!("{} hours", config.authentication.jwt_ttl_seconds / 3600));
-            println!("  {}: {}", "Identity Providers".white(), config.authentication.identity_providers.len());
-            println!("  {}: {}", "Sanitization Rules".white(), config.sanitization.rules.len());
-            println!("  {}: {}", "Routing Rules".white(), config.routing.incoming.len());
+            println!(
+                "  {}: {}",
+                "JWT Issuer".white(),
+                config.authentication.jwt_issuer
+            );
+            println!(
+                "  {}: {} hours",
+                "JWT TTL".white(),
+                config.authentication.jwt_ttl_seconds / 3600
+            );
+            println!(
+                "  {}: {}",
+                "Identity Providers".white(),
+                config.authentication.identity_providers.len()
+            );
+            println!(
+                "  {}: {}",
+                "Sanitization Rules".white(),
+                config.sanitization.rules.len()
+            );
+            println!(
+                "  {}: {}",
+                "Routing Rules".white(),
+                config.routing.incoming.len()
+            );
 
             // Print compilation report
             println!("\n{}", "=== Compilation Report ===".bold().cyan());
-            println!("  {}: {}", "Env vars resolved".white(), report.env_vars_resolved);
-            println!("  {}: {}", "Cross-references checked".white(), report.cross_references_checked);
-            println!("  {}: {}", "Total messages".white(), report.total_messages());
+            println!(
+                "  {}: {}",
+                "Env vars resolved".white(),
+                report.env_vars_resolved
+            );
+            println!(
+                "  {}: {}",
+                "Cross-references checked".white(),
+                report.cross_references_checked
+            );
+            println!(
+                "  {}: {}",
+                "Total messages".white(),
+                report.total_messages()
+            );
 
             if report.has_warnings() {
                 println!("\n{} ({}):", "Warnings".yellow(), report.warnings.len());
@@ -572,7 +626,10 @@ fn cmd_config_compile(file: &PathBuf, full: bool, format: &str, _cli: &Cli) -> i
                     "config": config,
                     "report": report,
                 });
-                println!("{}", serde_json::to_string_pretty(&output).unwrap_or_default());
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&output).unwrap_or_default()
+                );
             }
 
             0
@@ -625,17 +682,29 @@ fn cmd_config_diff(file1: &PathBuf, file2: &PathBuf, format: &str, _cli: &Cli) -
 
     // Compare version
     if yaml1.version != yaml2.version {
-        differences.push(("version".to_string(), yaml1.version.clone(), yaml2.version.clone()));
+        differences.push((
+            "version".to_string(),
+            yaml1.version.clone(),
+            yaml2.version.clone(),
+        ));
     }
 
     // Compare environment
     if yaml1.environment != yaml2.environment {
-        differences.push(("environment".to_string(), yaml1.environment.clone(), yaml2.environment.clone()));
+        differences.push((
+            "environment".to_string(),
+            yaml1.environment.clone(),
+            yaml2.environment.clone(),
+        ));
     }
 
     // Compare JWT settings
     if yaml1.authentication.jwt.issuer != yaml2.authentication.jwt.issuer {
-        differences.push(("authentication.jwt.issuer".to_string(), yaml1.authentication.jwt.issuer.clone(), yaml2.authentication.jwt.issuer.clone()));
+        differences.push((
+            "authentication.jwt.issuer".to_string(),
+            yaml1.authentication.jwt.issuer.clone(),
+            yaml2.authentication.jwt.issuer.clone(),
+        ));
     }
     if yaml1.authentication.jwt.ttl_hours != yaml2.authentication.jwt.ttl_hours {
         differences.push((
@@ -660,13 +729,32 @@ fn cmd_config_diff(file1: &PathBuf, file2: &PathBuf, format: &str, _cli: &Cli) -
     if differences.is_empty() {
         println!("\n{}", "✓ Configurations are identical".green().bold());
     } else {
-        println!("\n{} ({} difference(s)):", "Differences found:".yellow(), differences.len());
-        println!("{:<50} {:<30} {:<30}", "Field".white().bold(), "File 1".cyan(), "File 2".cyan());
+        println!(
+            "\n{} ({} difference(s)):",
+            "Differences found:".yellow(),
+            differences.len()
+        );
+        println!(
+            "{:<50} {:<30} {:<30}",
+            "Field".white().bold(),
+            "File 1".cyan(),
+            "File 2".cyan()
+        );
         println!("{}", "-".repeat(110).dimmed());
 
         for (field, val1, val2) in &differences {
-            let marker = if val1 == val2 { " ".white() } else { "≠".yellow() };
-            println!("{} {:<48} {:<28} {}", marker, field.white(), val1.cyan(), val2.cyan());
+            let marker = if val1 == val2 {
+                " ".white()
+            } else {
+                "≠".yellow()
+            };
+            println!(
+                "{} {:<48} {:<28} {}",
+                marker,
+                field.white(),
+                val1.cyan(),
+                val2.cyan()
+            );
         }
     }
 
@@ -683,7 +771,10 @@ fn cmd_config_diff(file1: &PathBuf, file2: &PathBuf, format: &str, _cli: &Cli) -
                 })
             }).collect::<Vec<_>>(),
         });
-        println!("{}", serde_json::to_string_pretty(&output).unwrap_or_default());
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&output).unwrap_or_default()
+        );
     }
 
     if differences.is_empty() { 0 } else { 2 }
@@ -718,40 +809,55 @@ async fn cmd_providers_list(server_url: &str, format: &str, cli: &Cli) -> i32 {
             if response.status().is_success() {
                 let body: serde_json::Value = response.json().await.unwrap_or_default();
 
-                if let Some(data) = body.get("data") {
-                    if let Some(providers) = data.get("providers").and_then(|p| p.as_array()) {
-                        if providers.is_empty() {
-                            println!("  {}", "No identity providers configured".dimmed());
-                        } else {
-                            for (i, provider) in providers.iter().enumerate() {
-                                let name = provider.get("name").and_then(|v| v.as_str()).unwrap_or("?");
-                                let type_str = provider.get("type").and_then(|v| v.as_str()).unwrap_or("?");
-                                let enabled = provider.get("enabled").and_then(|v| v.as_bool()).unwrap_or(false);
+                if let Some(providers) = body
+                    .get("data")
+                    .and_then(|d| d.get("providers"))
+                    .and_then(|p| p.as_array())
+                {
+                    if providers.is_empty() {
+                        println!("  {}", "No identity providers configured".dimmed());
+                    } else {
+                        for (i, provider) in providers.iter().enumerate() {
+                            let name = provider.get("name").and_then(|v| v.as_str()).unwrap_or("?");
+                            let type_str =
+                                provider.get("type").and_then(|v| v.as_str()).unwrap_or("?");
+                            let enabled = provider
+                                .get("enabled")
+                                .and_then(|v| v.as_bool())
+                                .unwrap_or(false);
 
-                                let enabled_str = if enabled { "✓".green() } else { "✗".red() };
-                                println!("  {}. {} [{}] {}", i + 1, name.white(), type_str.cyan(), enabled_str);
-                            }
+                            let enabled_str = if enabled { "✓".green() } else { "✗".red() };
+                            println!(
+                                "  {}. {} [{}] {}",
+                                i + 1,
+                                name.white(),
+                                type_str.cyan(),
+                                enabled_str
+                            );
                         }
+                    }
 
-                        if let Some(count) = data.get("count") {
-                            println!("\n  {}: {}", "Total".white(), count);
-                        }
+                    if let Some(count) = body.get("data").and_then(|d| d.get("count")) {
+                        println!("\n  {}: {}", "Total".white(), count);
                     }
                 }
 
                 if format == "json" {
                     println!("\n{}", "--- JSON Output ---".dimmed());
-                    println!("{}", serde_json::to_string_pretty(&body).unwrap_or_default());
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(&body).unwrap_or_default()
+                    );
                 }
 
                 0
             } else {
-                eprintln!("{} {}", "ERROR:".red(), format!("Server returned {}", response.status()));
+                eprintln!("{} Server returned {}", "ERROR:".red(), response.status());
                 1
             }
         }
         Err(e) => {
-            eprintln!("{} {}", "ERROR:".red(), format!("Cannot connect to {}: {}", server_url, e));
+            eprintln!("{} Cannot connect to {}: {}", "ERROR:".red(), server_url, e);
             1
         }
     }
@@ -784,7 +890,7 @@ async fn cmd_providers_test(
     });
 
     let mut request = client.post(&url).json(&body);
-    
+
     if let Some(token) = &cli.token {
         request = request.bearer_auth(token);
     }
@@ -795,29 +901,43 @@ async fn cmd_providers_test(
                 let body: serde_json::Value = response.json().await.unwrap_or_default();
 
                 if let Some(data) = body.get("data") {
-                    let success = data.get("success").and_then(|v| v.as_bool()).unwrap_or(false);
+                    let success = data
+                        .get("success")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false);
                     let message = data.get("message").and_then(|v| v.as_str()).unwrap_or("");
 
                     if success {
-                        println!("\n{} {}", "✓ Authentication test PASSED".green().bold(), message.green());
+                        println!(
+                            "\n{} {}",
+                            "✓ Authentication test PASSED".green().bold(),
+                            message.green()
+                        );
                     } else {
-                        println!("\n{} {}", "✗ Authentication test FAILED".red().bold(), message.red());
+                        println!(
+                            "\n{} {}",
+                            "✗ Authentication test FAILED".red().bold(),
+                            message.red()
+                        );
                     }
 
                     if let Some(details) = data.get("details") {
                         println!("\n{}:", "Details".dimmed());
-                        println!("  {}", serde_json::to_string_pretty(details).unwrap_or_default());
+                        println!(
+                            "  {}",
+                            serde_json::to_string_pretty(details).unwrap_or_default()
+                        );
                     }
                 }
 
                 if success_from_body(&body) { 0 } else { 1 }
             } else {
-                eprintln!("{} {}", "ERROR:".red(), format!("Server returned {}", response.status()));
+                eprintln!("{} Server returned {}", "ERROR:".red(), response.status());
                 1
             }
         }
         Err(e) => {
-            eprintln!("{} {}", "ERROR:".red(), format!("Request failed: {}", e));
+            eprintln!("{} Request failed: {}", "ERROR:".red(), e);
             1
         }
     }
@@ -830,19 +950,21 @@ async fn cmd_providers_test(
 /// Read file content with user-friendly error handling.
 fn read_file_content(file: &PathBuf) -> std::result::Result<String, i32> {
     std::fs::read_to_string(file).map_err(|e| {
-        eprintln!("{} {}", "ERROR:".red(), format!("Cannot read '{}': {}", file.display(), e));
+        eprintln!("{} Cannot read '{}': {}", "ERROR:".red(), file.display(), e);
         1
     })
 }
 
 /// Get server URL from CLI args or default.
 fn get_server_url(cli: &Cli) -> String {
-    cli.server.clone().unwrap_or_else(|| "http://localhost:3000".to_string())
+    cli.server
+        .clone()
+        .unwrap_or_else(|| "http://localhost:3000".to_string())
 }
 
 /// Build an authenticated HTTP request (if token provided).
-fn build_authenticated_request<'a>(
-    client: &'a reqwest::Client,
+fn build_authenticated_request(
+    client: &reqwest::Client,
     url: &str,
     token: Option<&str>,
 ) -> reqwest::RequestBuilder {
@@ -855,7 +977,9 @@ fn build_authenticated_request<'a>(
 
 /// Extract success flag from API response body.
 fn success_from_body(body: &serde_json::Value) -> bool {
-    body.get("success").and_then(|v| v.as_bool()).unwrap_or(false)
+    body.get("success")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
 }
 
 /// Print validation summary information.
@@ -863,17 +987,43 @@ fn print_validation_summary(yaml: &YamlConfig) {
     println!("\n{}", "Configuration Summary:".bold());
     println!("  {}: {}", "Version".white(), yaml.version);
     println!("  {}: {}", "Environment".white(), yaml.environment);
-    println!("  {}: {}", "Identity Providers".white(), yaml.authentication.identity_providers.len());
-    println!("  {}: {}", "Sanitization Rules".white(), yaml.sanitization.rules.len());
-    println!("  {}: {}", "Routing Rules".white(), yaml.routing.incoming.len());
-    println!("  {}: {}", "Retention Rules".white(), yaml.retention.as_ref().map(|r| r.rules.len()).unwrap_or(0));
-    println!("  {}: {}", "Notification Channels".white(), yaml.notifications.as_ref().map(|n| n.on_error.len()).unwrap_or(0));
+    println!(
+        "  {}: {}",
+        "Identity Providers".white(),
+        yaml.authentication.identity_providers.len()
+    );
+    println!(
+        "  {}: {}",
+        "Sanitization Rules".white(),
+        yaml.sanitization.rules.len()
+    );
+    println!(
+        "  {}: {}",
+        "Routing Rules".white(),
+        yaml.routing.incoming.len()
+    );
+    println!(
+        "  {}: {}",
+        "Retention Rules".white(),
+        yaml.retention.as_ref().map(|r| r.rules.len()).unwrap_or(0)
+    );
+    println!(
+        "  {}: {}",
+        "Notification Channels".white(),
+        yaml.notifications
+            .as_ref()
+            .map(|n| n.on_error.len())
+            .unwrap_or(0)
+    );
 }
 
 /// Print formatted status response from server.
 fn print_status_response(body: &serde_json::Value, _cli: &Cli) {
     if let Some(data) = body.get("data") {
-        let status = data.get("status").and_then(|v| v.as_str()).unwrap_or("unknown");
+        let status = data
+            .get("status")
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown");
 
         let status_display = match status {
             "operational" => status.green().bold(),
@@ -931,12 +1081,8 @@ mod tests {
 
     #[test]
     fn test_cli_parse_config_validate() {
-        let cli = Cli::try_parse_from([
-            "misogi-admin",
-            "config",
-            "validate",
-            "/path/to/config.yaml",
-        ]);
+        let cli =
+            Cli::try_parse_from(["misogi-admin", "config", "validate", "/path/to/config.yaml"]);
 
         assert!(cli.is_ok());
         let cli = cli.unwrap();
@@ -961,7 +1107,7 @@ mod tests {
 
         assert!(cli.is_ok());
         let cli = cli.unwrap();
-        
+
         if let Commands::Config { action } = cli.command {
             if let ConfigAction::Compile { full, format, .. } = action {
                 assert!(full);
@@ -1003,7 +1149,7 @@ mod tests {
 
         assert!(cli.is_ok());
         let cli = cli.unwrap();
-        
+
         if let Commands::Status { detailed } = cli.command {
             assert!(detailed);
         } else {
@@ -1043,9 +1189,14 @@ mod tests {
 
         assert!(cli.is_ok());
         let cli = cli.unwrap();
-        
+
         if let Commands::Providers { action } = cli.command {
-            if let ProviderAction::Test { id, username, password } = action {
+            if let ProviderAction::Test {
+                id,
+                username,
+                password,
+            } = action
+            {
                 assert_eq!(id, "MyLDAP");
                 assert_eq!(username, "admin");
                 assert_eq!(password, "secret123");
@@ -1075,8 +1226,13 @@ mod tests {
 
         assert!(cli.is_ok());
         let cli = cli.unwrap();
-        
-        if let Commands::Watch { path, count, poll_interval } = cli.command {
+
+        if let Commands::Watch {
+            path,
+            count,
+            poll_interval,
+        } = cli.command
+        {
             assert_eq!(path, PathBuf::from("/etc/misogi/config.yaml"));
             assert_eq!(count, 5);
             assert_eq!(poll_interval, 3);

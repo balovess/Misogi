@@ -29,9 +29,7 @@ use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 
 use crate::error::{MisogiError, Result};
-use crate::traits::{
-    ChunkAck, DriverHealthStatus, TransferDriver, TransferDriverConfig,
-};
+use crate::traits::{ChunkAck, DriverHealthStatus, TransferDriver, TransferDriverConfig};
 
 use super::blind_send_driver::{BlindSendConfig, BlindSendDriver};
 use super::pull_driver::{PullConfig, PullDriver};
@@ -194,6 +192,7 @@ impl Default for DirectTcpFactoryConfig {
 /// Wraps one of three concrete drivers behind a common [`TransferDriver`] impl,
 /// enabling runtime polymorphism without trait objects (impossible due to
 /// associated `Config` type on [`TransferDriver`]).
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 pub enum BuiltDriver {
     /// Wraps [`DirectTcpDriver`] for Push/TCP mode.
@@ -254,12 +253,7 @@ impl TransferDriver for BuiltDriver {
         }
     }
 
-    async fn send_chunk(
-        &self,
-        file_id: &str,
-        chunk_index: u32,
-        data: Bytes,
-    ) -> Result<ChunkAck> {
+    async fn send_chunk(&self, file_id: &str, chunk_index: u32, data: Bytes) -> Result<ChunkAck> {
         match self {
             Self::Push(d) => d.send_chunk(file_id, chunk_index, data).await,
             Self::Pull(d) => d.send_chunk(file_id, chunk_index, data).await,

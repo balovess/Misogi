@@ -68,7 +68,10 @@ impl Interleaver {
             width,
             total_shards
         );
-        Self { width, total_shards }
+        Self {
+            width,
+            total_shards,
+        }
     }
 
     /// Compute the transmission order for all logical shard indices.
@@ -133,7 +136,7 @@ impl Interleaver {
     /// assert_eq!(il.physical_to_logical(1), 4);
     /// ```
     pub fn physical_to_logical(&self, physical_idx: usize) -> usize {
-        let shards_per_group = (self.total_shards + self.width - 1) / self.width;
+        let shards_per_group = self.total_shards.div_ceil(self.width);
         let group = physical_idx / shards_per_group;
         let offset_in_group = physical_idx % shards_per_group;
         group + offset_in_group * self.width
@@ -161,7 +164,7 @@ impl Interleaver {
     pub fn logical_to_physical(&self, logical_idx: usize) -> usize {
         let group = logical_idx % self.width;
         let offset_in_group = logical_idx / self.width;
-        let shards_per_group = (self.total_shards + self.width - 1) / self.width;
+        let shards_per_group = self.total_shards.div_ceil(self.width);
         group * shards_per_group + offset_in_group
     }
 
@@ -239,9 +242,7 @@ mod tests {
     #[test]
     fn test_burst_loss_scattering() {
         let il = Interleaver::new(20);
-        let lost_logical: Vec<usize> = (5..=7)
-            .map(|p| il.physical_to_logical(p))
-            .collect();
+        let lost_logical: Vec<usize> = (5..=7).map(|p| il.physical_to_logical(p)).collect();
         let groups: std::collections::HashSet<usize> =
             lost_logical.iter().map(|&l| l % il.width).collect();
         assert!(

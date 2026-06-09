@@ -92,11 +92,7 @@ pub trait TcmProvider: Send + Sync {
     /// # Returns
     ///
     /// A signed [`TcmQuote`] containing PCR values and signature.
-    async fn quote(
-        &self,
-        nonce: &[u8],
-        pcr_selection: &[u8],
-    ) -> Result<TcmQuote, TcmError>;
+    async fn quote(&self, nonce: &[u8], pcr_selection: &[u8]) -> Result<TcmQuote, TcmError>;
 
     /// Seal data to the current PCR state.
     ///
@@ -108,11 +104,7 @@ pub trait TcmProvider: Send + Sync {
     ///
     /// * `data` — Plaintext data to seal
     /// * `pcr_selection` — PCR indices whose values bind this seal
-    async fn seal(
-        &self,
-        data: &[u8],
-        pcr_selection: &[u8],
-    ) -> Result<TcmSealedData, TcmError>;
+    async fn seal(&self, data: &[u8], pcr_selection: &[u8]) -> Result<TcmSealedData, TcmError>;
 
     /// Unseal previously sealed data.
     ///

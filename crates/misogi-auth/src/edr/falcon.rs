@@ -22,12 +22,7 @@ use serde::{Deserialize, Serialize};
 use tracing::debug;
 
 use super::models::{
-    EdrDevicePosture,
-    EdrError,
-    EdrOsInfo,
-    EdrRiskScore,
-    EdrRiskLevel,
-    RiskFactor,
+    EdrDevicePosture, EdrError, EdrOsInfo, EdrRiskLevel, EdrRiskScore, RiskFactor,
 };
 use super::traits::EdrProvider;
 
@@ -125,7 +120,9 @@ impl FalconEdrProvider {
             return Err(EdrError::Configuration("client_id is required".to_string()));
         }
         if client_secret.is_empty() {
-            return Err(EdrError::Configuration("client_secret is required".to_string()));
+            return Err(EdrError::Configuration(
+                "client_secret is required".to_string(),
+            ));
         }
 
         let base_url = match &cloud_region {
@@ -153,9 +150,10 @@ impl FalconEdrProvider {
     /// Ensure a valid access token exists, refreshing if needed.
     async fn ensure_token(&self) -> Result<String, EdrError> {
         {
-            let token = self.access_token.read().map_err(|e| {
-                EdrError::Internal(format!("Token lock poisoned: {e}"))
-            })?;
+            let token = self
+                .access_token
+                .read()
+                .map_err(|e| EdrError::Internal(format!("Token lock poisoned: {e}")))?;
             if !token.bearer_token.is_empty() && token.expires_at > Utc::now() {
                 return Ok(token.bearer_token.clone());
             }
@@ -226,15 +224,10 @@ impl FalconEdrProvider {
 
 #[async_trait]
 impl EdrProvider for FalconEdrProvider {
-    async fn get_device_posture(
-        &self,
-        device_id: &str,
-    ) -> Result<EdrDevicePosture, EdrError> {
+    async fn get_device_posture(&self, device_id: &str) -> Result<EdrDevicePosture, EdrError> {
         let encoded = urlencoding::encode(device_id);
         let response = self
-            .falcon_get(&format!(
-                "/devices/entities/devices/v1?ids={encoded}"
-            ))
+            .falcon_get(&format!("/devices/entities/devices/v1?ids={encoded}"))
             .await?;
 
         if response.status() == 404 {
@@ -252,23 +245,22 @@ impl EdrProvider for FalconEdrProvider {
         let devices: FalconDevicesResponse = response
             .json()
             .await
-            .map_err(|e| {
-                EdrError::InvalidResponse(format!("Falcon devices parse failed: {e}"))
-            })?;
+            .map_err(|e| EdrError::InvalidResponse(format!("Falcon devices parse failed: {e}")))?;
 
-        let device = devices.resources.into_iter().next().ok_or_else(|| {
-            EdrError::DeviceNotFound(device_id.to_string())
-        })?;
+        let device = devices
+            .resources
+            .into_iter()
+            .next()
+            .ok_or_else(|| EdrError::DeviceNotFound(device_id.to_string()))?;
 
-        let has_active_thrusts = device
-            .local_admins
-            .unwrap_or(false)
-            || !device
-                .reduced_functionality_mode
-                .unwrap_or(true);
+        let has_active_thrusts = device.local_admins.unwrap_or(false)
+            || !device.reduced_functionality_mode.unwrap_or(true);
 
         Ok(EdrDevicePosture {
-            device_id: device.device_id.clone().unwrap_or_else(|| device_id.to_string()),
+            device_id: device
+                .device_id
+                .clone()
+                .unwrap_or_else(|| device_id.to_string()),
             hostname: device.hostname.clone(),
             has_active_threats: has_active_thrusts,
             active_detection_count: 0,
@@ -278,7 +270,8 @@ impl EdrProvider for FalconEdrProvider {
                 .map_or(false, |s| s == "normal" || s == "enabled"),
             last_seen_at: device.last_seen,
             os_info: Some(EdrOsInfo {
-                platform: device.os_version
+                platform: device
+                    .os_version
                     .as_ref()
                     .map(|v| v.split_whitespace().next().unwrap_or(""))
                     .unwrap_or("")
@@ -290,18 +283,12 @@ impl EdrProvider for FalconEdrProvider {
         })
     }
 
-    async fn has_active_threats(
-        &self,
-        device_id: &str,
-    ) -> Result<bool, EdrError> {
+    async fn has_active_threats(&self, device_id: &str) -> Result<bool, EdrError> {
         let posture = self.get_device_posture(device_id).await?;
         Ok(posture.has_active_threats)
     }
 
-    async fn get_risk_score(
-        &self,
-        device_id: &str,
-    ) -> Result<EdrRiskScore, EdrError> {
+    async fn get_risk_score(&self, device_id: &str) -> Result<EdrRiskScore, EdrError> {
         let posture = self.get_device_posture(device_id).await?;
 
         let score = if posture.has_active_threats {

@@ -28,10 +28,15 @@
 
 use async_trait::async_trait;
 use bytes::Bytes;
+
+/// Type alias for in-memory sanitization result (data, actions, warnings).
+type SanitizeResult = (Vec<u8>, Vec<SanitizeAction>, Vec<String>);
 use std::fmt;
 use std::io::{Cursor, Read, Write};
 
-use crate::parser_trait::{ContentParser, ParseError, SanitizeAction, SanitizePolicy, SanitizedOutput};
+use crate::parser_trait::{
+    ContentParser, ParseError, SanitizeAction, SanitizePolicy, SanitizedOutput,
+};
 
 // ===========================================================================
 // OoxmlStreamParser Configuration
@@ -147,7 +152,9 @@ impl OoxmlStreamParser {
     /// Returns [`ParseError::FileTooLarge`] or [`ParseError::CorruptData`]
     /// on validation failure.
     fn validate_input(&self, input: &[u8], policy: &SanitizePolicy) -> Result<(), ParseError> {
-        let effective_max = policy.max_file_size_bytes.unwrap_or(self.config.max_file_size_bytes);
+        let effective_max = policy
+            .max_file_size_bytes
+            .unwrap_or(self.config.max_file_size_bytes);
 
         if input.len() as u64 > effective_max {
             return Err(ParseError::FileTooLarge(input.len() as u64));
@@ -187,15 +194,14 @@ impl OoxmlStreamParser {
         &self,
         data: &[u8],
         policy: &SanitizePolicy,
-    ) -> Result<(Vec<u8>, Vec<SanitizeAction>, Vec<String>), ParseError> {
+    ) -> Result<SanitizeResult, ParseError> {
         let mut actions: Vec<SanitizeAction> = Vec::new();
         let mut warnings: Vec<String> = Vec::new();
 
         // Open ZIP from memory
-        let mut reader =
-            zip::ZipArchive::new(Cursor::new(data)).map_err(|e| {
-                ParseError::CorruptData(format!("Failed to parse OOXML ZIP container: {}", e))
-            })?;
+        let mut reader = zip::ZipArchive::new(Cursor::new(data)).map_err(|e| {
+            ParseError::CorruptData(format!("Failed to parse OOXML ZIP container: {}", e))
+        })?;
 
         // Check expansion ratio for ZIP bomb detection (use indexed loop to avoid closure lifetime issues)
         let total_uncompressed: u64 = {
@@ -265,8 +271,7 @@ impl OoxmlStreamParser {
             })?;
 
             let options: zip::write::FileOptions<'_, ()> =
-                zip::write::FileOptions::default()
-                    .compression_method(entry_reader.compression());
+                zip::write::FileOptions::default().compression_method(entry_reader.compression());
 
             writer
                 .start_file(entry_name.as_str(), options)
@@ -294,7 +299,7 @@ impl OoxmlStreamParser {
                         return Err(ParseError::InternalError(format!(
                             "IO error reading entry '{}': {}",
                             entry_name, e
-                        )))
+                        )));
                     }
                 }
             }
@@ -323,7 +328,9 @@ impl OoxmlStreamParser {
         // Quick scan for content type indicators in the raw bytes
         let data_str = String::from_utf8_lossy(data);
 
-        if data_str.contains("wordprocessingml") || data_str.contains(".docx") || data_str.contains(".docm")
+        if data_str.contains("wordprocessingml")
+            || data_str.contains(".docx")
+            || data_str.contains(".docm")
         {
             "WordprocessingML"
         } else if data_str.contains("spreadsheetml")
@@ -400,8 +407,7 @@ impl ContentParser for OoxmlStreamParser {
         let _doc_type = Self::detect_document_type(&input);
 
         // Phase 3: In-memory sanitization
-        let (sanitized_data, raw_actions, warnings) =
-            self.sanitize_in_memory(&input, policy)?;
+        let (sanitized_data, raw_actions, warnings) = self.sanitize_in_memory(&input, policy)?;
 
         // Phase 4: Metadata stripping (if policy requires)
         let mut final_actions = raw_actions;
@@ -428,14 +434,20 @@ impl ContentParser for OoxmlStreamParser {
         Ok(SanitizedOutput {
             clean_data: Bytes::from(sanitized_data),
             original_size,
-            sanitized_size: final_actions.is_empty().then_some(original_size).unwrap_or_else(|| {
+            sanitized_size: if final_actions.is_empty() {
+                original_size
+            } else {
                 // Recalculate actual output size since we rebuilt the ZIP
                 // (size may differ due to removed entries)
                 let estimated = original_size.saturating_sub(
-                    final_actions.iter().filter(|a| **a == SanitizeAction::MacroStripped).count() as u64 * 1024,
+                    final_actions
+                        .iter()
+                        .filter(|a| **a == SanitizeAction::MacroStripped)
+                        .count() as u64
+                        * 1024,
                 );
                 estimated.max(1024) // At least 1KB for valid empty OOXML
-            }),
+            },
             actions_taken: final_actions,
             warnings,
             parser_name: self.parser_name().to_string(),
@@ -463,12 +475,10 @@ mod tests {
         let mut buf = Cursor::new(Vec::new());
         let mut writer = zip::ZipWriter::new(&mut buf);
 
-        let options: zip::write::FileOptions<'_, ()> = zip::write::FileOptions::default()
-            .compression_method(zip::CompressionMethod::Stored);
+        let options: zip::write::FileOptions<'_, ()> =
+            zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Stored);
 
-        writer
-            .start_file("[Content_Types].xml", options)
-            .unwrap();
+        writer.start_file("[Content_Types].xml", options).unwrap();
         writer
             .write_all(
                 b"<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\
@@ -510,8 +520,8 @@ mod tests {
         let mut buf = Cursor::new(Vec::new());
         let mut writer = zip::ZipWriter::new(&mut buf);
 
-        let options: zip::write::FileOptions<'_, ()> = zip::write::FileOptions::default()
-            .compression_method(zip::CompressionMethod::Stored);
+        let options: zip::write::FileOptions<'_, ()> =
+            zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Stored);
 
         // Standard content types
         writer.start_file("[Content_Types].xml", options).unwrap();
@@ -530,7 +540,9 @@ mod tests {
 
         // Normal document body
         writer.start_file("word/document.xml", options).unwrap();
-        writer.write_all(b"<w:document><w:body><w:p/></w:body></w:document>").unwrap();
+        writer
+            .write_all(b"<w:document><w:body><w:p/></w:body></w:document>")
+            .unwrap();
 
         writer.finish().unwrap();
         buf.into_inner()
@@ -547,15 +559,15 @@ mod tests {
 
         // Must support core MIME types
         assert!(
-            types.iter().any(|t| t.contains(&"wordprocessingml")),
+            types.iter().any(|t| t.contains("wordprocessingml")),
             "Must support Word MIME type"
         );
         assert!(
-            types.iter().any(|t| t.contains(&"spreadsheetml")),
+            types.iter().any(|t| t.contains("spreadsheetml")),
             "Must support Excel MIME type"
         );
         assert!(
-            types.iter().any(|t| t.contains(&"presentationml")),
+            types.iter().any(|t| t.contains("presentationml")),
             "Must support PowerPoint MIME type"
         );
 
@@ -631,11 +643,16 @@ mod tests {
         let macro_input = Bytes::from(make_macro_docx());
         let result = parser.parse_and_sanitize(macro_input, &policy).await;
 
-        assert!(result.is_ok(), "Macro-containing OOXML should parse successfully");
+        assert!(
+            result.is_ok(),
+            "Macro-containing OOXML should parse successfully"
+        );
 
         let output = result.unwrap();
         assert!(
-            output.actions_taken.contains(&SanitizeAction::MacroStripped),
+            output
+                .actions_taken
+                .contains(&SanitizeAction::MacroStripped),
             "Actions must include MacroStripped for VBA documents. Got: {:?}",
             output.actions_taken
         );
@@ -667,8 +684,7 @@ mod tests {
         let output = result.unwrap();
         let has_macro_action = output
             .actions_taken
-            .iter()
-            .any(|a| *a == SanitizeAction::MacroStripped);
+            .contains(&SanitizeAction::MacroStripped);
 
         assert!(
             !has_macro_action,
@@ -825,7 +841,9 @@ mod tests {
 
         let output = result.unwrap();
         assert!(
-            output.actions_taken.contains(&SanitizeAction::MetadataStripped),
+            output
+                .actions_taken
+                .contains(&SanitizeAction::MetadataStripped),
             "With remove_metadata=true, should record MetadataStripped"
         );
     }

@@ -184,14 +184,8 @@ fn extract_android_version(ua: &str) -> String {
 /// - `Ordering::Equal` if versions are equivalent
 /// - `Ordering::Greater` if `a > b`
 pub fn compare_os_versions(a: &str, b: &str) -> std::cmp::Ordering {
-    let parts_a: Vec<u32> = a
-        .split('.')
-        .filter_map(|s| s.parse().ok())
-        .collect();
-    let parts_b: Vec<u32> = b
-        .split('.')
-        .filter_map(|s| s.parse().ok())
-        .collect();
+    let parts_a: Vec<u32> = a.split('.').filter_map(|s| s.parse().ok()).collect();
+    let parts_b: Vec<u32> = b.split('.').filter_map(|s| s.parse().ok()).collect();
 
     let max_len = parts_a.len().max(parts_b.len());
 
@@ -251,7 +245,10 @@ mod tests {
 
     #[test]
     fn test_compare_versions_equal() {
-        assert_eq!(compare_os_versions("10.0", "10.0"), std::cmp::Ordering::Equal);
+        assert_eq!(
+            compare_os_versions("10.0", "10.0"),
+            std::cmp::Ordering::Equal
+        );
     }
 
     #[test]

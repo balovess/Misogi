@@ -28,9 +28,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use aws_sdk_s3::{
+    Client,
     error::{ProvideErrorMetadata, SdkError},
     primitives::ByteStream,
-    Client,
 };
 use bytes::Bytes;
 use tokio::sync::Semaphore;
@@ -148,11 +148,12 @@ pub async fn execute_multipart_upload(
     let upload_id = initiate_upload(client, bucket, key).await?;
 
     // Step 2: Upload parts concurrently
-    let result =
-        upload_parts_concurrent(client, bucket, key, &upload_id, data, config).await;
+    let result = upload_parts_concurrent(client, bucket, key, &upload_id, data, config).await;
 
     match result {
-        Ok(parts) => complete_upload(client, bucket, key, &upload_id, &parts, total_len as u64).await,
+        Ok(parts) => {
+            complete_upload(client, bucket, key, &upload_id, &parts, total_len as u64).await
+        }
         Err(e) => {
             if let Err(abort_err) = abort_upload(client, bucket, key, &upload_id).await {
                 warn!(key = %key, error = %abort_err, "Failed to abort after upload failure");
@@ -166,11 +167,7 @@ pub async fn execute_multipart_upload(
 // Internal: Step 1 — Initiate
 // ---------------------------------------------------------------------------
 
-async fn initiate_upload(
-    client: &Client,
-    bucket: &str,
-    key: &str,
-) -> Result<String, StorageError> {
+async fn initiate_upload(client: &Client, bucket: &str, key: &str) -> Result<String, StorageError> {
     debug!(key = %key, "Creating multipart upload");
 
     let response = client
@@ -231,10 +228,8 @@ async fn upload_parts_concurrent(
             let uid = upload_id.to_string();
             async move {
                 let _permit = sem.acquire().await.unwrap();
-                upload_single_part_with_retry(
-                    &client_ref, &bkt, &k, &uid, part_number, part_data,
-                )
-                .await
+                upload_single_part_with_retry(&client_ref, &bkt, &k, &uid, part_number, part_data)
+                    .await
             }
         });
 
@@ -255,7 +250,11 @@ async fn upload_parts_concurrent(
     }
 
     if !errors.is_empty() {
-        let msg = format!("{} of {} parts failed", errors.len(), parts.len() + errors.len());
+        let msg = format!(
+            "{} of {} parts failed",
+            errors.len(),
+            parts.len() + errors.len()
+        );
         error!(key = %key, "{}", msg);
         return Err(StorageError::InternalError(msg));
     }
@@ -403,15 +402,9 @@ fn map_sdk_error<E: ProvideErrorMetadata + std::fmt::Debug>(
             let code = se.err().code().unwrap_or("UNKNOWN");
             match status {
                 404 => StorageError::NotFound(key.into()),
-                403 => StorageError::PermissionDenied(format!(
-                    "Access denied for '{key}': {code}"
-                )),
-                400 => StorageError::ConfigurationError(format!(
-                    "Bad request for '{key}': {code}"
-                )),
-                _ => StorageError::NetworkError(format!(
-                    "S3 error ({status}) for '{key}': {code}"
-                )),
+                403 => StorageError::PermissionDenied(format!("Access denied for '{key}': {code}")),
+                400 => StorageError::ConfigurationError(format!("Bad request for '{key}': {code}")),
+                _ => StorageError::NetworkError(format!("S3 error ({status}) for '{key}': {code}")),
             }
         }
         SdkError::DispatchFailure(dfe) => {
@@ -420,10 +413,9 @@ fn map_sdk_error<E: ProvideErrorMetadata + std::fmt::Debug>(
         SdkError::TimeoutError(te) => {
             StorageError::NetworkError(format!("Timeout for '{key}': {:?}", te))
         }
-        other => StorageError::InternalError(format!(
-            "Unexpected S3 error for '{key}': {:?}",
-            other
-        )),
+        other => {
+            StorageError::InternalError(format!("Unexpected S3 error for '{key}': {:?}", other))
+        }
     }
 }
 

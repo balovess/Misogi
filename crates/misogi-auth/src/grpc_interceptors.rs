@@ -194,7 +194,10 @@ impl Clone for JwtGrpcInterceptor {
 #[cfg(feature = "jwt")]
 impl tonic::service::Interceptor for JwtGrpcInterceptor {
     #[instrument(skip(self, request), fields(interceptor = "jwt_grpc"))]
-    fn call(&mut self, mut request: tonic::Request<()>) -> Result<tonic::Request<()>, tonic::Status> {
+    fn call(
+        &mut self,
+        mut request: tonic::Request<()>,
+    ) -> Result<tonic::Request<()>, tonic::Status> {
         // Step 1: Extract Authorization header from gRPC metadata
         let metadata = request.metadata();
         let auth_header = metadata
@@ -278,9 +281,7 @@ impl tonic::service::Interceptor for JwtGrpcInterceptor {
 ///     .await?;
 /// ```
 #[cfg(feature = "jwt")]
-pub fn create_jwt_grpc_interceptor(
-    validator: Arc<JwtValidator>,
-) -> JwtGrpcInterceptor {
+pub fn create_jwt_grpc_interceptor(validator: Arc<JwtValidator>) -> JwtGrpcInterceptor {
     JwtGrpcInterceptor::new(validator)
 }
 

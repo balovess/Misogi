@@ -46,36 +46,29 @@ use tokio::sync::RwLock;
 
 use crate::config::SenderConfig;
 use crate::upload_engine::FileUploader;
-use misogi_core::{
-    FileInfo,
-    FileStatus,
-    approval::TransferRequest,
-    audit_log::AuditLogManager,
-};
 use misogi_auth::store::UserStore;
 use misogi_cdr::{
-    office_sanitizer::OfficeSanitizer,
-    pdf_sanitizer::PdfSanitizer,
+    SanitizationPolicy, office_sanitizer::OfficeSanitizer, pdf_sanitizer::PdfSanitizer,
     zip_scanner::ZipScanner,
-    SanitizationPolicy,
 };
+use misogi_core::{FileInfo, FileStatus, approval::TransferRequest, audit_log::AuditLogManager};
 
 // Re-export trait types for ergonomic access within this module
-use misogi_core::traits::{CDRStrategy, FileTypeDetector, PIIDetector};
-#[cfg(feature = "jp_contrib")]
-use misogi_core::traits::EncodingHandler;
+use crate::driver_instance::TransferDriverInstance;
+use misogi_core::cdr_strategies::BuiltinPdfStrategy;
+use misogi_core::cdr_strategies::FormatDowngradeStrategy;
+use misogi_core::cdr_strategies::VbaWhitelistStrategy;
 #[cfg(feature = "jp_contrib")]
 use misogi_core::contrib::jp::encoding::JapaneseEncodingHandler;
 #[cfg(feature = "jp_contrib")]
 use misogi_core::contrib::jp::vendor::VendorIsolationManager;
-use misogi_core::cdr_strategies::BuiltinPdfStrategy;
-use misogi_core::cdr_strategies::VbaWhitelistStrategy;
-use misogi_core::cdr_strategies::FormatDowngradeStrategy;
 use misogi_core::file_types::CompositeDetector;
-use misogi_core::pii::RegexPIIDetector;
-use crate::driver_instance::TransferDriverInstance;
 use misogi_core::log_engine::{JsonLogFormatter, SyslogCefFormatter};
+use misogi_core::pii::RegexPIIDetector;
+#[cfg(feature = "jp_contrib")]
+use misogi_core::traits::EncodingHandler;
 use misogi_core::traits::LogFormatter;
+use misogi_core::traits::{CDRStrategy, FileTypeDetector, PIIDetector};
 
 // =============================================================================
 // AppState — Central Shared State Container
@@ -97,7 +90,6 @@ pub struct AppState {
     // -----------------------------------------------------------------------
     // Core Configuration & Storage
     // -----------------------------------------------------------------------
-
     /// Parsed sender configuration (immutable after startup).
     pub config: SenderConfig,
 
@@ -112,7 +104,6 @@ pub struct AppState {
     // -----------------------------------------------------------------------
     // Legacy Direct Sanitizers (retained for backward compatibility)
     // -----------------------------------------------------------------------
-
     /// PDF sanitizer for direct CDR processing (legacy path).
     ///
     /// **Note**: New code should prefer `self.cdr_strategies` for pluggable CDR.
@@ -134,7 +125,6 @@ pub struct AppState {
     // -----------------------------------------------------------------------
     // Approval Workflow State
     // -----------------------------------------------------------------------
-
     /// Pending and historical transfer requests requiring approval.
     ///
     /// Keyed by `request_id`. Protected by `RwLock`.
@@ -146,7 +136,6 @@ pub struct AppState {
     // -----------------------------------------------------------------------
     // Audit Logging (with pluggable formatter)
     // -----------------------------------------------------------------------
-
     /// Audit log manager with configured [`LogFormatter`] backend.
     ///
     /// The formatter is selected at construction time based on
@@ -156,7 +145,6 @@ pub struct AppState {
     // =======================================================================
     // Pluggable Trait Layer (Task 5.14)
     // =======================================================================
-
     /// Transport driver for cross-network file transfer.
     ///
     /// Selected at startup based on `config.transfer_driver_type`:
@@ -262,16 +250,20 @@ impl AppState {
     pub fn from_config(config: &SenderConfig) -> Arc<Self> {
         // --- 1. Transport Driver ---
         // Select driver implementation based on config.transfer_driver_type.
-        let receiver_addr = config.tunnel_remote_addr.clone()
+        let receiver_addr = config
+            .tunnel_remote_addr
+            .clone()
             .unwrap_or_else(|| "127.0.0.1:9000".to_string());
-        let node_id = format!("misogi-sender-{}", &config.server_addr);
+        let node_id = format!("misogi-sender-{}", config.server_addr);
 
         let driver: Arc<TransferDriverInstance> = match config.transfer_driver_type.as_str() {
             "storage_relay" => {
-                let output_dir = config.transfer_output_dir
+                let output_dir = config
+                    .transfer_output_dir
                     .clone()
                     .unwrap_or_else(|| "./data/relay/outbound".to_string());
-                let input_dir = config.transfer_input_dir
+                let input_dir = config
+                    .transfer_input_dir
                     .clone()
                     .unwrap_or_else(|| "./data/relay/inbound".to_string());
                 Arc::new(TransferDriverInstance::storage_relay(
@@ -281,10 +273,12 @@ impl AppState {
                 ))
             }
             "external_command" => {
-                let send_cmd = config.transfer_send_command
+                let send_cmd = config
+                    .transfer_send_command
                     .clone()
                     .unwrap_or_else(|| "scp %s remote:/tmp/".to_string());
-                let status_cmd = config.transfer_status_command
+                let status_cmd = config
+                    .transfer_status_command
                     .clone()
                     .unwrap_or_else(|| "echo done".to_string());
                 Arc::new(TransferDriverInstance::external_command(
@@ -294,15 +288,14 @@ impl AppState {
                 ))
             }
             "udp_blast" => {
-                let target = config.blast_config
+                let target = config
+                    .blast_config
                     .as_ref()
                     .map(|b| b.target_addr.clone())
                     .unwrap_or_else(|| "127.0.0.1:9002".to_string());
                 Arc::new(TransferDriverInstance::udp_blast(target))
             }
-            _ => {
-                Arc::new(TransferDriverInstance::direct_tcp(receiver_addr, node_id))
-            }
+            _ => Arc::new(TransferDriverInstance::direct_tcp(receiver_addr, node_id)),
         };
 
         // --- 2. CDR Strategy Chain ---
@@ -338,8 +331,7 @@ impl AppState {
 
         // --- 5. Encoding Handler (requires jp_contrib feature) ---
         #[cfg(feature = "jp_contrib")]
-        let encoding: Arc<dyn EncodingHandler> =
-            Arc::new(JapaneseEncodingHandler::default());
+        let encoding: Arc<dyn EncodingHandler> = Arc::new(JapaneseEncodingHandler::default());
 
         // --- 6. Log Formatter + AuditLogManager ---
         // Task 5.14 Note: TemplateLogFormatter requires Tera instance; using JsonLogFormatter
@@ -493,13 +485,11 @@ impl AppState {
     ///
     /// When `status_filter` is `Some(_)`, only files matching that status are
     /// returned. When `None`, all files are returned regardless of status.
-    pub async fn list_files(
-        &self,
-        status_filter: Option<&FileStatus>,
-    ) -> Vec<FileInfo> {
+    pub async fn list_files(&self, status_filter: Option<&FileStatus>) -> Vec<FileInfo> {
         let files = self.files.read().await;
         if let Some(filter) = status_filter {
-            files.iter()
+            files
+                .iter()
                 .filter(|f| f.1.status == *filter)
                 .map(|(_, v)| v.clone())
                 .collect()
@@ -538,10 +528,7 @@ impl AppState {
     ///
     /// When `approver_id` is `Some(id)`, only requests assigned to that approver
     /// are returned. When `None`, all pending requests are returned.
-    pub async fn list_pending_requests(
-        &self,
-        approver_id: Option<&str>,
-    ) -> Vec<TransferRequest> {
+    pub async fn list_pending_requests(&self, approver_id: Option<&str>) -> Vec<TransferRequest> {
         let requests = self.requests.read().await;
         requests
             .iter()
@@ -576,7 +563,8 @@ impl AppState {
         let requests = self.requests.read().await;
 
         let filtered: Vec<TransferRequest> = if let Some(status) = status_filter {
-            requests.iter()
+            requests
+                .iter()
                 .filter(|r| &r.1.status == status)
                 .map(|(_, v)| v.clone())
                 .collect()

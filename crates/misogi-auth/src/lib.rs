@@ -252,8 +252,8 @@ pub use store::UserStore;
 // --- Re-exports: JWT types ---
 #[cfg(feature = "jwt")]
 pub use jwt::{
-    JwtAuthenticator, JwtConfig, JwtError, JwtToken, ValidatedClaims,
-    JwtIssuer, JwtValidator, ValidatedToken,
+    JwtAuthenticator, JwtConfig, JwtError, JwtIssuer, JwtToken, JwtValidator, ValidatedClaims,
+    ValidatedToken,
 };
 
 // --- Re-exports: LDAP types ---
@@ -263,15 +263,14 @@ pub use ldap_provider::{LdapAuthProvider, LdapConfig, LdapError, LdapUser};
 // --- Re-exports: OIDC types ---
 #[cfg(feature = "oidc")]
 pub use oidc_provider::{
-    azure_ad_config, generate_code_verifier, generate_random_state,
-    gcloud_japan_config, keycloak_config, okta_config,
-    OidcAuthProvider, OidcConfig, OidcError, OidcMetadata, OidcTokens,
-    OidcUserInfo, ValidatedIdToken,
+    OidcAuthProvider, OidcConfig, OidcError, OidcMetadata, OidcTokens, OidcUserInfo,
+    ValidatedIdToken, azure_ad_config, gcloud_japan_config, generate_code_verifier,
+    generate_random_state, keycloak_config, okta_config,
 };
 
 // --- Re-exports: SAML types ---
 #[cfg(feature = "saml")]
-pub use saml_provider::{SamlAuthProvider, SamlAttributes, SamlConfig, SamlError, SamlIdpMetadata};
+pub use saml_provider::{SamlAttributes, SamlAuthProvider, SamlConfig, SamlError, SamlIdpMetadata};
 
 // --- Re-exports: Middleware types ---
 pub use middleware::{AuthEngine, AuthError, ServiceAccount};
@@ -314,7 +313,9 @@ pub use middleware::JwtAuthExtractor;
 ///
 /// Requires both `jwt` and `axum` feature flags.
 #[cfg(all(feature = "jwt", feature = "axum"))]
-pub use extractors::{ExtractionError, IdentityAuthExtractor, JwtAuthExtractor as MicroKernelJwtExtractor};
+pub use extractors::{
+    ExtractionError, IdentityAuthExtractor, JwtAuthExtractor as MicroKernelJwtExtractor,
+};
 
 /// Provider context extractor for delegated authentication flows.
 ///
@@ -326,9 +327,7 @@ pub use extractors::{IdentityContext, ProviderSource};
 ///
 /// Uses [`JwtValidator`](jwt::JwtValidator) directly. Returns `UNAUTHENTICATED` on failure.
 #[cfg(all(feature = "grpc", feature = "jwt"))]
-pub use grpc_interceptors::{
-    create_jwt_grpc_interceptor, JwtGrpcInterceptor,
-};
+pub use grpc_interceptors::{JwtGrpcInterceptor, create_jwt_grpc_interceptor};
 
 // --- Re-exports: Device Security types ---
 
@@ -347,9 +346,8 @@ pub use posture::{
     checker::PostureChecker,
     os_detector,
     types::{
-        CheckSeverity, DevicePosture, EncryptionStatus, FailureAction,
-        OsPlatform, OsPosture, PatchStatus, PostureCheckResult, PosturePolicy,
-        SecuritySoftwarePosture,
+        CheckSeverity, DevicePosture, EncryptionStatus, FailureAction, OsPlatform, OsPosture,
+        PatchStatus, PostureCheckResult, PosturePolicy, SecuritySoftwarePosture,
     },
 };
 
@@ -358,9 +356,7 @@ pub use posture::{
 pub use tcm::{
     config::{TcmConfig, TcmProviderType},
     mock::MockTcmProvider,
-    traits::{
-        PcrValue, QuoteAlgorithm, TcmError, TcmProvider, TcmQuote, TcmSealedData,
-    },
+    traits::{PcrValue, QuoteAlgorithm, TcmError, TcmProvider, TcmQuote, TcmSealedData},
 };
 
 /// EDR provider types (requires `defender` or `falcon` feature).
@@ -391,17 +387,15 @@ pub mod prelude {
 
     #[cfg(feature = "jwt")]
     pub use super::jwt::{
-        JwtAuthenticator, JwtConfig, JwtToken, ValidatedClaims,
-        JwtIssuer, JwtValidator, ValidatedToken,
+        JwtAuthenticator, JwtConfig, JwtIssuer, JwtToken, JwtValidator, ValidatedClaims,
+        ValidatedToken,
     };
 
     #[cfg(feature = "ldap")]
     pub use super::ldap_provider::{LdapAuthProvider, LdapConfig, LdapUser};
 
     #[cfg(feature = "oidc")]
-    pub use super::oidc_provider::{
-        OidcAuthProvider, OidcConfig, OidcTokens, OidcUserInfo,
-    };
+    pub use super::oidc_provider::{OidcAuthProvider, OidcConfig, OidcTokens, OidcUserInfo};
 
     #[cfg(feature = "saml")]
     pub use super::saml_provider::{SamlAuthProvider, SamlConfig};
@@ -409,9 +403,7 @@ pub mod prelude {
     pub use super::middleware::{AuthEngine, ServiceAccount};
 
     #[cfg(feature = "ldap")]
-    pub use super::plugins::ldap::{
-        LdapAttributeMappings, LdapIdentityProvider, LdapPluginConfig,
-    };
+    pub use super::plugins::ldap::{LdapAttributeMappings, LdapIdentityProvider, LdapPluginConfig};
 
     #[cfg(feature = "oidc")]
     pub use super::plugins::oidc::{OidcIdentityProvider, OidcProviderConfig};
@@ -423,13 +415,11 @@ pub mod prelude {
 
     // Micro-kernel architecture types (Phase 7)
     #[cfg(all(feature = "jwt", feature = "axum"))]
-    pub use super::extractors::{
-        ExtractionError, IdentityAuthExtractor, JwtAuthExtractor,
-    };
+    pub use super::extractors::{ExtractionError, IdentityAuthExtractor, JwtAuthExtractor};
 
     #[cfg(feature = "axum")]
     pub use super::extractors::{IdentityContext, ProviderSource};
 
     #[cfg(all(feature = "grpc", feature = "jwt"))]
-    pub use super::grpc_interceptors::{create_jwt_grpc_interceptor, JwtGrpcInterceptor};
+    pub use super::grpc_interceptors::{JwtGrpcInterceptor, create_jwt_grpc_interceptor};
 }

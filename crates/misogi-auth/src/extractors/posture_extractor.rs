@@ -38,18 +38,18 @@ use axum::{
 };
 use serde_json::json;
 
-#[cfg(feature = "jwt")]
-use crate::jwt::ValidatedClaims;
 use crate::device::collector::collect_fingerprint_from_header;
 use crate::device::fingerprint::DeviceFingerprint;
 use crate::device::validator::{FingerprintBindError, FingerprintValidator};
 #[cfg(feature = "jwt")]
+use crate::jwt::ValidatedClaims;
+#[cfg(feature = "jwt")]
 use crate::middleware::{AuthEngine, AuthError};
-use crate::posture::os_detector::parse_os_from_user_agent;
-use crate::posture::{PostureChecker, PostureEvaluationResult};
 use crate::posture::edr_bridge::build_client_report_posture;
 #[cfg(any(feature = "defender", feature = "falcon"))]
 use crate::posture::edr_bridge::convert_edr_to_posture;
+use crate::posture::os_detector::parse_os_from_user_agent;
+use crate::posture::{PostureChecker, PostureEvaluationResult};
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -219,7 +219,11 @@ impl IntoResponse for PostureRejection {
                 })),
             )
                 .into_response(),
-            Self::PostureFailed { score, action, failed_checks } => (
+            Self::PostureFailed {
+                score,
+                action,
+                failed_checks,
+            } => (
                 StatusCode::FORBIDDEN,
                 axum::Json(json!({
                     "error": "posture_check_failed",
@@ -299,20 +303,14 @@ where
         let claims = extract_jwt(&parts.headers, &state)?;
 
         // Step 2: Extract and validate device fingerprint
-        let (device_id, fingerprint) =
-            extract_fingerprint(&parts.headers, &state, Some(&claims))?;
+        let (device_id, fingerprint) = extract_fingerprint(&parts.headers, &state, Some(&claims))?;
 
         // Step 3: Detect OS from User-Agent
         let ua = extract_user_agent(&parts.headers, &state.config)?;
         let detected_os = parse_os_from_user_agent(&ua);
 
         // Step 4: Build device posture (EDR or client-report)
-        let device_posture = build_device_posture(
-            &detected_os,
-            &fingerprint,
-            &state,
-            &device_id,
-        );
+        let device_posture = build_device_posture(&detected_os, &fingerprint, &state, &device_id);
 
         // Step 5: Evaluate posture against policy
         let eval = state.posture_checker.evaluate(device_posture);
@@ -368,7 +366,9 @@ fn extract_jwt(
         .trim();
 
     if token.is_empty() {
-        return Err(PostureRejection::Unauthorized(AuthError::MissingCredentials));
+        return Err(PostureRejection::Unauthorized(
+            AuthError::MissingCredentials,
+        ));
     }
 
     state
@@ -417,17 +417,14 @@ fn extract_fingerprint(
         ));
     }
 
-    let collected = collect_fingerprint_from_header(Some(fp_header)).map_err(|e| {
-        PostureRejection::FingerprintInvalid(format!("parsing failed: {e}"))
-    })?;
+    let collected = collect_fingerprint_from_header(Some(fp_header))
+        .map_err(|e| PostureRejection::FingerprintInvalid(format!("parsing failed: {e}")))?;
 
-    let fingerprint = collected.ok_or_else(|| {
-        PostureRejection::FingerprintInvalid("empty fingerprint payload".into())
-    })?.fingerprint;
+    let fingerprint = collected
+        .ok_or_else(|| PostureRejection::FingerprintInvalid("empty fingerprint payload".into()))?
+        .fingerprint;
 
-    let computed_id = fingerprint.compute_device_id(
-        &state.fingerprint_validator.secret(),
-    );
+    let computed_id = fingerprint.compute_device_id(&state.fingerprint_validator.secret());
 
     #[cfg(feature = "jwt")]
     if let Some(claims) = claims {
@@ -442,9 +439,7 @@ fn extract_fingerprint(
                     )
                 }
                 FingerprintBindError::ReplayDetected => {
-                    PostureRejection::FingerprintInvalid(
-                        "potential replay attack detected".into(),
-                    )
+                    PostureRejection::FingerprintInvalid("potential replay attack detected".into())
                 }
                 other => PostureRejection::FingerprintInvalid(other.to_string()),
             })?;

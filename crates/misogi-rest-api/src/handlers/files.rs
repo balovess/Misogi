@@ -15,10 +15,10 @@
 
 #[allow(unused_imports)]
 use axum::{
+    Json,
     extract::{Multipart, Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
-    Json,
 };
 #[allow(unused_imports)]
 use chrono::Utc;
@@ -28,8 +28,7 @@ use uuid::Uuid;
 use crate::error::ApiError;
 #[allow(unused_imports)]
 use crate::models::{
-    FileDetail, FileItem, FileStatus, ListFilesQuery, PaginatedResponse,
-    SanitizationReport,
+    FileDetail, FileItem, FileStatus, ListFilesQuery, PaginatedResponse, SanitizationReport,
 };
 use crate::router::AppState;
 
@@ -74,8 +73,7 @@ pub struct UploadResponse {
 /// - `200 OK` -- JSON array of file items wrapped in [`PaginatedResponse`]
 #[instrument(skip(state, query))]
 pub async fn list_files(
-    #[allow(unused_variables)]
-    State(state): State<AppState>,
+    #[allow(unused_variables)] State(state): State<AppState>,
     Query(query): Query<ListFilesQuery>,
 ) -> Result<Json<PaginatedResponse<FileItem>>, ApiError> {
     debug!(
@@ -123,13 +121,14 @@ pub async fn upload_file(
 ) -> Result<(StatusCode, Json<UploadResponse>), ApiError> {
     while let Some(field) = multipart.next_field().await.map_err(|e| {
         error!(error = %e, "Failed to read multipart field");
-        ApiError::bad_request(ApiError::INVALID_REQUEST, "Malformed multipart upload", None)
+        ApiError::bad_request(
+            ApiError::INVALID_REQUEST,
+            "Malformed multipart upload",
+            None,
+        )
     })? {
         if field.name() == Some("file") {
-            let filename = field
-                .file_name()
-                .unwrap_or("unknown")
-                .to_string();
+            let filename = field.file_name().unwrap_or("unknown").to_string();
 
             let content_type = field
                 .content_type()
@@ -162,7 +161,9 @@ pub async fn upload_file(
                 url: format!("/api/v1/files/{file_id}"),
             };
 
-            state.metrics.inc_files_uploaded(&state.config.default_policy);
+            state
+                .metrics
+                .inc_files_uploaded(&state.config.default_policy);
 
             return Ok((StatusCode::CREATED, Json(response)));
         }
@@ -194,8 +195,7 @@ pub async fn upload_file(
 /// - `404 Not Found` -- No file with the given ID exists
 #[instrument(skip(state), fields(file_id = %file_id))]
 pub async fn get_file(
-    #[allow(unused_variables)]
-    State(state): State<AppState>,
+    #[allow(unused_variables)] State(state): State<AppState>,
     Path(file_id): Path<Uuid>,
 ) -> Result<Json<FileDetail>, ApiError> {
     debug!(file_id = %file_id, "Fetching file details");

@@ -144,8 +144,8 @@ impl Default for VendorAccount {
             ip_whitelist: Vec::new(),
             force_max_cdr_policy: None,
             require_dual_approval: false,
-            upload_rate_limit_per_hour: 0, // Unlimited by default
-            max_file_size_mb: 0,           // No limit by default
+            upload_rate_limit_per_hour: 0,  // Unlimited by default
+            max_file_size_mb: 0,            // No limit by default
             allowed_extensions: Vec::new(), // Allow all by default
             created_at: Utc::now(),
         }
@@ -370,7 +370,10 @@ impl VendorIsolationManager {
         })?;
 
         // Check CIDR membership
-        let allowed = account.ip_whitelist.iter().any(|network| network.contains(client_ip));
+        let allowed = account
+            .ip_whitelist
+            .iter()
+            .any(|network| network.contains(client_ip));
 
         tracing::debug!(
             user_id = %user_id,
@@ -415,10 +418,7 @@ impl VendorIsolationManager {
         // Check and record in rate limiter
         let mut rate_limiters = self.rate_limiters.write().unwrap();
         let limiter = rate_limiters.get_mut(user_id).ok_or_else(|| {
-            MisogiError::NotFound(format!(
-                "Rate limiter for '{}' not initialized",
-                user_id
-            ))
+            MisogiError::NotFound(format!("Rate limiter for '{}' not initialized", user_id))
         })?;
 
         let allowed = limiter.check_and_record();
@@ -446,7 +446,9 @@ impl VendorIsolationManager {
     /// - `None` if no override is set (use default CDR behavior).
     pub fn get_required_cdr_policy(&self, user_id: &str) -> Option<String> {
         let accounts = self.accounts.read().unwrap();
-        accounts.get(user_id).and_then(|a| a.force_max_cdr_policy.clone())
+        accounts
+            .get(user_id)
+            .and_then(|a| a.force_max_cdr_policy.clone())
     }
 
     /// Check whether a vendor requires dual-person approval for uploads.
@@ -529,10 +531,7 @@ mod tests {
         VendorAccount {
             user_id: user_id.to_string(),
             display_name: format!("Test Vendor {}", user_id),
-            ip_whitelist: whitelist
-                .iter()
-                .map(|s| s.parse().unwrap())
-                .collect(),
+            ip_whitelist: whitelist.iter().map(|s| s.parse().unwrap()).collect(),
             force_max_cdr_policy: None,
             require_dual_approval: false,
             upload_rate_limit_per_hour: 100,
@@ -598,7 +597,10 @@ mod tests {
         // 192.168.2.1 is NOT in 192.168.1.0/24
         let result = manager.validate_access("vendor_deny_test", "192.168.2.1");
         assert!(result.is_ok());
-        assert!(!result.unwrap(), "192.168.2.1 should NOT be allowed in 192.168.1.0/24");
+        assert!(
+            !result.unwrap(),
+            "192.168.2.1 should NOT be allowed in 192.168.1.0/24"
+        );
     }
 
     #[test]
@@ -799,7 +801,12 @@ mod tests {
         let result = manager.register_account(account);
 
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("must not be empty"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("must not be empty")
+        );
     }
 
     #[test]

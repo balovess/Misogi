@@ -1,8 +1,11 @@
-use axum::{Router, routing::{get, post}, middleware};
-use tower_http::cors::CorsLayer;
-use uuid::Uuid;
-use tracing::Instrument;
 use crate::state::SharedState;
+use axum::{
+    Router, middleware,
+    routing::{get, post},
+};
+use tower_http::cors::CorsLayer;
+use tracing::Instrument;
+use uuid::Uuid;
 
 async fn request_id_middleware(
     mut req: axum::extract::Request,
@@ -59,18 +62,38 @@ pub fn build_router(state: SharedState) -> Router {
 fn v1_routes(state: SharedState) -> Router {
     Router::new()
         .route("/upload", post(crate::http_routes::upload))
-        .route("/files/:file_id", get(crate::http_routes::get_file)
-            .post(crate::http_routes::trigger_transfer))
+        .route(
+            "/files/:file_id",
+            get(crate::http_routes::get_file).post(crate::http_routes::trigger_transfer),
+        )
         .route("/files", get(crate::http_routes::list_files))
-        .route("/sanitize/:file_id", post(crate::http_routes::sanitize_file))
+        .route(
+            "/sanitize/:file_id",
+            post(crate::http_routes::sanitize_file),
+        )
         .route("/sanitize/policies", get(crate::http_routes::list_policies))
         .route("/health", get(crate::http_routes::health))
-        .route("/transfers", post(crate::approval_routes::create_transfer_request)
-            .get(crate::approval_routes::list_transfers))
-        .route("/transfers/pending", get(crate::approval_routes::list_pending_requests))
-        .route("/transfers/:request_id", get(crate::approval_routes::get_transfer))
-        .route("/transfers/:request_id/approve", post(crate::approval_routes::approve_request))
-        .route("/transfers/:request_id/reject", post(crate::approval_routes::reject_request))
+        .route(
+            "/transfers",
+            post(crate::approval_routes::create_transfer_request)
+                .get(crate::approval_routes::list_transfers),
+        )
+        .route(
+            "/transfers/pending",
+            get(crate::approval_routes::list_pending_requests),
+        )
+        .route(
+            "/transfers/:request_id",
+            get(crate::approval_routes::get_transfer),
+        )
+        .route(
+            "/transfers/:request_id/approve",
+            post(crate::approval_routes::approve_request),
+        )
+        .route(
+            "/transfers/:request_id/reject",
+            post(crate::approval_routes::reject_request),
+        )
         .route("/ppap/detect", post(crate::http_routes::ppap_detect))
         .route("/ppap/statistics", get(crate::http_routes::ppap_statistics))
         .with_state(state)
@@ -88,23 +111,28 @@ fn v2_routes(state: SharedState) -> Router {
         // V2 upload (enhanced with metadata support — delegates to V1 for now)
         .route("/upload", post(crate::http_routes::upload))
         // V2 sanitize (AI-enhanced path — delegates to V1 for now)
-        .route("/sanitize/:file_id", post(crate::http_routes::sanitize_file))
+        .route(
+            "/sanitize/:file_id",
+            post(crate::http_routes::sanitize_file),
+        )
         // V2-specific: Pre-scan with ML analysis (placeholder)
         .route("/pre-scan", post(v2_pre_scan_placeholder))
         // V2 file listing (delegates to V1)
         .route("/files", get(crate::http_routes::list_files))
         .route("/files/:file_id", get(crate::http_routes::get_file))
         // V2 transfers (delegates to V1)
-        .route("/transfers", post(crate::approval_routes::create_transfer_request)
-            .get(crate::approval_routes::list_transfers))
+        .route(
+            "/transfers",
+            post(crate::approval_routes::create_transfer_request)
+                .get(crate::approval_routes::list_transfers),
+        )
         // V2 PPAP detection (delegates to V1)
         .route("/ppap/detect", post(crate::http_routes::ppap_detect))
         .route("/ppap/statistics", get(crate::http_routes::ppap_statistics))
         .with_state(state)
 }
 
-async fn v2_pre_scan_placeholder(
-) -> axum::Json<serde_json::Value> {
+async fn v2_pre_scan_placeholder() -> axum::Json<serde_json::Value> {
     axum::Json(serde_json::json!({
         "status": "not_implemented",
         "message": "V2 AI pre-scan endpoint is not yet available",

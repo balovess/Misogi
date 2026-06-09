@@ -83,12 +83,11 @@ impl WasmParserAdapter {
 
         // Step 2: Create wasmi engine and validate/compile module format
         let engine = Engine::default();
-        let module = Module::new(&engine, &wasm_bytes[..]).map_err(|e| {
-            WasmError::InvalidModuleFormat {
+        let module =
+            Module::new(&engine, &wasm_bytes[..]).map_err(|e| WasmError::InvalidModuleFormat {
                 path: path.clone(),
                 reason: e.to_string(),
-            }
-        })?;
+            })?;
 
         // Step 3: Create linker with host imports (alloc, dealloc, log)
         let mut linker = <Linker<()>>::new(&engine);
@@ -96,9 +95,9 @@ impl WasmParserAdapter {
 
         // Step 4: Instantiate and start module with empty initial state (wasmi 1.0.9)
         let mut store = Store::new(&engine, ());
-        let instance = linker.instantiate_and_start(&mut store, &module).map_err(|e| {
-            WasmError::Internal(format!("instantiation failed: {}", e))
-        })?;
+        let instance = linker
+            .instantiate_and_start(&mut store, &module)
+            .map_err(|e| WasmError::Internal(format!("instantiation failed: {}", e)))?;
 
         // Step 5: Validate required exports exist
         let exports = PluginExports::default();
@@ -133,26 +132,30 @@ impl WasmParserAdapter {
 
         // Import: Allocate memory in WASM linear memory space
         linker
-            .func_wrap(module, imports.alloc, |mut caller: Caller<'_, ()>, size: i32| -> i32 {
-                // Get exported memory from caller's module
-                let mem = match caller.get_export("memory").and_then(|e| e.into_memory()) {
-                    Some(m) => m,
-                    None => return -1,
-                };
+            .func_wrap(
+                module,
+                imports.alloc,
+                |mut caller: Caller<'_, ()>, size: i32| -> i32 {
+                    // Get exported memory from caller's module
+                    let mem = match caller.get_export("memory").and_then(|e| e.into_memory()) {
+                        Some(m) => m,
+                        None => return -1,
+                    };
 
-                // Calculate current memory size in bytes
-                let current_size = mem.data_size(&caller) as i32;
+                    // Calculate current memory size in bytes
+                    let current_size = mem.data_size(&caller) as i32;
 
-                // Calculate pages needed (64KB per page)
-                let bytes_needed = size.max(1) as u64;
-                let pages_needed = (bytes_needed + 65535) / 65536;
+                    // Calculate pages needed (64KB per page)
+                    let bytes_needed = size.max(1) as u64;
+                    let pages_needed = bytes_needed.div_ceil(65536);
 
-                // Grow memory by required pages (wasmi 1.0.9: grow takes u64)
-                match mem.grow(&mut caller, pages_needed) {
-                    Ok(_) => current_size,
-                    Err(_) => -1,
-                }
-            })
+                    // Grow memory by required pages (wasmi 1.0.9: grow takes u64)
+                    match mem.grow(&mut caller, pages_needed) {
+                        Ok(_) => current_size,
+                        Err(_) => -1,
+                    }
+                },
+            )
             .map_err(|e| {
                 WasmError::Internal(format!("failed to define {}: {}", imports.alloc, e))
             })?;
@@ -177,17 +180,16 @@ impl WasmParserAdapter {
                 module,
                 imports.log,
                 |caller: Caller<'_, ()>, ptr: i32, len: i32| {
-                    if let Some(mem) = caller.get_export("memory").and_then(|e| e.into_memory())
-                    {
+                    if let Some(mem) = caller.get_export("memory").and_then(|e| e.into_memory()) {
                         let data = mem.data(&caller);
                         if ptr >= 0 && len > 0 {
                             let start = ptr as usize;
                             let end = start.saturating_add(len as usize);
-                            if end <= data.len() {
-                                if let Ok(msg) = std::str::from_utf8(&data[start..end]) {
-                                    tracing::debug!(plugin_log = %msg, "WASM plugin log");
-                                    return;
-                                }
+                            if end <= data.len()
+                                && let Ok(msg) = std::str::from_utf8(&data[start..end])
+                            {
+                                tracing::debug!(plugin_log = %msg, "WASM plugin log");
+                                return;
                             }
                         }
                     }
@@ -211,7 +213,11 @@ impl WasmParserAdapter {
         path: &Path,
     ) -> WasmResult<()> {
         // Check parse function (ensure it's a function export)
-        if instance.get_export(store, exports.parse).and_then(|e| e.into_func()).is_none() {
+        if instance
+            .get_export(store, exports.parse)
+            .and_then(|e| e.into_func())
+            .is_none()
+        {
             return Err(WasmError::MissingExport {
                 function: exports.parse.to_string(),
                 path: path.to_path_buf(),
@@ -219,7 +225,11 @@ impl WasmParserAdapter {
         }
 
         // Check supported_types function (ensure it's a function export)
-        if instance.get_export(store, exports.supported_types).and_then(|e| e.into_func()).is_none() {
+        if instance
+            .get_export(store, exports.supported_types)
+            .and_then(|e| e.into_func())
+            .is_none()
+        {
             return Err(WasmError::MissingExport {
                 function: exports.supported_types.to_string(),
                 path: path.to_path_buf(),
@@ -227,7 +237,11 @@ impl WasmParserAdapter {
         }
 
         // Check abi_version function (optional but recommended)
-        if instance.get_export(store, exports.abi_version).and_then(|e| e.into_func()).is_none() {
+        if instance
+            .get_export(store, exports.abi_version)
+            .and_then(|e| e.into_func())
+            .is_none()
+        {
             tracing::warn!(
                 path = %path.display(),
                 "plugin does not export {} (ABI version checking disabled)",
@@ -299,15 +313,16 @@ impl WasmParserAdapter {
     ///
     /// Works around the &'static str requirement by returning owned strings.
     pub fn supported_types_owned(&mut self) -> WasmResult<Vec<String>> {
-        let store = self.store.as_mut().ok_or_else(|| WasmError::Internal(
-            "adapter not initialized (store missing)".to_string(),
-        ))?;
-        let instance = self.instance.as_ref().ok_or_else(|| WasmError::Internal(
-            "adapter not initialized (instance missing)".to_string(),
-        ))?;
-        let memory = self.memory.as_ref().ok_or_else(|| WasmError::Internal(
-            "no memory export available".to_string(),
-        ))?;
+        let store = self.store.as_mut().ok_or_else(|| {
+            WasmError::Internal("adapter not initialized (store missing)".to_string())
+        })?;
+        let instance = self.instance.as_ref().ok_or_else(|| {
+            WasmError::Internal("adapter not initialized (instance missing)".to_string())
+        })?;
+        let memory = self
+            .memory
+            .as_ref()
+            .ok_or_else(|| WasmError::Internal("no memory export available".to_string()))?;
 
         // Call misogi_supported_types() export
         let supported_types_fn = instance

@@ -149,7 +149,11 @@ mod tests {
     fn test_mock_adapter_adapt_success() {
         let adapter = MockIdentityAdapter;
         let input = b"{\"test\": true}".to_vec();
-        let result = adapter.adapt_request(input.clone(), &ApiVersion::new(1, 0, 0), &ApiVersion::new(2, 0, 0));
+        let result = adapter.adapt_request(
+            input.clone(),
+            &ApiVersion::new(1, 0, 0),
+            &ApiVersion::new(2, 0, 0),
+        );
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), input);
     }
@@ -157,7 +161,11 @@ mod tests {
     #[test]
     fn test_mock_adapter_unsupported_version() {
         let adapter = MockIdentityAdapter;
-        let result = adapter.adapt_request(b"data".to_vec(), &ApiVersion::new(9, 9, 9), &ApiVersion::new(9, 9, 9));
+        let result = adapter.adapt_request(
+            b"data".to_vec(),
+            &ApiVersion::new(9, 9, 9),
+            &ApiVersion::new(9, 9, 9),
+        );
         assert!(result.is_err());
 
         match result.unwrap_err() {
@@ -174,7 +182,11 @@ mod tests {
         let adapter: Box<dyn ProtocolAdapter> = Box::new(MockIdentityAdapter);
         assert_eq!(adapter.adapter_name(), "mock-identity");
 
-        let result = adapter.adapt_response(b"test".to_vec(), &ApiVersion::new(1, 0, 0), &ApiVersion::new(2, 0, 0));
+        let result = adapter.adapt_response(
+            b"test".to_vec(),
+            &ApiVersion::new(1, 0, 0),
+            &ApiVersion::new(2, 0, 0),
+        );
         assert!(result.is_ok());
     }
 

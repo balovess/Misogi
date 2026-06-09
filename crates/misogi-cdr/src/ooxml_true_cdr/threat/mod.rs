@@ -4,18 +4,18 @@
 //! plus common detection utilities (DDE, URL protocols, script injection).
 
 mod excel;
-mod word;
 mod ppt;
+mod word;
 
 pub use excel::scan_excel_element_threats;
-pub use word::scan_word_element_threats;
 pub use ppt::scan_powerpoint_element_threats;
+pub use word::scan_word_element_threats;
 
 use quick_xml::events::attributes::Attributes;
 use regex::Regex;
 
 use super::config::OoxmlTrueCdrConfig;
-use super::constants::{DDE_PATTERNS, BLOCKED_URL_PROTOCOLS, SCRIPT_INJECTION_PATTERNS};
+use super::constants::{BLOCKED_URL_PROTOCOLS, DDE_PATTERNS, SCRIPT_INJECTION_PATTERNS};
 use super::report::{OoxmlCdrAction, OoxmlCdrReport};
 use super::types::OoxmlDocumentType;
 
@@ -39,12 +39,18 @@ pub fn scan_element_threats(
     report: &mut OoxmlCdrReport,
     removed_targets: &mut Vec<String>,
 ) -> bool {
-    let local_name = elem_name.split(':').last().unwrap_or(elem_name);
+    let local_name = elem_name.split(':').next_back().unwrap_or(elem_name);
 
     match doc_type {
-        OoxmlDocumentType::Excel => scan_excel_element_threats(local_name, attrs, report, removed_targets),
-        OoxmlDocumentType::Word => scan_word_element_threats(local_name, attrs, report, removed_targets),
-        OoxmlDocumentType::PowerPoint => scan_powerpoint_element_threats(local_name, attrs, report, removed_targets),
+        OoxmlDocumentType::Excel => {
+            scan_excel_element_threats(local_name, attrs, report, removed_targets)
+        }
+        OoxmlDocumentType::Word => {
+            scan_word_element_threats(local_name, attrs, report, removed_targets)
+        }
+        OoxmlDocumentType::PowerPoint => {
+            scan_powerpoint_element_threats(local_name, attrs, report, removed_targets)
+        }
         OoxmlDocumentType::Unknown => false,
     }
 }
@@ -67,62 +73,67 @@ pub fn scan_text_content_threats(
     report: &mut OoxmlCdrReport,
 ) -> bool {
     let parent = parent_elem_name
-        .and_then(|n| n.split(':').last())
+        .and_then(|n| n.split(':').next_back())
         .unwrap_or("");
 
     // DDE Attack Detection — scan cell values (<v>) and formulas (<f>)
-    if parent == "v" || parent == "f" || parent == "definedName" {
-        if contains_dde_payload(text_content) {
-            report.dde_attacks_detected += 1;
-            let matched_pattern = matched_dde_pattern(text_content)
-                .unwrap_or("unknown".to_string());
+    if (parent == "v" || parent == "f" || parent == "definedName")
+        && contains_dde_payload(text_content)
+    {
+        report.dde_attacks_detected += 1;
+        let matched_pattern = matched_dde_pattern(text_content).unwrap_or("unknown".to_string());
 
-            report.actions_taken.push(OoxmlCdrAction::DdeAttackDetected {
+        report
+            .actions_taken
+            .push(OoxmlCdrAction::DdeAttackDetected {
                 location: format!("{} element", parent),
                 pattern_matched: matched_pattern,
             });
 
-            tracing::warn!(
-                parent_element = %parent,
-                content = %text_content,
-                "DDE attack payload detected and neutralized"
-            );
-            return false;
-        }
+        tracing::warn!(
+            parent_element = %parent,
+            content = %text_content,
+            "DDE attack payload detected and neutralized"
+        );
+        return false;
     }
 
     // Word instrText deep-scan for script injection
-    if parent == "instrText" && doc_type == OoxmlDocumentType::Word {
-        if contains_script_injection(text_content) {
-            report.word_threats_neutralized += 1;
-            report.actions_taken.push(OoxmlCdrAction::InstrTextScriptNeutralized {
+    if parent == "instrText"
+        && doc_type == OoxmlDocumentType::Word
+        && contains_script_injection(text_content)
+    {
+        report.word_threats_neutralized += 1;
+        report
+            .actions_taken
+            .push(OoxmlCdrAction::InstrTextScriptNeutralized {
                 field_content: text_content.chars().take(100).collect(),
             });
 
-            tracing::warn!(
-                content = %text_content,
-                "Script injection detected in Word instrText field — neutralized"
-            );
-            return false;
-        }
+        tracing::warn!(
+            content = %text_content,
+            "Script injection detected in Word instrText field — neutralized"
+        );
+        return false;
     }
 
     // PowerPoint animation command filtering
-    if parent == "cmd" && doc_type == OoxmlDocumentType::PowerPoint {
-        if contains_script_injection(text_content)
-            || has_blocked_url_protocol(text_content)
-        {
-            report.powerpoint_threats_neutralized += 1;
-            report.actions_taken.push(OoxmlCdrAction::AnimationCmdStripped {
+    if parent == "cmd"
+        && doc_type == OoxmlDocumentType::PowerPoint
+        && (contains_script_injection(text_content) || has_blocked_url_protocol(text_content))
+    {
+        report.powerpoint_threats_neutralized += 1;
+        report
+            .actions_taken
+            .push(OoxmlCdrAction::AnimationCmdStripped {
                 cmd_content: text_content.chars().take(100).collect(),
             });
 
-            tracing::warn!(
-                content = %text_content,
-                "Script injection in PowerPoint animation cmd — stripped"
-            );
-            return false;
-        }
+        tracing::warn!(
+            content = %text_content,
+            "Script injection in PowerPoint animation cmd — stripped"
+        );
+        return false;
     }
 
     true
@@ -134,16 +145,17 @@ pub fn scan_text_content_threats(
 
 /// Check if text content contains a DDE attack payload.
 pub fn contains_dde_payload(content: &str) -> bool {
-    DDE_PATTERNS.iter().any(|pattern| {
-        Regex::new(pattern).map_or(false, |re| re.is_match(content))
-    })
+    DDE_PATTERNS
+        .iter()
+        .any(|pattern| Regex::new(pattern).is_ok_and(|re| re.is_match(content)))
 }
 
 /// Return the first matching DDE pattern string (for reporting).
 pub fn matched_dde_pattern(content: &str) -> Option<String> {
-    DDE_PATTERNS.iter().find(|pattern| {
-        Regex::new(pattern).map_or(false, |re| re.is_match(content))
-    }).map(|s| s.to_string())
+    DDE_PATTERNS
+        .iter()
+        .find(|pattern| Regex::new(pattern).is_ok_and(|re| re.is_match(content)))
+        .map(|s| s.to_string())
 }
 
 // =============================================================================
@@ -153,17 +165,18 @@ pub fn matched_dde_pattern(content: &str) -> Option<String> {
 /// Check if a URL/reference uses a blocked protocol scheme.
 pub fn has_blocked_url_protocol(url: &str) -> bool {
     let url_lower = url.to_ascii_lowercase();
-    BLOCKED_URL_PROTOCOLS.iter().any(|proto| {
-        url_lower.starts_with(proto) || url_lower.contains(proto)
-    })
+    BLOCKED_URL_PROTOCOLS
+        .iter()
+        .any(|proto| url_lower.starts_with(proto) || url_lower.contains(proto))
 }
 
 /// Identify which blocked protocol triggered the detection (for reporting).
 pub fn identify_blocked_protocol(url: &str) -> Option<String> {
     let url_lower = url.to_ascii_lowercase();
-    BLOCKED_URL_PROTOCOLS.iter().find(|proto| {
-        url_lower.starts_with(*proto) || url_lower.contains(*proto)
-    }).map(|s| s.to_string())
+    BLOCKED_URL_PROTOCOLS
+        .iter()
+        .find(|proto| url_lower.starts_with(*proto) || url_lower.contains(*proto))
+        .map(|s| s.to_string())
 }
 
 // =============================================================================
@@ -172,7 +185,7 @@ pub fn identify_blocked_protocol(url: &str) -> Option<String> {
 
 /// Check if text content contains script injection patterns.
 pub fn contains_script_injection(content: &str) -> bool {
-    SCRIPT_INJECTION_PATTERNS.iter().any(|pattern| {
-        Regex::new(pattern).map_or(false, |re| re.is_match(content))
-    })
+    SCRIPT_INJECTION_PATTERNS
+        .iter()
+        .any(|pattern| Regex::new(pattern).is_ok_and(|re| re.is_match(content)))
 }

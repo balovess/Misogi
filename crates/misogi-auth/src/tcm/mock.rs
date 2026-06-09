@@ -13,14 +13,7 @@ use hmac::{Hmac, Mac};
 use sha2::Sha256;
 use tracing::debug;
 
-use super::traits::{
-    PcrValue,
-    QuoteAlgorithm,
-    TcmError,
-    TcmProvider,
-    TcmQuote,
-    TcmSealedData,
-};
+use super::traits::{PcrValue, QuoteAlgorithm, TcmError, TcmProvider, TcmQuote, TcmSealedData};
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -101,8 +94,7 @@ impl TcmProvider for MockTcmProvider {
         }
 
         // Generate a mock signature (HMAC over pcr values + nonce)
-        let mut mac = HmacSha256::new_from_slice(&self.seed)
-            .expect("HMAC accepts any key size");
+        let mut mac = HmacSha256::new_from_slice(&self.seed).expect("HMAC accepts any key size");
         for pcr in &pcr_values {
             mac.update(&pcr.value);
         }
@@ -117,19 +109,14 @@ impl TcmProvider for MockTcmProvider {
         })
     }
 
-    async fn seal(
-        &self,
-        data: &[u8],
-        pcr_selection: &[u8],
-    ) -> Result<TcmSealedData, TcmError> {
+    async fn seal(&self, data: &[u8], pcr_selection: &[u8]) -> Result<TcmSealedData, TcmError> {
         if !self.available {
             return Err(TcmError::HardwareUnavailable(
                 "Mock TCM is configured as unavailable".to_string(),
             ));
         }
 
-        let mut mac = HmacSha256::new_from_slice(&self.seed)
-            .expect("HMAC accepts any key size");
+        let mut mac = HmacSha256::new_from_slice(&self.seed).expect("HMAC accepts any key size");
         mac.update(data);
         mac.update(pcr_selection);
         let ciphertext = mac.finalize().into_bytes().to_vec();
@@ -244,11 +231,15 @@ mod tests {
         assert!(mock.get_endorsement_key_cert().await.is_err());
         assert!(mock.quote(b"nonce", &[0]).await.is_err());
         assert!(mock.seal(b"data", &[0]).await.is_err());
-        assert!(mock.unseal(&TcmSealedData {
-            ciphertext: vec![],
-            pcr_selection: vec![],
-            algorithm: QuoteAlgorithm::Sha256Rsa,
-            created_at: None,
-        }).await.is_err());
+        assert!(
+            mock.unseal(&TcmSealedData {
+                ciphertext: vec![],
+                pcr_selection: vec![],
+                algorithm: QuoteAlgorithm::Sha256Rsa,
+                created_at: None,
+            })
+            .await
+            .is_err()
+        );
     }
 }

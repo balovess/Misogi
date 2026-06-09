@@ -236,10 +236,7 @@ impl LdapAuthProvider {
     /// the user's DN as a member, then maps each matching group to a
     /// [`UserRole`] via the configured `role_mappings`.
     #[instrument(skip(self, user_dn), fields(user_dn = %user_dn))]
-    pub async fn resolve_roles(
-        &self,
-        user_dn: &str,
-    ) -> Result<Vec<UserRole>, LdapError> {
+    pub async fn resolve_roles(&self, user_dn: &str) -> Result<Vec<UserRole>, LdapError> {
         let url = self.next_url();
         self.do_resolve_roles(url, user_dn).await
     }
@@ -248,10 +245,7 @@ impl LdapAuthProvider {
     ///
     /// Returns `Ok(None)` if no user matches the identifier.
     #[instrument(skip(self, identifier), fields(identifier = %identifier))]
-    pub async fn find_user(
-        &self,
-        identifier: &str,
-    ) -> Result<Option<LdapUser>, LdapError> {
+    pub async fn find_user(&self, identifier: &str) -> Result<Option<LdapUser>, LdapError> {
         let url = self.next_url();
         self.do_find_user(url, identifier).await
     }
@@ -288,8 +282,7 @@ impl LdapAuthProvider {
         if self.config.urls.is_empty() {
             return "ldap://localhost:389";
         }
-        let idx = self.url_index.fetch_add(1, Ordering::Relaxed)
-            % self.config.urls.len();
+        let idx = self.url_index.fetch_add(1, Ordering::Relaxed) % self.config.urls.len();
         &self.config.urls[idx]
     }
 
@@ -302,16 +295,13 @@ impl LdapAuthProvider {
     ) -> Result<LdapUser, LdapError> {
         use ldap3::{LdapConnAsync, Scope, SearchEntry};
 
-        let timeout =
-            Duration::from_secs(self.config.connection_timeout_secs);
+        let timeout = Duration::from_secs(self.config.connection_timeout_secs);
 
         // Step 1: Establish async connection (keep conn alive for duration)
         let (conn, mut ldap) = tokio::time::timeout(timeout, LdapConnAsync::new(url))
             .await
             .map_err(|_| LdapError::Timeout)?
-            .map_err(|e| {
-                LdapError::ConnectionFailed(format!("LDAP connect error: {e}"))
-            })?;
+            .map_err(|e| LdapError::ConnectionFailed(format!("LDAP connect error: {e}")))?;
 
         // Step 2: Bind as service account
         let bind_result = tokio::time::timeout(
@@ -335,10 +325,7 @@ impl LdapAuthProvider {
         debug!("Service account bind successful");
 
         // Step 3: Build user search filter
-        let filter = self
-            .config
-            .user_filter
-            .replace("{username}", username);
+        let filter = self.config.user_filter.replace("{username}", username);
 
         // Step 4: Search for user entry
         let search_result = tokio::time::timeout(
@@ -347,21 +334,25 @@ impl LdapAuthProvider {
                 &self.config.user_search_base,
                 Scope::Subtree,
                 &filter,
-                vec!["dn", "uid", "cn", "displayName", "mail", "department", "sAMAccountName"],
+                vec![
+                    "dn",
+                    "uid",
+                    "cn",
+                    "displayName",
+                    "mail",
+                    "department",
+                    "sAMAccountName",
+                ],
             ),
         )
         .await
         .map_err(|_| LdapError::Timeout)?
-        .map_err(|e| {
-            LdapError::SearchFailed(format!("User search failed: {e}"))
-        })?;
+        .map_err(|e| LdapError::SearchFailed(format!("User search failed: {e}")))?;
 
         // Process search result
-        let (entries, _result) = search_result.success().map_err(|e| {
-            LdapError::SearchFailed(format!(
-                "User search result error: {e}"
-            ))
-        })?;
+        let (entries, _result) = search_result
+            .success()
+            .map_err(|e| LdapError::SearchFailed(format!("User search result error: {e}")))?;
 
         if entries.is_empty() {
             warn!(
@@ -384,17 +375,13 @@ impl LdapAuthProvider {
             .await
             .map_err(|_| LdapError::Timeout)?
             .map_err(|e| {
-                LdapError::ConnectionFailed(format!(
-                    "User verification connect error: {e}"
-                ))
+                LdapError::ConnectionFailed(format!("User verification connect error: {e}"))
             })?;
 
-        let user_bind_result = tokio::time::timeout(
-            timeout,
-            user_ldap.simple_bind(&user_dn, password),
-        )
-        .await
-        .map_err(|_| LdapError::Timeout)?;
+        let user_bind_result =
+            tokio::time::timeout(timeout, user_ldap.simple_bind(&user_dn, password))
+                .await
+                .map_err(|_| LdapError::Timeout)?;
 
         match user_bind_result {
             Ok(_) => debug!("User credential bind successful"),
@@ -436,11 +423,7 @@ impl LdapAuthProvider {
             .cloned()
             .unwrap_or_else(|| uid.clone());
 
-        let mail = entry
-            .attrs
-            .get("mail")
-            .and_then(|v| v.first())
-            .cloned();
+        let mail = entry.attrs.get("mail").and_then(|v| v.first()).cloned();
 
         let department = entry
             .attrs
@@ -460,22 +443,15 @@ impl LdapAuthProvider {
     }
 
     /// Resolve roles by querying group membership for a user DN.
-    async fn do_resolve_roles(
-        &self,
-        url: &str,
-        user_dn: &str,
-    ) -> Result<Vec<UserRole>, LdapError> {
+    async fn do_resolve_roles(&self, url: &str, user_dn: &str) -> Result<Vec<UserRole>, LdapError> {
         use ldap3::LdapConnAsync;
 
-        let timeout =
-            Duration::from_secs(self.config.connection_timeout_secs);
+        let timeout = Duration::from_secs(self.config.connection_timeout_secs);
 
         let (conn, mut ldap) = tokio::time::timeout(timeout, LdapConnAsync::new(url))
             .await
             .map_err(|_| LdapError::Timeout)?
-            .map_err(|e| {
-                LdapError::ConnectionFailed(format!("LDAP connect error: {e}"))
-            })?;
+            .map_err(|e| LdapError::ConnectionFailed(format!("LDAP connect error: {e}")))?;
 
         // Bind as service account
         let bind_result = tokio::time::timeout(
@@ -497,10 +473,10 @@ impl LdapAuthProvider {
         // Map groups to roles
         let mut roles: Vec<UserRole> = Vec::new();
         for group_dn in &groups {
-            if let Some(role) = self.config.role_mappings.get(group_dn) {
-                if !roles.contains(&role) {
-                    roles.push(role.clone());
-                }
+            if let Some(role) = self.config.role_mappings.get(group_dn)
+                && !roles.contains(role)
+            {
+                roles.push(role.clone());
             }
         }
 
@@ -521,15 +497,12 @@ impl LdapAuthProvider {
     ) -> Result<Option<LdapUser>, LdapError> {
         use ldap3::{LdapConnAsync, Scope, SearchEntry};
 
-        let timeout =
-            Duration::from_secs(self.config.connection_timeout_secs);
+        let timeout = Duration::from_secs(self.config.connection_timeout_secs);
 
         let (conn, mut ldap) = tokio::time::timeout(timeout, LdapConnAsync::new(url))
             .await
             .map_err(|_| LdapError::Timeout)?
-            .map_err(|e| {
-                LdapError::ConnectionFailed(format!("LDAP connect error: {e}"))
-            })?;
+            .map_err(|e| LdapError::ConnectionFailed(format!("LDAP connect error: {e}")))?;
 
         let bind_result = tokio::time::timeout(
             timeout,
@@ -543,9 +516,7 @@ impl LdapAuthProvider {
         }
 
         // Build OR filter for uid/mail/cn
-        let filter = format!(
-            "(|(uid={identifier})(mail={identifier})(cn={identifier}))"
-        );
+        let filter = format!("(|(uid={identifier})(mail={identifier})(cn={identifier}))");
 
         let search_result = tokio::time::timeout(
             timeout,
@@ -554,20 +525,23 @@ impl LdapAuthProvider {
                 Scope::Subtree,
                 &filter,
                 vec![
-                    "dn", "uid", "cn", "displayName",
-                    "mail", "department", "sAMAccountName",
+                    "dn",
+                    "uid",
+                    "cn",
+                    "displayName",
+                    "mail",
+                    "department",
+                    "sAMAccountName",
                 ],
             ),
         )
         .await
         .map_err(|_| LdapError::Timeout)?
-        .map_err(|e| {
-            LdapError::SearchFailed(format!("Search failed: {e}"))
-        })?;
+        .map_err(|e| LdapError::SearchFailed(format!("Search failed: {e}")))?;
 
-        let (entries, _result) = search_result.success().map_err(|e| {
-            LdapError::SearchFailed(format!("Search result error: {e}"))
-        })?;
+        let (entries, _result) = search_result
+            .success()
+            .map_err(|e| LdapError::SearchFailed(format!("Search result error: {e}")))?;
 
         if entries.is_empty() {
             return Ok(None);
@@ -623,8 +597,7 @@ impl LdapAuthProvider {
     ) -> Result<Vec<String>, LdapError> {
         use ldap3::Scope;
 
-        let timeout =
-            Duration::from_secs(self.config.connection_timeout_secs);
+        let timeout = Duration::from_secs(self.config.connection_timeout_secs);
 
         // Standard LDAP group membership filter
         let filter = format!("(member={user_dn})");
@@ -640,15 +613,11 @@ impl LdapAuthProvider {
         )
         .await
         .map_err(|_| LdapError::Timeout)?
-        .map_err(|e| {
-            LdapError::SearchFailed(format!("Group search failed: {e}"))
-        })?;
+        .map_err(|e| LdapError::SearchFailed(format!("Group search failed: {e}")))?;
 
-        let (entries, _result) = search_result.success().map_err(|e| {
-            LdapError::SearchFailed(format!(
-                "Group search result error: {e}"
-            ))
-        })?;
+        let (entries, _result) = search_result
+            .success()
+            .map_err(|e| LdapError::SearchFailed(format!("Group search result error: {e}")))?;
 
         let groups: Vec<String> = entries
             .into_iter()
@@ -671,15 +640,12 @@ impl LdapAuthProvider {
     async fn do_health_check(&self, url: &str) -> Result<(), LdapError> {
         use ldap3::LdapConnAsync;
 
-        let timeout =
-            Duration::from_secs(self.config.connection_timeout_secs);
+        let timeout = Duration::from_secs(self.config.connection_timeout_secs);
 
         let (_conn, mut ldap) = tokio::time::timeout(timeout, LdapConnAsync::new(url))
             .await
             .map_err(|_| LdapError::Timeout)?
-            .map_err(|e| {
-                LdapError::ConnectionFailed(format!("{e}"))
-            })?;
+            .map_err(|e| LdapError::ConnectionFailed(format!("{e}")))?;
 
         let bind_result = tokio::time::timeout(
             timeout,
@@ -688,9 +654,7 @@ impl LdapAuthProvider {
         .await
         .map_err(|_| LdapError::Timeout)?;
 
-        bind_result.map_err(|e| {
-            LdapError::BindFailed(format!("{e}"))
-        })?;
+        bind_result.map_err(|e| LdapError::BindFailed(format!("{e}")))?;
 
         Ok(())
     }

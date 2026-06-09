@@ -196,7 +196,6 @@ pub struct IdentityProviderConfig {
     pub enabled: bool,
 
     // ---- LDAP-specific fields ----
-
     /// LDAP server URL (required when type=ldap).
     ///
     /// Must use `ldaps://` for secure connections in production.
@@ -217,7 +216,6 @@ pub struct IdentityProviderConfig {
     pub bind_cn: Option<String>,
 
     // ---- OIDC-specific fields ----
-
     /// OIDC issuer URL (required when type=oidc).
     ///
     /// Example: `https://accounts.gcloud.go.jp`
@@ -247,7 +245,6 @@ pub struct IdentityProviderConfig {
     pub pkce: bool,
 
     // ---- Common fields ----
-
     /// Attribute mapping from IdP claims to Misogi user attributes.
     ///
     /// Maps external attribute names to internal identifiers:
@@ -278,23 +275,18 @@ fn default_oidc_scopes() -> Vec<String> {
 ///
 /// Three-tier policy system matching MIC guidelines for Japanese government
 /// document handling with increasing levels of security.
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum SanitizationPolicyLevel {
     /// Maximum security — destroys all embedded logic, converts to flat representation.
     Strict,
 
     /// Balanced — removes JS/VBA/macros while preserving editability.
+    #[default]
     Standard,
 
     /// Minimal — basic sanitization only, preserves most content.
     Lenient,
-}
-
-impl Default for SanitizationPolicyLevel {
-    fn default() -> Self {
-        Self::Standard
-    }
 }
 
 /// Sanitization configuration root structure.
@@ -628,7 +620,9 @@ impl YamlConfig {
                 field: "root".to_string(),
                 message: format!("{} validation error(s) detected", error_count),
                 severity: crate::error::ValidationSeverity::Error,
-                suggestion: Some("Review all validation errors and fix them before compiling".to_string()),
+                suggestion: Some(
+                    "Review all validation errors and fix them before compiling".to_string(),
+                ),
             })
         } else {
             Ok(errors)
@@ -641,58 +635,78 @@ impl YamlConfig {
 
     fn validate_version(&self, errors: &mut Vec<ValidationError>) {
         if self.version.is_empty() {
-            errors.push(ValidationError::new(
-                "version",
-                "version must not be empty",
-            ).with_suggestion("Set version to \"1.0\""));
+            errors.push(
+                ValidationError::new("version", "version must not be empty")
+                    .with_suggestion("Set version to \"1.0\""),
+            );
         } else if !["1.0"].contains(&self.version.as_str()) {
-            errors.push(ValidationError::warning(
-                "version",
-                format!("version '{}' is not officially supported", self.version),
-            ).with_suggestion("Use version \"1.0\" for compatibility"));
+            errors.push(
+                ValidationError::warning(
+                    "version",
+                    format!("version '{}' is not officially supported", self.version),
+                )
+                .with_suggestion("Use version \"1.0\" for compatibility"),
+            );
         }
     }
 
     fn validate_environment(&self, errors: &mut Vec<ValidationError>) {
         let valid_environments = ["development", "staging", "production"];
         if !valid_environments.contains(&self.environment.as_str()) {
-            errors.push(ValidationError::new(
-                "environment",
-                format!("invalid environment '{}', must be one of: {}", 
-                    self.environment, valid_environments.join(", "))
-            ).with_suggestion("Use 'production' for government deployments"));
+            errors.push(
+                ValidationError::new(
+                    "environment",
+                    format!(
+                        "invalid environment '{}', must be one of: {}",
+                        self.environment,
+                        valid_environments.join(", ")
+                    ),
+                )
+                .with_suggestion("Use 'production' for government deployments"),
+            );
         }
     }
 
     fn validate_authentication(&self, errors: &mut Vec<ValidationError>) {
         // Validate JWT config
         if self.authentication.jwt.issuer.is_empty() {
-            errors.push(ValidationError::new(
-                "authentication.jwt.issuer",
-                "JWT issuer must not be empty",
-            ).with_suggestion("Set issuer to your domain, e.g., 'https://misogi.gov.jp'"));
-        } else if !self.authentication.jwt.issuer.starts_with("https://") && 
-                  self.environment == "production" {
-            errors.push(ValidationError::new(
-                "authentication.jwt.issuer",
-                "JWT issuer must use HTTPS in production",
-            ).with_suggestion("Change 'http://' to 'https://'"));
+            errors.push(
+                ValidationError::new("authentication.jwt.issuer", "JWT issuer must not be empty")
+                    .with_suggestion("Set issuer to your domain, e.g., 'https://misogi.gov.jp'"),
+            );
+        } else if !self.authentication.jwt.issuer.starts_with("https://")
+            && self.environment == "production"
+        {
+            errors.push(
+                ValidationError::new(
+                    "authentication.jwt.issuer",
+                    "JWT issuer must use HTTPS in production",
+                )
+                .with_suggestion("Change 'http://' to 'https://'"),
+            );
         }
 
         // Validate TTL range
         if self.authentication.jwt.ttl_hours < 1 || self.authentication.jwt.ttl_hours > 168 {
-            errors.push(ValidationError::new(
-                "authentication.jwt.ttl_hours",
-                format!("TTL must be between 1-168 hours, got {}", 
-                    self.authentication.jwt.ttl_hours),
-            ).with_suggestion("Use 8 hours for standard government sessions"));
+            errors.push(
+                ValidationError::new(
+                    "authentication.jwt.ttl_hours",
+                    format!(
+                        "TTL must be between 1-168 hours, got {}",
+                        self.authentication.jwt.ttl_hours
+                    ),
+                )
+                .with_suggestion("Use 8 hours for standard government sessions"),
+            );
         }
 
         // Validate at least one enabled provider exists
-        let has_enabled_provider = self.authentication.identity_providers
+        let has_enabled_provider = self
+            .authentication
+            .identity_providers
             .iter()
             .any(|p| p.enabled);
-        
+
         if !has_enabled_provider && !self.authentication.identity_providers.is_empty() {
             errors.push(ValidationError::new(
                 "authentication.identity_providers",
@@ -713,31 +727,40 @@ impl YamlConfig {
 
             match provider.r#type {
                 IdentityProviderType::Ldap => {
-                    if provider.url.as_ref().map_or(true, |u| u.is_empty()) {
-                        errors.push(ValidationError::new(
-                            format!("{}.url", prefix),
-                            "LDAP provider requires a URL",
-                        ).with_suggestion("Set URL to 'ldaps://ldap.example.com'"));
+                    if provider.url.as_ref().is_none_or(|u| u.is_empty()) {
+                        errors.push(
+                            ValidationError::new(
+                                format!("{}.url", prefix),
+                                "LDAP provider requires a URL",
+                            )
+                            .with_suggestion("Set URL to 'ldaps://ldap.example.com'"),
+                        );
                     }
-                    if provider.base_dn.as_ref().map_or(true, |dn| dn.is_empty()) {
-                        errors.push(ValidationError::new(
-                            format!("{}.base_dn", prefix),
-                            "LDAP provider requires base_dn",
-                        ).with_suggestion("Set base_dn to 'DC=gov,DC=jp'"));
+                    if provider.base_dn.as_ref().is_none_or(|dn| dn.is_empty()) {
+                        errors.push(
+                            ValidationError::new(
+                                format!("{}.base_dn", prefix),
+                                "LDAP provider requires base_dn",
+                            )
+                            .with_suggestion("Set base_dn to 'DC=gov,DC=jp'"),
+                        );
                     }
                 }
                 IdentityProviderType::Oidc => {
-                    if provider.issuer.as_ref().map_or(true, |u| u.is_empty()) {
+                    if provider.issuer.as_ref().is_none_or(|u| u.is_empty()) {
                         errors.push(ValidationError::new(
                             format!("{}.issuer", prefix),
                             "OIDC provider requires an issuer URL",
                         ));
                     }
-                    if provider.client_id.as_ref().map_or(true, |id| id.is_empty()) {
-                        errors.push(ValidationError::new(
-                            format!("{}.client_id", prefix),
-                            "OIDC provider requires client_id",
-                        ).with_suggestion("Set client_id or use ${OIDC_CLIENT_ID}"));
+                    if provider.client_id.as_ref().is_none_or(|id| id.is_empty()) {
+                        errors.push(
+                            ValidationError::new(
+                                format!("{}.client_id", prefix),
+                                "OIDC provider requires client_id",
+                            )
+                            .with_suggestion("Set client_id or use ${OIDC_CLIENT_ID}"),
+                        );
                     }
                 }
                 IdentityProviderType::Saml => {
@@ -754,28 +777,37 @@ impl YamlConfig {
             let prefix = format!("sanitization.rules[{}]", i);
 
             if rule.match_pattern.is_empty() {
-                errors.push(ValidationError::new(
-                    format!("{}.match_pattern", prefix),
-                    "Sanitization rule must have a match pattern",
-                ).with_suggestion("Use '*.pdf' for PDF files or '*' for catch-all"));
+                errors.push(
+                    ValidationError::new(
+                        format!("{}.match_pattern", prefix),
+                        "Sanitization rule must have a match pattern",
+                    )
+                    .with_suggestion("Use '*.pdf' for PDF files or '*' for catch-all"),
+                );
             }
 
             // Warn about lenient policy in production
             if rule.policy == SanitizationPolicyLevel::Lenient && self.environment == "production" {
-                errors.push(ValidationError::warning(
-                    format!("{}.policy", prefix),
-                    "Lenient sanitization policy is not recommended for production",
-                ).with_suggestion("Consider using 'strict' or 'standard' policy"));
+                errors.push(
+                    ValidationError::warning(
+                        format!("{}.policy", prefix),
+                        "Lenient sanitization policy is not recommended for production",
+                    )
+                    .with_suggestion("Consider using 'strict' or 'standard' policy"),
+                );
             }
         }
     }
 
     fn validate_routing(&self, errors: &mut Vec<ValidationError>) {
         if self.routing.incoming.is_empty() {
-            errors.push(ValidationError::new(
-                "routing.incoming",
-                "At least one routing rule must be defined",
-            ).with_suggestion("Add a catch-all rule with source_pattern: '*'"));
+            errors.push(
+                ValidationError::new(
+                    "routing.incoming",
+                    "At least one routing rule must be defined",
+                )
+                .with_suggestion("Add a catch-all rule with source_pattern: '*'"),
+            );
         }
 
         // Validate each routing rule
@@ -791,23 +823,36 @@ impl YamlConfig {
 
             // Validate rate limit format
             if !Self::is_valid_rate_limit(&rule.rate_limit) {
-                errors.push(ValidationError::new(
-                    format!("{}.rate_limit", prefix),
-                    format!("Invalid rate limit format: '{}'. Expected '<number>/min'", rule.rate_limit),
-                ).with_suggestion("Use '100/min', '1000/min', or '0/min' for unlimited"));
+                errors.push(
+                    ValidationError::new(
+                        format!("{}.rate_limit", prefix),
+                        format!(
+                            "Invalid rate limit format: '{}'. Expected '<number>/min'",
+                            rule.rate_limit
+                        ),
+                    )
+                    .with_suggestion("Use '100/min', '1000/min', or '0/min' for unlimited"),
+                );
             }
 
             // Validate that allowed_providers reference existing providers
             for provider_name in &rule.allowed_providers {
-                let provider_exists = self.authentication.identity_providers
+                let provider_exists = self
+                    .authentication
+                    .identity_providers
                     .iter()
                     .any(|p| p.name == *provider_name);
-                
+
                 if !provider_exists {
-                    errors.push(ValidationError::new(
-                        format!("{}.allowed_providers", prefix),
-                        format!("Referenced provider '{}' does not exist", provider_name),
-                    ).with_suggestion("Check identity_providers section for correct provider names"));
+                    errors.push(
+                        ValidationError::new(
+                            format!("{}.allowed_providers", prefix),
+                            format!("Referenced provider '{}' does not exist", provider_name),
+                        )
+                        .with_suggestion(
+                            "Check identity_providers section for correct provider names",
+                        ),
+                    );
                 }
             }
         }
@@ -815,10 +860,14 @@ impl YamlConfig {
 
     fn validate_retention(&self, retention: &RetentionConfig, errors: &mut Vec<ValidationError>) {
         // Validate default retention range
-        if retention.default_days < 1 || retention.default_days > 36500 { // 100 years max
+        if retention.default_days < 1 || retention.default_days > 36500 {
+            // 100 years max
             errors.push(ValidationError::new(
                 "retention.default_days",
-                format!("Default retention must be 1-36500 days, got {}", retention.default_days),
+                format!(
+                    "Default retention must be 1-36500 days, got {}",
+                    retention.default_days
+                ),
             ));
         }
 
@@ -844,7 +893,9 @@ impl YamlConfig {
 
     fn validate_cross_references(&self, errors: &mut Vec<ValidationError>) {
         // Collect all provider names for reference validation
-        let provider_names: Vec<&String> = self.authentication.identity_providers
+        let provider_names: Vec<&String> = self
+            .authentication
+            .identity_providers
             .iter()
             .map(|p| &p.name)
             .collect();
@@ -853,10 +904,13 @@ impl YamlConfig {
         let mut seen = std::collections::HashSet::new();
         for (i, name) in provider_names.iter().enumerate() {
             if !seen.insert(*name) {
-                errors.push(ValidationError::new(
-                    format!("authentication.identity_providers[{}].name", i),
-                    format!("Duplicate identity provider name: '{}'", name),
-                ).with_suggestion("Each provider must have a unique name"));
+                errors.push(
+                    ValidationError::new(
+                        format!("authentication.identity_providers[{}].name", i),
+                        format!("Duplicate identity provider name: '{}'", name),
+                    )
+                    .with_suggestion("Each provider must have a unique name"),
+                );
             }
         }
     }
@@ -879,7 +933,7 @@ impl YamlConfig {
     fn extract_location(error: &serde_yaml::Error) -> (Option<usize>, Option<usize>) {
         // serde_yaml errors contain location info in their message
         let msg = error.to_string();
-        
+
         // Try to extract line number from message like "at line X, column Y"
         let re = regex::Regex::new(r"at line (\d+),? column (\d+)").unwrap();
         if let Some(caps) = re.captures(&msg) {
@@ -928,7 +982,10 @@ routing:
         assert_eq!(config.version, "1.0");
         assert_eq!(config.environment, "production");
         assert_eq!(config.authentication.jwt.ttl_hours, 8);
-        assert_eq!(config.sanitization.default_policy, SanitizationPolicyLevel::Standard);
+        assert_eq!(
+            config.sanitization.default_policy,
+            SanitizationPolicyLevel::Standard
+        );
         assert_eq!(config.routing.incoming.len(), 1);
     }
 
@@ -1039,11 +1096,17 @@ routing:
         let config = YamlConfig::from_yaml_str(yaml).unwrap();
         let result = config.validate();
 
-        assert!(result.is_err(), "Should fail validation with multiple errors");
+        assert!(
+            result.is_err(),
+            "Should fail validation with multiple errors"
+        );
 
         // Should include errors for version, environment, jwt.issuer, jwt.ttl_hours, routing
         let err = result.unwrap_err();
-        assert!(err.message.contains("validation error"), "Error should mention count");
+        assert!(
+            err.message.contains("validation error"),
+            "Error should mention count"
+        );
     }
 
     // =========================================================================
@@ -1076,10 +1139,15 @@ routing:
 "#;
 
         let config = YamlConfig::from_yaml_str(yaml).unwrap();
-        let warnings = config.validate().expect("Valid config should pass validation");
-        
+        let warnings = config
+            .validate()
+            .expect("Valid config should pass validation");
+
         // May have warnings but no errors
-        assert!(!warnings.iter().any(|w| w.is_error()), "Should have no error-level validations");
+        assert!(
+            !warnings.iter().any(|w| w.is_error()),
+            "Should have no error-level validations"
+        );
     }
 
     // =========================================================================
@@ -1204,7 +1272,13 @@ routing:
 
         let config = YamlConfig::from_yaml_str(yaml).unwrap();
         let oidc_provider = &config.authentication.identity_providers[0];
-        assert_eq!(oidc_provider.client_id.as_deref().unwrap(), "${MY_CLIENT_ID}");
-        assert_eq!(oidc_provider.client_secret.as_deref().unwrap(), "${MY_SECRET}");
+        assert_eq!(
+            oidc_provider.client_id.as_deref().unwrap(),
+            "${MY_CLIENT_ID}"
+        );
+        assert_eq!(
+            oidc_provider.client_secret.as_deref().unwrap(),
+            "${MY_SECRET}"
+        );
     }
 }

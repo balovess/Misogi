@@ -285,10 +285,7 @@ impl Default for PosturePolicy {
 
         Self {
             min_posture_score: 70,
-            required_checks: vec![
-                "os_supported".to_string(),
-                "antivirus_enabled".to_string(),
-            ],
+            required_checks: vec!["os_supported".to_string(), "antivirus_enabled".to_string()],
             os_requirements,
             max_patch_age_days: 30,
             require_antivirus: true,

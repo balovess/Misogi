@@ -20,8 +20,8 @@ mod grpc_interceptor_tests {
     use super::super::*;
     use crate::jwt::{JwtConfig, JwtValidator};
     use std::sync::Arc;
-    use tonic::service::Interceptor;
     use tonic::Request;
+    use tonic::service::Interceptor;
 
     // ===================================================================
     // Helper: Create test JWT config (uses test keys if available)
@@ -177,10 +177,9 @@ mod grpc_interceptor_tests {
 
         // Request with empty Bearer token
         let mut request = Request::new(());
-        request.metadata_mut().insert(
-            "authorization",
-            "Bearer ".parse().unwrap(),
-        );
+        request
+            .metadata_mut()
+            .insert("authorization", "Bearer ".parse().unwrap());
 
         let result = interceptor.call(request);
 
@@ -286,7 +285,9 @@ mod grpc_interceptor_tests {
         // The error should indicate this is an external/invalid token
         // Either "external" or "validation failed" or similar
         assert!(
-            message.contains("external") || message.contains("validation") || message.contains("invalid"),
+            message.contains("external")
+                || message.contains("validation")
+                || message.contains("invalid"),
             "Error should clearly indicate external/rejected token: {message}"
         );
     }

@@ -1,10 +1,10 @@
 #[cfg(test)]
-mod tests {
-    use crate::abac::policy::{
-        AbacPolicyRule, ApprovalTemplate, ApproverPool, ConditionOperator,
-        Obligation, PolicyCondition, PolicyEffect, PolicyTarget,
-    };
+mod test_cases {
     use crate::abac::attribute::{AbacAttribute, AbacValue};
+    use crate::abac::policy::{
+        AbacPolicyRule, ApprovalTemplate, ApproverPool, ConditionOperator, Obligation,
+        PolicyCondition, PolicyEffect, PolicyTarget,
+    };
     use std::collections::HashMap;
 
     // ===================================================================
@@ -58,7 +58,10 @@ mod tests {
             value: AbacValue::String("banned_role".to_string()),
         };
         let mut map = HashMap::new();
-        map.insert("Role".to_string(), AbacValue::String("normal_user".to_string()));
+        map.insert(
+            "Role".to_string(),
+            AbacValue::String("normal_user".to_string()),
+        );
         assert!(cond.evaluate(&map));
     }
 
@@ -89,7 +92,10 @@ mod tests {
             ]),
         };
         let mut map = HashMap::new();
-        map.insert("Role".to_string(), AbacValue::String("operator".to_string()));
+        map.insert(
+            "Role".to_string(),
+            AbacValue::String("operator".to_string()),
+        );
         assert!(cond.evaluate(&map));
     }
 
@@ -98,9 +104,7 @@ mod tests {
         let cond = PolicyCondition {
             attribute: AbacAttribute::Role(String::new()),
             operator: ConditionOperator::In,
-            value: AbacValue::List(vec![
-                AbacValue::String("admin".to_string()),
-            ]),
+            value: AbacValue::List(vec![AbacValue::String("admin".to_string())]),
         };
         let mut map = HashMap::new();
         map.insert("Role".to_string(), AbacValue::String("guest".to_string()));
@@ -112,9 +116,7 @@ mod tests {
         let cond = PolicyCondition {
             attribute: AbacAttribute::Role(String::new()),
             operator: ConditionOperator::NotIn,
-            value: AbacValue::List(vec![
-                AbacValue::String("terminated".to_string()),
-            ]),
+            value: AbacValue::List(vec![AbacValue::String("terminated".to_string())]),
         };
         let mut map = HashMap::new();
         map.insert("Role".to_string(), AbacValue::String("active".to_string()));
@@ -173,7 +175,10 @@ mod tests {
             value: AbacValue::String(r"^emp-\d{4}$".to_string()),
         };
         let mut map = HashMap::new();
-        map.insert("UserId".to_string(), AbacValue::String("emp-1234".to_string()));
+        map.insert(
+            "UserId".to_string(),
+            AbacValue::String("emp-1234".to_string()),
+        );
         assert!(cond.evaluate(&map));
     }
 
@@ -185,7 +190,10 @@ mod tests {
             value: AbacValue::String(r"^emp-".to_string()),
         };
         let mut map = HashMap::new();
-        map.insert("UserId".to_string(), AbacValue::String("admin-user".to_string()));
+        map.insert(
+            "UserId".to_string(),
+            AbacValue::String("admin-user".to_string()),
+        );
         assert!(!cond.evaluate(&map));
     }
 

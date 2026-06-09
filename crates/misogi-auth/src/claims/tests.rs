@@ -48,7 +48,8 @@ fn test_new_required_fields_only() {
 fn test_builder_chaining() {
     let c = MisogiClaims::new("x".to_string(), TEST_IAT, TEST_EXP)
         .with_display_name("N".to_string())
-        .add_role("a").add_role("b")
+        .add_role("a")
+        .add_role("b")
         .with_idp_source("test".to_string());
     assert_eq!(c.display_name.as_deref(), Some("N"));
     assert_eq!(c.roles.len(), 2);
@@ -105,9 +106,8 @@ fn test_serialization_structure() {
 
 #[test]
 fn test_required_fields_present_in_output() {
-    let json = serde_json::to_string(
-        &MisogiClaims::new("r".to_string(), TEST_IAT, TEST_EXP)
-    ).unwrap();
+    let json =
+        serde_json::to_string(&MisogiClaims::new("r".to_string(), TEST_IAT, TEST_EXP)).unwrap();
     assert!(json.contains("\"applicant_id\""));
     assert!(json.contains("\"iat\""));
     assert!(json.contains("\"exp\""));
@@ -123,8 +123,7 @@ fn test_missing_exp_fails_deserialize() {
 fn test_applicant_id_exact_preservation() {
     let id = "EMP-2024-0042-JP";
     let c = MisogiClaims::new(id.to_string(), TEST_IAT, TEST_EXP);
-    let r: MisogiClaims =
-        serde_json::from_str(&serde_json::to_string(&c).unwrap()).unwrap();
+    let r: MisogiClaims = serde_json::from_str(&serde_json::to_string(&c).unwrap()).unwrap();
     assert_eq!(r.applicant_id.len(), id.len());
 }
 
@@ -134,9 +133,8 @@ fn test_applicant_id_exact_preservation() {
 
 #[test]
 fn test_optional_skip_when_none() {
-    let json = serde_json::to_string(
-        &MisogiClaims::new("s".to_string(), TEST_IAT, TEST_EXP)
-    ).unwrap();
+    let json =
+        serde_json::to_string(&MisogiClaims::new("s".to_string(), TEST_IAT, TEST_EXP)).unwrap();
     assert!(!json.contains("display_name"));
     assert!(!json.contains("original_subject"));
     assert!(json.contains("idp_source")); // String, not Option
@@ -179,11 +177,18 @@ fn test_extra_flattens_to_top_level() {
 fn test_extra_roundtrip() {
     let mut ex = HashMap::new();
     ex.insert("scope".into(), serde_json::json!(["read", "write"]));
-    let c = MisogiClaims { applicant_id: "e".into(), iat: TEST_IAT, exp: TEST_EXP,
-        display_name: None, roles: vec![], idp_source: "t".into(),
-        original_subject: None, issuer_dn: None, extra: ex.clone() };
-    let r: MisogiClaims =
-        serde_json::from_str(&serde_json::to_string(&c).unwrap()).unwrap();
+    let c = MisogiClaims {
+        applicant_id: "e".into(),
+        iat: TEST_IAT,
+        exp: TEST_EXP,
+        display_name: None,
+        roles: vec![],
+        idp_source: "t".into(),
+        original_subject: None,
+        issuer_dn: None,
+        extra: ex.clone(),
+    };
+    let r: MisogiClaims = serde_json::from_str(&serde_json::to_string(&c).unwrap()).unwrap();
     assert_eq!(r.extra["scope"], serde_json::json!(["read", "write"]));
 }
 
@@ -211,21 +216,26 @@ fn test_empty_extra_clean_output() {
 
 #[test]
 fn test_temporal_valid() {
-    assert!(MisogiClaims::new("v".to_string(), TEST_IAT, TEST_EXP)
-        .validate_temporal().is_ok());
+    assert!(
+        MisogiClaims::new("v".to_string(), TEST_IAT, TEST_EXP)
+            .validate_temporal()
+            .is_ok()
+    );
 }
 
 #[test]
 fn test_temporal_rejects_inverted() {
-    let r = MisogiClaims::new("i".to_string(), TEST_EXP, TEST_IAT)
-        .validate_temporal();
+    let r = MisogiClaims::new("i".to_string(), TEST_EXP, TEST_IAT).validate_temporal();
     assert!(r.is_err() && r.unwrap_err().contains("exp"));
 }
 
 #[test]
 fn test_temporal_rejects_zero_lifetime() {
-    assert!(MisogiClaims::new("z".to_string(), TEST_IAT, TEST_IAT)
-        .validate_temporal().is_err());
+    assert!(
+        MisogiClaims::new("z".to_string(), TEST_IAT, TEST_IAT)
+            .validate_temporal()
+            .is_err()
+    );
 }
 
 // ===========================================================================
@@ -234,16 +244,14 @@ fn test_temporal_rejects_zero_lifetime() {
 
 #[test]
 fn test_has_role_case_sensitive() {
-    let c = MisogiClaims::new("h".to_string(), TEST_IAT, TEST_EXP)
-        .with_roles(vec!["Admin".into()]);
+    let c = MisogiClaims::new("h".to_string(), TEST_IAT, TEST_EXP).with_roles(vec!["Admin".into()]);
     assert!(c.has_role("Admin"));
     assert!(!c.has_role("admin"));
 }
 
 #[test]
 fn test_has_role_empty() {
-    assert!(!MisogiClaims::new("e".to_string(), TEST_IAT, TEST_EXP)
-        .has_role("x"));
+    assert!(!MisogiClaims::new("e".to_string(), TEST_IAT, TEST_EXP).has_role("x"));
 }
 
 #[test]
@@ -290,31 +298,27 @@ fn test_debug_contains_key_info() {
 #[test]
 fn test_unicode_roundtrip() {
     let name = "\u{7530}\u{4E2D} \u{592A}\u{90CE}";
-    let c = MisogiClaims::new("u".to_string(), TEST_IAT, TEST_EXP)
-        .with_display_name(name.to_string());
-    let r: MisogiClaims =
-        serde_json::from_str(&serde_json::to_string(&c).unwrap()).unwrap();
+    let c =
+        MisogiClaims::new("u".to_string(), TEST_IAT, TEST_EXP).with_display_name(name.to_string());
+    let r: MisogiClaims = serde_json::from_str(&serde_json::to_string(&c).unwrap()).unwrap();
     assert_eq!(r.display_name.as_deref(), Some(name));
 }
 
 #[test]
 fn test_large_roles_vector() {
     let roles: Vec<String> = (0..100).map(|i| format!("r-{i}")).collect();
-    let c = MisogiClaims::new("m".to_string(), TEST_IAT, TEST_EXP)
-        .with_roles(roles.clone());
+    let c = MisogiClaims::new("m".to_string(), TEST_IAT, TEST_EXP).with_roles(roles.clone());
     assert_eq!(c.roles.len(), 100);
-    let r: MisogiClaims =
-        serde_json::from_str(&serde_json::to_string(&c).unwrap()).unwrap();
+    let r: MisogiClaims = serde_json::from_str(&serde_json::to_string(&c).unwrap()).unwrap();
     assert_eq!(r.roles.len(), 100);
 }
 
 #[test]
 fn test_nested_extra_data() {
     let nested = serde_json::json!({"meta": {"dept": "Eng"}, "perm": true});
-    let c = MisogiClaims::new("n".to_string(), TEST_IAT, TEST_EXP)
-        .with_extra("ext", nested.clone());
-    let r: MisogiClaims =
-        serde_json::from_str(&serde_json::to_string(&c).unwrap()).unwrap();
+    let c =
+        MisogiClaims::new("n".to_string(), TEST_IAT, TEST_EXP).with_extra("ext", nested.clone());
+    let r: MisogiClaims = serde_json::from_str(&serde_json::to_string(&c).unwrap()).unwrap();
     assert_eq!(r.extra["ext"], nested);
 }
 
@@ -329,7 +333,8 @@ fn test_idp_default_unknown() {
 #[test]
 fn test_with_roles_replaces() {
     let c = MisogiClaims::new("r".to_string(), TEST_IAT, TEST_EXP)
-        .add_role("old").with_roles(vec!["new-a".into(), "new-b".into()]);
+        .add_role("old")
+        .with_roles(vec!["new-a".into(), "new-b".into()]);
     assert_eq!(c.roles.len(), 2);
     assert!(!c.has_role("old"));
 }

@@ -324,10 +324,7 @@ impl LibreOfficeJtdConverter {
     /// LibreOffice's `--convert-to pdf` produces output named `<stem>.pdf` in the
     /// specified output directory, where `<stem>` is the input filename without extension.
     fn expected_output_path(output_dir: &Path, input_path: &Path) -> PathBuf {
-        let stem = input_path
-            .file_stem()
-            .unwrap_or_default()
-            .to_string_lossy();
+        let stem = input_path.file_stem().unwrap_or_default().to_string_lossy();
         output_dir.join(format!("{stem}.pdf"))
     }
 }
@@ -380,14 +377,12 @@ impl JtdConverter for LibreOfficeJtdConverter {
         let original_size_bytes = std::fs::metadata(input_path)?.len();
 
         // Step 3: Ensure output directory exists
-        let output_dir = output_path
-            .parent()
-            .ok_or_else(|| {
-                JtdConversionError::Io(std::io::Error::new(
-                    std::io::ErrorKind::InvalidInput,
-                    "output_path has no parent directory",
-                ))
-            })?;
+        let output_dir = output_path.parent().ok_or_else(|| {
+            JtdConversionError::Io(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "output_path has no parent directory",
+            ))
+        })?;
 
         std::fs::create_dir_all(output_dir)?;
 
@@ -482,7 +477,10 @@ mod tests {
     #[test]
     fn test_default_constructor_values() {
         let converter = LibreOfficeJtdConverter::new();
-        assert!(converter.soffice_path.is_none(), "default should have no explicit path");
+        assert!(
+            converter.soffice_path.is_none(),
+            "default should have no explicit path"
+        );
         assert_eq!(converter.timeout_secs, DEFAULT_TIMEOUT_SECS);
     }
 
@@ -512,7 +510,10 @@ mod tests {
     #[test]
     fn test_with_timeout_clamps_zero() {
         let converter = LibreOfficeJtdConverter::new().with_timeout(0);
-        assert_eq!(converter.timeout_secs, 1, "zero timeout must be clamped to 1");
+        assert_eq!(
+            converter.timeout_secs, 1,
+            "zero timeout must be clamped to 1"
+        );
     }
 
     // =========================================================================
@@ -635,9 +636,8 @@ mod tests {
     #[tokio::test]
     async fn test_is_available_returns_false_when_not_installed() {
         // Use a clearly nonexistent path to force detection failure
-        let converter = LibreOfficeJtdConverter::with_path(
-            "/this/path/definitely/does/not/exist/soffice",
-        );
+        let converter =
+            LibreOfficeJtdConverter::with_path("/this/path/definitely/does/not/exist/soffice");
         let available = converter.is_available().await.unwrap();
         assert!(!available);
     }
@@ -647,8 +647,7 @@ mod tests {
         // Use a system binary that is guaranteed to exist on all platforms
         // to bypass resolve_soffice_path and reach input file validation.
         #[cfg(target_os = "windows")]
-        let converter =
-            LibreOfficeJtdConverter::with_path(r"C:\Windows\System32\cmd.exe");
+        let converter = LibreOfficeJtdConverter::with_path(r"C:\Windows\System32\cmd.exe");
         #[cfg(target_os = "macos")]
         let converter = LibreOfficeJtdConverter::with_path("/bin/sh");
         #[cfg(target_os = "linux")]
@@ -719,7 +718,10 @@ mod tests {
 
     #[test]
     fn test_default_timeout_constant_value() {
-        assert_eq!(DEFAULT_TIMEOUT_SECS, 120, "default timeout must be 120 seconds");
+        assert_eq!(
+            DEFAULT_TIMEOUT_SECS, 120,
+            "default timeout must be 120 seconds"
+        );
     }
 
     #[test]

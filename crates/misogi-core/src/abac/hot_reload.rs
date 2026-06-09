@@ -109,10 +109,7 @@ impl AbacHotReload {
     ///
     /// Use [`with_file_watch`](Self::with_file_watch) to enable automatic
     /// file-change detection via [`check_and_reload`](Self::check_and_reload).
-    pub fn new(
-        engine: AbacEngine,
-        executor: ApprovalExecutor,
-    ) -> Self {
+    pub fn new(engine: AbacEngine, executor: ApprovalExecutor) -> Self {
         Self {
             config_path: None,
             last_modified: RwLock::new(None),
@@ -177,16 +174,13 @@ impl AbacHotReload {
         // --- Compare against last known time ---
         {
             let last = self.last_modified.read().map_err(|e| {
-                ReloadError::IoError(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    format!("RwLock poisoned: {}", e),
-                ))
+                ReloadError::IoError(std::io::Error::other(format!("RwLock poisoned: {}", e)))
             })?;
 
-            if let Some(prev) = *last {
-                if current_mtime <= prev {
-                    return Ok(false); // File has not changed since last check
-                }
+            if let Some(prev) = *last
+                && current_mtime <= prev
+            {
+                return Ok(false); // File has not changed since last check
             }
         } // Release read lock before acquiring write locks below
 
@@ -240,9 +234,8 @@ impl AbacHotReload {
     ///
     /// The parsed and validated [`AbacConfig`] on success.
     pub fn reload_from_string(&self, toml_str: &str) -> Result<AbacConfig, ReloadError> {
-        let config: AbacConfig = toml::from_str(toml_str).map_err(|e| {
-            ReloadError::ParseError(format!("TOML parse error: {}", e))
-        })?;
+        let config: AbacConfig = toml::from_str(toml_str)
+            .map_err(|e| ReloadError::ParseError(format!("TOML parse error: {}", e)))?;
 
         self.validate_and_apply(config)
     }
@@ -321,12 +314,11 @@ impl AbacHotReload {
         let result = self.validate_and_apply(config);
 
         // Update timestamp on success regardless of apply result path
-        if result.is_ok() {
-            if let Ok(mtime) = std::fs::metadata(path).and_then(|m| m.modified()) {
-                if let Ok(mut last) = self.last_modified.write() {
-                    *last = Some(mtime);
-                }
-            }
+        if result.is_ok()
+            && let Ok(mtime) = std::fs::metadata(path).and_then(|m| m.modified())
+            && let Ok(mut last) = self.last_modified.write()
+        {
+            *last = Some(mtime);
         }
 
         result
@@ -358,10 +350,10 @@ impl AbacHotReload {
         // --- Step 2: Update Engine ---
         {
             let mut eng = self.engine.write().map_err(|e| {
-                ReloadError::IoError(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    format!("engine RwLock poisoned: {}", e),
-                ))
+                ReloadError::IoError(std::io::Error::other(format!(
+                    "engine RwLock poisoned: {}",
+                    e
+                )))
             })?;
             eng.reload_rules(config.rules.clone());
             // Cache already invalidated inside reload_rules()
@@ -370,10 +362,10 @@ impl AbacHotReload {
         // --- Step 3: Update Executor templates ---
         {
             let exec = self.executor.write().map_err(|e| {
-                ReloadError::IoError(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    format!("executor RwLock poisoned: {}", e),
-                ))
+                ReloadError::IoError(std::io::Error::other(format!(
+                    "executor RwLock poisoned: {}",
+                    e
+                )))
             })?;
             for template in &config.approval_templates {
                 exec.register_template(template.clone());

@@ -10,8 +10,8 @@
 //! | GET      | `/api/v1/audit`   | [`query_audit_logs`] | Filterable audit log query   |
 
 use axum::{
-    extract::{Query, State},
     Json,
+    extract::{Query, State},
 };
 use tracing::{debug, instrument};
 
@@ -56,17 +56,17 @@ pub async fn query_audit_logs(
     );
 
     // --- Validate time range ---
-    if let (Some(start), Some(end)) = (&query.start_date, &query.end_date) {
-        if start > end {
-            return Err(ApiError::bad_request(
-                ApiError::INVALID_REQUEST,
-                "start_date must be before end_date",
-                Some(serde_json::json!({
-                    "field": "date_range",
-                    "constraint": "start_date < end_date",
-                })),
-            ));
-        }
+    if let (Some(start), Some(end)) = (&query.start_date, &query.end_date)
+        && start > end
+    {
+        return Err(ApiError::bad_request(
+            ApiError::INVALID_REQUEST,
+            "start_date must be before end_date",
+            Some(serde_json::json!({
+                "field": "date_range",
+                "constraint": "start_date < end_date",
+            })),
+        ));
     }
 
     // TODO: Query audit log store (misogi-core audit_log module)

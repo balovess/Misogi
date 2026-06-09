@@ -327,9 +327,7 @@ impl SessionHandle {
     pub fn pending_indices(&self) -> Vec<u32> {
         let confirmed = self.confirmed_chunks.read();
         let total = self.metadata.total_chunks;
-        (0..total)
-            .filter(|i| !confirmed.contains(i))
-            .collect()
+        (0..total).filter(|i| !confirmed.contains(i)).collect()
     }
 
     /// Returns a reference to the session metadata.
@@ -391,11 +389,7 @@ impl VerificationReport {
     }
 
     /// Create a report indicating failures with specific issue indices.
-    pub fn with_issues(
-        missing: Vec<u32>,
-        corrupt: Vec<u32>,
-        total_hash: Option<String>,
-    ) -> Self {
+    pub fn with_issues(missing: Vec<u32>, corrupt: Vec<u32>, total_hash: Option<String>) -> Self {
         Self {
             all_ok: missing.is_empty() && corrupt.is_empty(),
             missing_indices: missing,

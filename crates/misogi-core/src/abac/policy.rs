@@ -165,20 +165,15 @@ impl PolicyCondition {
 // ===========================================================================
 
 /// Access control decision outcome produced by a matched policy rule.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum PolicyEffect {
     /// Access is explicitly permitted subject to any attached obligations.
     Permit,
 
     /// Access is explicitly denied. Obligations are not applicable.
+    #[default]
     Deny,
-}
-
-impl Default for PolicyEffect {
-    fn default() -> Self {
-        Self::Deny
-    }
 }
 
 // ===========================================================================
@@ -376,10 +371,7 @@ impl AbacPolicyRule {
     ///
     /// `true` if all conditions are satisfied (or there are no conditions);
     /// `false` if any condition fails.
-    pub fn matches_conditions(
-        &self,
-        attribute_map: &HashMap<String, AbacValue>,
-    ) -> bool {
+    pub fn matches_conditions(&self, attribute_map: &HashMap<String, AbacValue>) -> bool {
         self.conditions
             .iter()
             .all(|cond| cond.evaluate(attribute_map))

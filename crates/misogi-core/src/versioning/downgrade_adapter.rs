@@ -140,10 +140,7 @@ impl DowngradeAdapter {
     ///   receives the same recursive treatment.
     ///
     /// Returns `(cleaned_value, Vec<stripped_field_names>)`.
-    fn strip_unknown_fields(
-        &self,
-        value: &Value,
-    ) -> Result<(Value, Vec<String>), AdapterError> {
+    fn strip_unknown_fields(&self, value: &Value) -> Result<(Value, Vec<String>), AdapterError> {
         match value {
             Value::Object(map) => {
                 let mut cleaned = serde_json::Map::with_capacity(map.len());
@@ -152,8 +149,7 @@ impl DowngradeAdapter {
                 for (key, val) in map {
                     if self.known_v1_fields.contains(key) {
                         // Recurse into known nested structures.
-                        let (filtered, nested_stripped) =
-                            self.strip_unknown_fields(val)?;
+                        let (filtered, nested_stripped) = self.strip_unknown_fields(val)?;
                         cleaned.insert(key.clone(), filtered);
                         stripped.extend(nested_stripped);
                     } else if self.strict_mode {
@@ -421,9 +417,7 @@ mod tests {
     }
 
     fn make_default_adapter() -> DowngradeAdapter {
-        DowngradeBuilder::new()
-            .with_log_stripped(false)
-            .build()
+        DowngradeBuilder::new().with_log_stripped(false).build()
     }
 
     // ====================================================================
@@ -751,17 +745,13 @@ mod tests {
 
     #[test]
     fn test_trait_object_safety() {
-        let adapter: Box<dyn ProtocolAdapter> =
-            Box::new(make_default_adapter());
+        let adapter: Box<dyn ProtocolAdapter> = Box::new(make_default_adapter());
         assert_eq!(adapter.adapter_name(), "downgrade-v2-to-v1");
 
         let input = json!({"applicant_id": "T01"});
         let bytes = serde_json::to_vec(&input).unwrap();
-        let result = adapter.adapt_request(
-            bytes,
-            &ApiVersion::new(2, 0, 0),
-            &ApiVersion::new(1, 0, 0),
-        );
+        let result =
+            adapter.adapt_request(bytes, &ApiVersion::new(2, 0, 0), &ApiVersion::new(1, 0, 0));
         assert!(result.is_ok());
     }
 
@@ -775,11 +765,8 @@ mod tests {
 
         let input = json!({ "alpha": 1, "beta": 2 });
         let bytes = serde_json::to_vec(&input).unwrap();
-        let result = adapter.adapt_request(
-            bytes,
-            &ApiVersion::new(2, 0, 0),
-            &ApiVersion::new(1, 0, 0),
-        );
+        let result =
+            adapter.adapt_request(bytes, &ApiVersion::new(2, 0, 0), &ApiVersion::new(1, 0, 0));
 
         assert!(result.is_ok());
         let output: Value = serde_json::from_slice(&result.unwrap()).unwrap();

@@ -284,7 +284,7 @@ impl<S: Clone + Eq + Hash + Serialize + std::fmt::Debug> StateMachine<S> {
     /// sm.add_state(S::B); // Register terminal state B
     /// ```
     pub fn add_state(&mut self, state: S) {
-        self.states.entry(state).or_insert_with(StateConfig::default);
+        self.states.entry(state).or_default();
     }
 
     /// Define a transition rule from one state to another.
@@ -413,10 +413,9 @@ impl<S: Clone + Eq + Hash + Serialize + std::fmt::Debug> StateMachine<S> {
             .clone();
 
         // Step 2: Find matching transition rule
-        let config = self
-            .states
-            .get(&current_state)
-            .ok_or_else(|| MisogiError::Protocol(format!("Current state not registered: {:?}", current_state)))?;
+        let config = self.states.get(&current_state).ok_or_else(|| {
+            MisogiError::Protocol(format!("Current state not registered: {:?}", current_state))
+        })?;
 
         let matching_rule = config
             .transitions
@@ -430,13 +429,13 @@ impl<S: Clone + Eq + Hash + Serialize + std::fmt::Debug> StateMachine<S> {
             })?;
 
         // Step 3: Evaluate guard function if present
-        if let Some(ref guard) = matching_rule.guard {
-            if !guard(&context) {
-                return Err(MisogiError::Protocol(format!(
-                    "Guard function rejected transition from {:?} to {:?}",
-                    current_state, target
-                )));
-            }
+        if let Some(ref guard) = matching_rule.guard
+            && !guard(&context)
+        {
+            return Err(MisogiError::Protocol(format!(
+                "Guard function rejected transition from {:?} to {:?}",
+                current_state, target
+            )));
         }
 
         // Step 4: Update current state (exclusive lock)
@@ -511,10 +510,9 @@ impl<S: Clone + Eq + Hash + Serialize + std::fmt::Debug> StateMachine<S> {
             .clone();
 
         // Find rule by trigger name
-        let config = self
-            .states
-            .get(&current_state)
-            .ok_or_else(|| MisogiError::Protocol(format!("Current state not registered: {:?}", current_state)))?;
+        let config = self.states.get(&current_state).ok_or_else(|| {
+            MisogiError::Protocol(format!("Current state not registered: {:?}", current_state))
+        })?;
 
         let rule = config
             .transitions
@@ -596,8 +594,8 @@ impl<S: Clone + Eq + Hash + Serialize + std::fmt::Debug> StateMachine<S> {
 // to satisfy the ApprovalTrigger<S>::start() signature which expects
 // Arc<dyn StateMachine<S>>.
 
-impl<S: Clone + Eq + Hash + Send + Sync + Serialize + std::fmt::Debug + 'static> crate::traits::StateMachine<S>
-    for StateMachine<S>
+impl<S: Clone + Eq + Hash + Send + Sync + Serialize + std::fmt::Debug + 'static>
+    crate::traits::StateMachine<S> for StateMachine<S>
 {
     /// Subscribe to state change events from this machine.
     ///
@@ -652,16 +650,10 @@ mod tests {
         sm.add_state(TestState::Running);
         sm.add_state(TestState::Stopped);
         sm.add_state(TestState::Error);
-        sm
-            .add_transition(TestState::Idle, TestState::Running, "start", None)
+        sm.add_transition(TestState::Idle, TestState::Running, "start", None)
             .unwrap();
-        sm.add_transition(
-            TestState::Running,
-            TestState::Stopped,
-            "stop",
-            None,
-        )
-        .unwrap();
+        sm.add_transition(TestState::Running, TestState::Stopped, "stop", None)
+            .unwrap();
         sm.add_transition(TestState::Running, TestState::Error, "fail", None)
             .unwrap();
         sm
@@ -760,7 +752,10 @@ mod tests {
     #[test]
     fn test_guard_allows_transition() {
         let guard = Arc::new(|ctx: &TransitionContext| {
-            ctx.actor_id.as_ref().map(|id| id.starts_with("admin")).unwrap_or(false)
+            ctx.actor_id
+                .as_ref()
+                .map(|id| id.starts_with("admin"))
+                .unwrap_or(false)
         });
 
         let mut sm = StateMachine::new(TestState::Idle);
@@ -894,12 +889,7 @@ mod tests {
         let mut sm = StateMachine::new(TestState::Idle);
 
         // Try to add transition to unregistered state
-        let result = sm.add_transition(
-            TestState::Idle,
-            TestState::Running,
-            "start",
-            None,
-        );
+        let result = sm.add_transition(TestState::Idle, TestState::Running, "start", None);
         assert!(result.is_err(), "Should reject unregistered target state");
         assert!(
             result.unwrap_err().to_string().contains("not registered"),
@@ -911,12 +901,7 @@ mod tests {
     fn test_empty_trigger_name_rejection() {
         let mut sm = create_test_machine();
 
-        let result = sm.add_transition(
-            TestState::Idle,
-            TestState::Running,
-            "",
-            None,
-        );
+        let result = sm.add_transition(TestState::Idle, TestState::Running, "", None);
         assert!(result.is_err(), "Should reject empty trigger name");
     }
 
@@ -955,9 +940,8 @@ mod tests {
         sm.add_state(TestState::Running);
 
         // First guard: requires actor "alice"
-        let guard_alice = Arc::new(|ctx: &TransitionContext| {
-            ctx.actor_id.as_deref() == Some("alice")
-        });
+        let guard_alice =
+            Arc::new(|ctx: &TransitionContext| ctx.actor_id.as_deref() == Some("alice"));
         sm.add_transition(
             TestState::Idle,
             TestState::Running,
@@ -967,9 +951,7 @@ mod tests {
         .unwrap();
 
         // Second guard: requires actor "bob"
-        let guard_bob = Arc::new(|ctx: &TransitionContext| {
-            ctx.actor_id.as_deref() == Some("bob")
-        });
+        let guard_bob = Arc::new(|ctx: &TransitionContext| ctx.actor_id.as_deref() == Some("bob"));
         sm.add_transition(
             TestState::Idle,
             TestState::Running,
@@ -979,10 +961,7 @@ mod tests {
         .unwrap();
 
         // Alice can use her trigger
-        let result = sm.trigger(
-            "start_alice",
-            TransitionContext::new(Some("alice")),
-        );
+        let result = sm.trigger("start_alice", TransitionContext::new(Some("alice")));
         assert!(result.is_ok(), "Alice's trigger should work");
 
         // Reset for bob test
@@ -1000,8 +979,7 @@ mod tests {
         assert!(result.is_ok(), "Bob's trigger should work");
 
         // Wrong actor fails
-        let result =
-            sm2.trigger("start_bob", TransitionContext::new(Some("charlie")));
+        let result = sm2.trigger("start_bob", TransitionContext::new(Some("charlie")));
         assert!(result.is_err(), "Charlie should fail Bob's guard");
     }
 }

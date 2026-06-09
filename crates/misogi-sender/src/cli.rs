@@ -1,7 +1,6 @@
 use clap::{ArgAction, Parser};
 use std::path::PathBuf;
 
-
 /// Command-line interface for the Misogi Sender node.
 ///
 /// Provides all runtime configuration options that can override or supplement
@@ -47,7 +46,6 @@ use std::path::PathBuf;
 #[command(version)]
 pub struct CommandLine {
     // ---- Core Options (Existing) ----
-
     /// Operational mode: server, client, or validate-config.
     #[arg(long, default_value = "server")]
     pub mode: String,
@@ -86,7 +84,6 @@ pub struct CommandLine {
     pub log_level: Option<String>,
 
     // ---- Phase 5 Extended Options ----
-
     /// Transfer driver type selection (overrides [transfer_driver] type in TOML).
     ///
     /// Available drivers:
@@ -211,7 +208,6 @@ pub struct CommandLine {
     // --- JTD (Ichitaro) Conversion Options ---
     // These arguments control automatic JTD-to-PDF conversion before CDR processing.
     // All JTD conversion features are opt-in; they do not affect non-JTD files.
-
     /// Enable automatic conversion of Ichitaro (.jtd) documents to PDF before CDR sanitization.
     ///
     /// When enabled and a .jtd file is detected as input, the file is first converted
@@ -288,7 +284,6 @@ pub struct CommandLine {
     pub jtd_timeout_secs: u64,
 
     // ---- Usability Enhancement Commands ----
-
     /// Run interactive configuration wizard to create a new configuration file.
     ///
     /// This command guides you through creating a misogi.toml configuration file

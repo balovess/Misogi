@@ -21,11 +21,11 @@
 //! 4. Reads sanitized output back into bytes
 //! 5. Maps internal actions to [`SanitizeAction`] records
 
-pub mod pdf_parser;
 pub mod ooxml_parser;
+pub mod pdf_parser;
 pub mod zip_parser;
 
 // Re-export parser implementations for convenient access
-pub use pdf_parser::PdfStreamParser;
 pub use ooxml_parser::OoxmlStreamParser;
+pub use pdf_parser::PdfStreamParser;
 pub use zip_parser::ZipStreamParser;

@@ -3,20 +3,17 @@
 /// This module contains the async trait method implementations that satisfy
 /// the [`TransferDriver`](crate::traits::TransferDriver) contract for Mode B
 /// pull-based transfer operation.
-
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use async_trait::async_trait;
 use bytes::Bytes;
 use chrono::Utc;
 
+use super::driver::PullDriver;
+use super::types::{PullBufferEntry, PullConfig, PullEntryStatus};
 use crate::error::{MisogiError, Result};
 use crate::hash::compute_md5;
-use crate::traits::{
-    ChunkAck, DriverHealthStatus, TransferDriver, TransferDriverConfig,
-};
-use super::types::{PullConfig, PullBufferEntry, PullEntryStatus};
-use super::driver::PullDriver;
+use crate::traits::{ChunkAck, DriverHealthStatus, TransferDriver, TransferDriverConfig};
 
 #[async_trait]
 impl TransferDriver for PullDriver {
@@ -83,12 +80,7 @@ impl TransferDriver for PullDriver {
     ///
     /// # Errors
     /// - [`MisogiError::Protocol`] if not initialized or buffer is over capacity.
-    async fn send_chunk(
-        &self,
-        file_id: &str,
-        chunk_index: u32,
-        data: Bytes,
-    ) -> Result<ChunkAck> {
+    async fn send_chunk(&self, file_id: &str, chunk_index: u32, data: Bytes) -> Result<ChunkAck> {
         if !self.initialized.load(std::sync::atomic::Ordering::SeqCst) {
             return Err(MisogiError::Protocol(
                 "PullDriver not initialized".to_string(),
@@ -285,12 +277,16 @@ impl TransferDriver for PullDriver {
     ///
     /// Idempotent: safe to call multiple times.
     async fn shutdown(&self) -> Result<()> {
-        if self.initialized.swap(false, std::sync::atomic::Ordering::SeqCst) {
+        if self
+            .initialized
+            .swap(false, std::sync::atomic::Ordering::SeqCst)
+        {
             // Clear the buffer
             let mut buf = self.buffer.write().await;
             let count = buf.len();
             buf.clear();
-            self.buffer_bytes.store(0, std::sync::atomic::Ordering::SeqCst);
+            self.buffer_bytes
+                .store(0, std::sync::atomic::Ordering::SeqCst);
 
             tracing::info!(
                 driver = self.name(),

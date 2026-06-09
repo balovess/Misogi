@@ -14,9 +14,12 @@
 //! | Config Model        | Sender/Receiver split  | Single unified config |
 //! | Manifest Support    | Yes (JSON metadata)    | No (pure data stream) |
 
-use std::net::IpAddr;
-use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
 use std::collections::HashMap;
+use std::net::IpAddr;
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
 
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -28,10 +31,7 @@ use tokio::sync::RwLock;
 
 use crate::error::{MisogiError, Result};
 use crate::fec::FecConfig;
-use crate::traits::{
-    TransferDriver, TransferDriverConfig,
-    ChunkAck, DriverHealthStatus,
-};
+use crate::traits::{ChunkAck, DriverHealthStatus, TransferDriver, TransferDriverConfig};
 
 use super::encoder::BlindSendEncoder;
 
@@ -40,13 +40,19 @@ use super::encoder::BlindSendEncoder;
 // =============================================================================
 
 /// Default UDP port for blind send broadcast traffic.
-fn default_udp_port() -> u16 { 9999 }
+fn default_udp_port() -> u16 {
+    9999
+}
 
 /// Default redundancy factor (total shards / data shards).
-fn default_redundancy_factor() -> f32 { 2.0 }
+fn default_redundancy_factor() -> f32 {
+    2.0
+}
 
 /// Default maximum payload size per packet in bytes.
-fn default_packet_size() -> u32 { 1400 }
+fn default_packet_size() -> u32 {
+    1400
+}
 
 /// Default broadcast address for UDP transmission.
 fn default_broadcast_addr() -> IpAddr {
@@ -57,7 +63,9 @@ fn default_broadcast_addr() -> IpAddr {
 ///
 /// Must be > parity_shards (RS codec constraint: parity < data).
 /// Using 16 matches FecConfig::standard().
-fn default_fec_data_shards() -> usize { 16 }
+fn default_fec_data_shards() -> usize {
+    16
+}
 
 /// Configuration parameters for [`BlindSendDriver`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -154,6 +162,7 @@ impl BlindSendConfig {
 /// - **No Confidentiality**: UDP broadcast is plaintext. Encrypt at application layer.
 /// - **No Authentication**: Any host on subnet can receive packets. Use isolated networks.
 /// - **No Delivery Guarantee**: Extreme loss (> parity ratio) causes permanent data loss.
+#[allow(clippy::type_complexity)]
 #[derive(Debug)]
 pub struct BlindSendDriver {
     config: BlindSendConfig,
@@ -188,17 +197,17 @@ impl TransferDriver for BlindSendDriver {
         self.config = config;
 
         let socket = UdpSocket::bind("0.0.0.0:0").await.map_err(|e| {
-            MisogiError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Failed to bind UDP socket: {}", e),
-            ))
+            MisogiError::Io(std::io::Error::other(format!(
+                "Failed to bind UDP socket: {}",
+                e
+            )))
         })?;
 
         socket.set_broadcast(true).map_err(|e| {
-            MisogiError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Failed to enable broadcast: {}", e),
-            ))
+            MisogiError::Io(std::io::Error::other(format!(
+                "Failed to enable broadcast: {}",
+                e
+            )))
         })?;
 
         let fec_config = self.config.to_fec_config();
@@ -222,12 +231,7 @@ impl TransferDriver for BlindSendDriver {
         Ok(())
     }
 
-    async fn send_chunk(
-        &self,
-        file_id: &str,
-        chunk_index: u32,
-        data: Bytes,
-    ) -> Result<ChunkAck> {
+    async fn send_chunk(&self, file_id: &str, chunk_index: u32, data: Bytes) -> Result<ChunkAck> {
         if !self.initialized.load(Ordering::SeqCst) {
             return Err(MisogiError::Protocol(
                 "BlindSendDriver not initialized".to_string(),
@@ -239,7 +243,8 @@ impl TransferDriver for BlindSendDriver {
 
         {
             let mut chunks = self.pending_chunks.write().await;
-            chunks.entry(file_id.to_string())
+            chunks
+                .entry(file_id.to_string())
                 .or_default()
                 .push((chunk_index, data));
         }
@@ -274,18 +279,21 @@ impl TransferDriver for BlindSendDriver {
             ));
         }
 
-        let socket = self.socket.as_ref().ok_or_else(|| {
-            MisogiError::Protocol("UDP socket not initialized".to_string())
-        })?;
+        let socket = self
+            .socket
+            .as_ref()
+            .ok_or_else(|| MisogiError::Protocol("UDP socket not initialized".to_string()))?;
 
-        let encoder = self.encoder.as_ref().ok_or_else(|| {
-            MisogiError::Protocol("FEC encoder not initialized".to_string())
-        })?;
+        let encoder = self
+            .encoder
+            .as_ref()
+            .ok_or_else(|| MisogiError::Protocol("FEC encoder not initialized".to_string()))?;
 
         let chunks = {
             let chunks_map = self.pending_chunks.read().await;
             chunks_map.get(file_id).cloned()
-        }.ok_or_else(|| {
+        }
+        .ok_or_else(|| {
             MisogiError::Protocol(format!("No buffered chunks for file_id '{}'", file_id))
         })?;
 
@@ -298,9 +306,7 @@ impl TransferDriver for BlindSendDriver {
         }
 
         if file_data.is_empty() {
-            return Err(MisogiError::Protocol(
-                "Cannot send empty file data".into(),
-            ));
+            return Err(MisogiError::Protocol("Cannot send empty file data".into()));
         }
 
         let packets = encoder.encode(&file_data)?;

@@ -32,30 +32,27 @@
 //!                       --> REMOVED (404)
 //! ```
 
-pub mod api_version;
 pub mod api_semver;
-pub mod protocol_adapter;
-pub mod versioned_types;
-pub mod deprecation_middleware;
+pub mod api_version;
 pub mod compatibility_adapter;
+pub mod deprecation_middleware;
 pub mod downgrade_adapter;
-pub mod sunset_policy;
 #[cfg(feature = "grpc")]
 pub mod grpc_version_interceptor;
+pub mod protocol_adapter;
+pub mod sunset_policy;
+pub mod versioned_types;
 
 // Re-exports with clear naming to avoid conflicts
-pub use api_version::ApiVersion as EnumApiVersion;
 pub use api_semver::{ApiVersion, ParseVersionError};
-pub use protocol_adapter::{AdapterError, ProtocolAdapter};
-pub use versioned_types::{VersionedRequest, VersionedResponse};
+pub use api_version::ApiVersion as EnumApiVersion;
+pub use compatibility_adapter::{AdaptDirection, AdaptedResult, ChunkCompatAdapter};
 pub use deprecation_middleware::{DeprecationConfig, deprecation_warning_middleware};
-pub use compatibility_adapter::{ChunkCompatAdapter, AdaptDirection, AdaptedResult};
 pub use downgrade_adapter::{DowngradeAdapter, DowngradeBuilder, default_v1_fields};
-pub use sunset_policy::{SunsetPhase, VersionSunsetPolicy};
 #[cfg(feature = "grpc")]
 pub use grpc_version_interceptor::{
-    GrpcVersionInterceptor,
-    GrpcVersionConfig,
-    GrpcVersionConfigBuilder,
-    VersionInterceptorError,
+    GrpcVersionConfig, GrpcVersionConfigBuilder, GrpcVersionInterceptor, VersionInterceptorError,
 };
+pub use protocol_adapter::{AdapterError, ProtocolAdapter};
+pub use sunset_policy::{SunsetPhase, VersionSunsetPolicy};
+pub use versioned_types::{VersionedRequest, VersionedResponse};

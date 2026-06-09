@@ -13,28 +13,21 @@
 // | [`json_scanner`] | JSON recursive field-level PII scanner |
 // | [`xml_scanner`] | XML element/attribute-level PII scanner |
 
-pub mod types;
-pub mod field_classifier;
 pub mod csv_scanner;
+pub mod field_classifier;
 pub mod json_scanner;
+pub mod types;
 pub mod xml_scanner;
 
 pub use types::{
-    FieldAction,
-    FieldMapping,
-    FieldScanResult,
-    StructuredFormat,
-    StructuredScanResult,
+    FieldAction, FieldMapping, FieldScanResult, StructuredFormat, StructuredScanResult,
 };
 
 pub use field_classifier::{
-    FieldClassifier,
-    FieldClassification,
-    FieldClassifierBuilder,
-    FieldClassifierConfig,
+    FieldClassification, FieldClassifier, FieldClassifierBuilder, FieldClassifierConfig,
     StructuredScannerConfig,
 };
 
 pub use csv_scanner::{CsvPiiScanner, CsvScannerConfig};
-pub use json_scanner::{JsonPiiScanner, JsonScannerConfig, ArrayHandling};
+pub use json_scanner::{ArrayHandling, JsonPiiScanner, JsonScannerConfig};
 pub use xml_scanner::{XmlPiiScanner, XmlScannerConfig};

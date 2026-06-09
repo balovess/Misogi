@@ -35,6 +35,7 @@ use crate::types::ChunkMeta;
 #[derive(Debug, Clone)]
 pub struct MockDriverConfig {
     /// If true, `init()` succeeds; if false, it fails.
+    #[allow(dead_code)]
     pub should_init_succeed: bool,
 }
 
@@ -96,12 +97,7 @@ impl TransferDriver for MockIntegrityDriver {
         Ok(())
     }
 
-    async fn send_chunk(
-        &self,
-        file_id: &str,
-        chunk_index: u32,
-        data: Bytes,
-    ) -> Result<ChunkAck> {
+    async fn send_chunk(&self, file_id: &str, chunk_index: u32, data: Bytes) -> Result<ChunkAck> {
         if !self.always_succeed && self.fail_on_indices.contains(&chunk_index) {
             return Err(MisogiError::Io(std::io::Error::new(
                 std::io::ErrorKind::ConnectionReset,
@@ -243,11 +239,7 @@ async fn test_default_repair_chunks_with_valid_indices_succeeds() {
         .repair_chunks(
             "file-repair",
             &[10, 20, 30],
-            &[
-                chunk_a.as_slice(),
-                chunk_b.as_slice(),
-                chunk_c.as_slice(),
-            ],
+            &[chunk_a.as_slice(), chunk_b.as_slice(), chunk_c.as_slice()],
             &meta,
         )
         .await;
@@ -460,10 +452,7 @@ async fn test_integrity_ack_construction() {
     };
     assert_eq!(fail_ack.chunk_index, 99);
     assert!(!fail_ack.received_ok);
-    assert_eq!(
-        fail_ack.error.as_deref(),
-        Some("hash mismatch detected")
-    );
+    assert_eq!(fail_ack.error.as_deref(), Some("hash mismatch detected"));
 
     // Ack produced by default send_chunk_integrity should carry the chunk_index.
     let driver = MockIntegrityDriver::always_ok();

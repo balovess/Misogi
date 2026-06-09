@@ -54,7 +54,8 @@ impl Histogram {
         loop {
             let current = self.min.load(Ordering::Relaxed);
             if current == 0 || value < current {
-                if self.min
+                if self
+                    .min
                     .compare_exchange(current, value, Ordering::Relaxed, Ordering::Relaxed)
                     .is_ok()
                 {
@@ -69,7 +70,8 @@ impl Histogram {
         loop {
             let current = self.max.load(Ordering::Relaxed);
             if value > current {
-                if self.max
+                if self
+                    .max
                     .compare_exchange(current, value, Ordering::Relaxed, Ordering::Relaxed)
                     .is_ok()
                 {

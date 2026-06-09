@@ -244,7 +244,7 @@ impl StorageInfo {
     /// Returns `true` if the `etag` field is `Some(...)` and non-empty.
     /// Used by callers to determine whether conditional operations are safe.
     pub fn has_etag(&self) -> bool {
-        self.etag.as_ref().map_or(false, |e| !e.is_empty())
+        self.etag.as_ref().is_some_and(|e| !e.is_empty())
     }
 
     /// Check whether this storage info includes a creation timestamp.

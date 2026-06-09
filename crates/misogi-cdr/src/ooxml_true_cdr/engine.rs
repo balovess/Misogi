@@ -5,8 +5,8 @@
 use std::collections::HashSet;
 use std::io::{Cursor, Read, Seek, Write};
 
-use zip::{ZipArchive, ZipWriter};
 use zip::write::FileOptions;
+use zip::{ZipArchive, ZipWriter};
 
 use misogi_core::{MisogiError, Result};
 
@@ -15,12 +15,9 @@ use super::constants::DANGEROUS_ENTRY_PATTERNS;
 use super::report::OoxmlCdrReport;
 use super::types::{OoxmlDocumentType, OoxmlTrueCdrResult};
 
-use super::xml_filter::{
-    filter_content_types,
-    filter_document_xml,
-};
 use super::binary::validate_binary_entry;
 use super::rels_cleaner::{clean_relationships, validate_output};
+use super::xml_filter::{filter_content_types, filter_document_xml};
 
 // =============================================================================
 // Main Engine
@@ -163,8 +160,7 @@ impl OoxmlTrueCdrEngine {
         let mut report = OoxmlCdrReport::default();
 
         // Collect all entry names first (we'll need them multiple times)
-        let entry_names: Vec<String> =
-            reader.file_names().map(|s| s.to_string()).collect();
+        let entry_names: Vec<String> = reader.file_names().map(|s| s.to_string()).collect();
 
         // Track removed entry IDs for relationship cleanup
         let mut removed_entry_ids: HashSet<String> = HashSet::new();
@@ -220,10 +216,10 @@ impl OoxmlTrueCdrEngine {
 
         // Step 7: Finalize output ZIP
         let output_cursor = writer.finish().map_err(|e| {
-            MisogiError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Failed to finalize output ZIP: {}", e),
-            ))
+            MisogiError::Io(std::io::Error::other(format!(
+                "Failed to finalize output ZIP: {}",
+                e
+            )))
         })?;
 
         let output = output_cursor.into_inner();
@@ -299,7 +295,9 @@ pub(super) fn should_skip_entry(
     }
 
     // Check for smart tags if configured to strip
-    if config.strip_smart_tags && (normalized.contains("smarttags") || normalized.contains("tagging")) {
+    if config.strip_smart_tags
+        && (normalized.contains("smarttags") || normalized.contains("tagging"))
+    {
         report.smart_tags_removed += 1;
         tracing::warn!(entry = %entry_name, "Smart tag entry removed");
         if let Some(id) = extract_relationship_id(entry_name) {
@@ -310,11 +308,11 @@ pub(super) fn should_skip_entry(
     }
 
     // Check for external data connections if configured to strip
-    if config.strip_data_connections && (
-        normalized.contains("externallink")
-        || normalized.contains("connections.xml")
-        || normalized.contains("dde")
-    ) {
+    if config.strip_data_connections
+        && (normalized.contains("externallink")
+            || normalized.contains("connections.xml")
+            || normalized.contains("dde"))
+    {
         report.data_connections_removed += 1;
         tracing::warn!(entry = %entry_name, "External data connection removed");
         if let Some(id) = extract_relationship_id(entry_name) {
@@ -350,8 +348,9 @@ fn process_xml_entry(
 ) -> Result<()> {
     // Read entry contents into memory
     let mut xml_bytes = Vec::new();
-    entry_reader.read_to_end(&mut xml_bytes)
-        .map_err(|e| MisogiError::Io(e))?;
+    entry_reader
+        .read_to_end(&mut xml_bytes)
+        .map_err(MisogiError::Io)?;
 
     // Apply appropriate filter based on entry name
     let filtered_result = if entry_name == "[Content_Types].xml" {
@@ -366,14 +365,15 @@ fn process_xml_entry(
     };
 
     // Write filtered output (even if empty, preserve structure)
-    let options: zip::write::FileOptions<'_, ()> = FileOptions::default()
-        .compression_method(entry_reader.compression());
+    let options: zip::write::FileOptions<'_, ()> =
+        FileOptions::default().compression_method(entry_reader.compression());
 
     if let Some(modified) = entry_reader.last_modified() {
         let _ = modified;
     }
 
-    writer.start_file(entry_name, options)
+    writer
+        .start_file(entry_name, options)
         .map_err(|e| MisogiError::Io(e.into()))?;
 
     // Write filtered bytes (or original if empty result indicates keep-as-is)
@@ -383,8 +383,7 @@ fn process_xml_entry(
         filtered_result.filtered_bytes
     };
 
-    writer.write_all(&output_bytes)
-        .map_err(|e| MisogiError::Io(e))?;
+    writer.write_all(&output_bytes).map_err(MisogiError::Io)?;
 
     // Update statistics
     report.xml_elements_filtered += filtered_result.elements_dropped;
@@ -406,14 +405,14 @@ fn process_binary_entry(
     match validated {
         Some(validated_data) => {
             // Entry is safe to copy
-            let options: zip::write::FileOptions<'_, ()> = FileOptions::default()
-                .compression_method(entry_reader.compression());
+            let options: zip::write::FileOptions<'_, ()> =
+                FileOptions::default().compression_method(entry_reader.compression());
 
-            writer.start_file(entry_name, options)
+            writer
+                .start_file(entry_name, options)
                 .map_err(|e| MisogiError::Io(e.into()))?;
 
-            writer.write_all(&validated_data)
-                .map_err(|e| MisogiError::Io(e))?;
+            writer.write_all(&validated_data).map_err(MisogiError::Io)?;
         }
         None => {
             // Entry should be skipped (dangerous or invalid)
@@ -426,13 +425,10 @@ fn process_binary_entry(
 }
 
 /// Calculate total uncompressed size of all ZIP entries (bomb detection).
-fn calculate_uncompressed_size(
-    archive: &mut ZipArchive<impl Read + Seek>,
-) -> Result<u64> {
+fn calculate_uncompressed_size(archive: &mut ZipArchive<impl Read + Seek>) -> Result<u64> {
     let mut total: u64 = 0;
     for i in 0..archive.len() {
-        let entry = archive.by_index(i)
-            .map_err(|e| MisogiError::Io(e.into()))?;
+        let entry = archive.by_index(i).map_err(|e| MisogiError::Io(e.into()))?;
         total = total.saturating_add(entry.size());
     }
     Ok(total)

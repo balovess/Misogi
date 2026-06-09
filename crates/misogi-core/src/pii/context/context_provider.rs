@@ -19,9 +19,7 @@
 
 use async_trait::async_trait;
 
-use super::types::{
-    ContextAnalysisRequest, ContextAnalysisResponse, ContextError,
-};
+use super::types::{ContextAnalysisRequest, ContextAnalysisResponse, ContextError};
 
 // =============================================================================
 // ContextProvider Trait
@@ -194,9 +192,15 @@ impl ContextProvider for MockContextProvider {
             is_pii: self.always_pii,
             confidence_score: self.fixed_confidence,
             reason: if self.always_pii {
-                format!("Mock confirmed '{}' as {} PII", request.candidate_text, request.pii_type)
+                format!(
+                    "Mock confirmed '{}' as {} PII",
+                    request.candidate_text, request.pii_type
+                )
             } else {
-                format!("Mock rejected '{}' as false positive", request.candidate_text)
+                format!(
+                    "Mock rejected '{}' as false positive",
+                    request.candidate_text
+                )
             },
             matched_indicators: if self.always_pii {
                 vec!["mock-positive".to_string()]

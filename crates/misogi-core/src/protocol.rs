@@ -1,7 +1,7 @@
+use crate::error::{MisogiError, Result};
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 #[cfg(feature = "runtime")]
 use tokio::io::AsyncReadExt;
-use crate::error::{MisogiError, Result};
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -56,7 +56,10 @@ pub struct ProtocolFrame {
 
 impl ProtocolFrame {
     pub fn new(frame_type: FrameType, payload: Vec<u8>) -> Self {
-        Self { frame_type, payload }
+        Self {
+            frame_type,
+            payload,
+        }
     }
 
     pub fn encode(&self) -> BytesMut {
@@ -70,18 +73,14 @@ impl ProtocolFrame {
 
     pub fn decode(data: &Bytes) -> Result<Self> {
         if data.len() < 5 {
-            return Err(MisogiError::Protocol(
-                "Frame too short".to_string(),
-            ));
+            return Err(MisogiError::Protocol("Frame too short".to_string()));
         }
 
         let mut cursor = data.clone();
         let total_len = cursor.get_u32() as usize;
 
         if data.len() < 4 + total_len {
-            return Err(MisogiError::Protocol(
-                "Incomplete frame".to_string(),
-            ));
+            return Err(MisogiError::Protocol("Incomplete frame".to_string()));
         }
 
         let frame_type_byte = cursor.get_u8();
@@ -89,7 +88,10 @@ impl ProtocolFrame {
         let payload_len = total_len - 1;
         let payload = cursor.copy_to_bytes(payload_len).to_vec();
 
-        Ok(ProtocolFrame { frame_type, payload })
+        Ok(ProtocolFrame {
+            frame_type,
+            payload,
+        })
     }
 
     /// Decode a ProtocolFrame from an async byte stream (requires tokio runtime).
@@ -118,7 +120,10 @@ impl ProtocolFrame {
             reader.read_exact(&mut payload).await?;
         }
 
-        Ok(Self { frame_type, payload })
+        Ok(Self {
+            frame_type,
+            payload,
+        })
     }
 }
 
@@ -128,10 +133,7 @@ mod tests {
 
     #[test]
     fn test_frame_encode_decode_roundtrip() {
-        let original = ProtocolFrame::new(
-            FrameType::Handshake,
-            b"test_payload".to_vec(),
-        );
+        let original = ProtocolFrame::new(FrameType::Handshake, b"test_payload".to_vec());
 
         let encoded = original.encode();
         let decoded = ProtocolFrame::decode(&encoded.freeze()).unwrap();
@@ -201,7 +203,7 @@ mod tests {
     #[test]
     fn test_file_info_serialization() {
         use crate::types::{FileInfo, FileStatus};
-        
+
         let info = FileInfo {
             file_id: "file-123".to_string(),
             filename: "test.txt".to_string(),
@@ -223,7 +225,7 @@ mod tests {
     #[test]
     fn test_chunk_meta_serialization() {
         use crate::types::ChunkMeta;
-        
+
         let chunk = ChunkMeta {
             file_id: "file-123".to_string(),
             chunk_index: 0,
@@ -241,7 +243,7 @@ mod tests {
     #[test]
     fn test_manifest_serialization() {
         use crate::types::*;
-        
+
         let manifest = FileManifest {
             file_id: "file-456".to_string(),
             filename: "large_file.bin".to_string(),
@@ -277,7 +279,7 @@ mod tests {
     #[test]
     fn test_compute_md5() {
         use crate::hash::compute_md5;
-        
+
         let data = b"hello world";
         let hash = compute_md5(data);
 

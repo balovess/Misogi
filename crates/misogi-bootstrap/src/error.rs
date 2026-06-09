@@ -16,7 +16,6 @@
 //! | Dependency errors | MissingDependency, BuildOrderViolation | No        |
 //! | Runtime errors    | StartupFailure, ShutdownError         | Depends*  |
 
-
 use thiserror::Error;
 
 // =============================================================================
@@ -185,7 +184,10 @@ impl BootstrapError {
     /// Returns `true` for dependency-related errors that indicate the caller
     /// needs to adjust their build method call order.
     pub fn is_dependency_error(&self) -> bool {
-        matches!(self, Self::MissingDependency(_) | Self::BuildOrderViolation { .. })
+        matches!(
+            self,
+            Self::MissingDependency(_) | Self::BuildOrderViolation { .. }
+        )
     }
 
     /// Get the name of the configuration section related to this error, if any.

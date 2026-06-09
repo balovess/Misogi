@@ -65,10 +65,7 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use tonic::transport::{Channel, ClientTlsConfig};
 
-use super::{
-    ExternalScanner, Result as ScannerResult, ScanResult, ScannerError,
-    ScannerMetadata,
-};
+use super::{ExternalScanner, Result as ScannerResult, ScanResult, ScannerError, ScannerMetadata};
 
 // =============================================================================
 // Configuration Types
@@ -237,9 +234,7 @@ impl GrpcScannerAdapter {
             })?;
 
         // Apply timeout
-        let endpoint = endpoint.timeout(
-            std::time::Duration::from_secs(self.config.timeout_secs),
-        );
+        let endpoint = endpoint.timeout(std::time::Duration::from_secs(self.config.timeout_secs));
 
         // Apply TLS if configured
         let endpoint = if self.config.use_tls {
@@ -259,13 +254,16 @@ impl GrpcScannerAdapter {
         };
 
         // Connect to server
-        let channel = endpoint.connect().await.map_err(|e: tonic::transport::Error| {
-            tracing::error!(error = %e, "Failed to connect to gRPC server");
-            ScannerError::Connection(format!(
-                "Failed to connect to gRPC server {}: {}",
-                self.config.server_addr, e
-            ))
-        })?;
+        let channel = endpoint
+            .connect()
+            .await
+            .map_err(|e: tonic::transport::Error| {
+                tracing::error!(error = %e, "Failed to connect to gRPC server");
+                ScannerError::Connection(format!(
+                    "Failed to connect to gRPC server {}: {}",
+                    self.config.server_addr, e
+                ))
+            })?;
 
         tracing::info!(server = %self.config.server_addr, "gRPC channel established");
 
@@ -415,10 +413,7 @@ impl ExternalScanner for GrpcScannerAdapter {
         match tokio::time::timeout(timeout_duration, self.grpc_scan(data)).await {
             Ok(result) => result,
             Err(_) => {
-                tracing::warn!(
-                    timeout = self.config.timeout_secs,
-                    "gRPC scan timed out"
-                );
+                tracing::warn!(timeout = self.config.timeout_secs, "gRPC scan timed out");
                 Ok(ScanResult::Timeout {
                     timeout_secs: self.config.timeout_secs,
                 })
@@ -568,7 +563,7 @@ mod tests {
     async fn test_health_check_fails_without_server() {
         let config = GrpcScannerConfig {
             server_addr: "localhost:19999".to_string(), // Unlikely port
-            timeout_secs: 2, // Short timeout for fast failure
+            timeout_secs: 2,                            // Short timeout for fast failure
             ..Default::default()
         };
 

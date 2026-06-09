@@ -13,10 +13,10 @@
 
 #[allow(unused_imports)]
 use axum::{
-    extract::{Path, State},
-    http::{header, StatusCode},
-    response::IntoResponse,
     Json,
+    extract::{Path, State},
+    http::{StatusCode, header},
+    response::IntoResponse,
 };
 #[allow(unused_imports)]
 use chrono::Utc;
@@ -25,7 +25,7 @@ use uuid::Uuid;
 
 use crate::error::ApiError;
 #[allow(unused_imports)]
-use crate::models::{JobCreated, JobStatus, JobState, ScanRequest};
+use crate::models::{JobCreated, JobState, JobStatus, ScanRequest};
 use crate::router::AppState;
 
 // ---------------------------------------------------------------------------

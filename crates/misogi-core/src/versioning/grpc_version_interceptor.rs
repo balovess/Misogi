@@ -51,13 +51,13 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
+use bytes::Bytes;
+use http_body_util::Empty;
 use tonic::{Request, Response, Status, body::BoxBody};
 use tower::Service;
-use http_body_util::Empty;
-use bytes::Bytes;
 
 use crate::versioning::api_semver::ApiVersion;
-use crate::versioning::protocol_adapter::{ProtocolAdapter, AdapterError};
+use crate::versioning::protocol_adapter::{AdapterError, ProtocolAdapter};
 
 // =============================================================================
 // GrpcVersionConfig — Interceptor Configuration
@@ -76,7 +76,7 @@ pub struct GrpcVersionConfig {
     pub default_version: ApiVersion,
 
     /// Optional protocol adapter for cross-version transformation.
- ///
+    ///
     /// When `Some`, enables automatic request/response adaptation between
     /// different API versions. When `None`, only same-version requests
     /// are accepted.
@@ -266,18 +266,14 @@ impl From<Status> for VersionInterceptorError {
 impl From<VersionInterceptorError> for Status {
     fn from(err: VersionInterceptorError) -> Status {
         match err {
-            VersionInterceptorError::UnsupportedVersion(version) => {
-                Status::unimplemented(format!(
-                    "API version {} is not supported. Supported versions: contact administrator",
-                    version
-                ))
-            }
-            VersionInterceptorError::AdapterFailed(reason) => {
-                Status::internal(format!(
-                    "Protocol adaptation failed: {}. This indicates an internal server configuration error.",
-                    reason
-                ))
-            }
+            VersionInterceptorError::UnsupportedVersion(version) => Status::unimplemented(format!(
+                "API version {} is not supported. Supported versions: contact administrator",
+                version
+            )),
+            VersionInterceptorError::AdapterFailed(reason) => Status::internal(format!(
+                "Protocol adaptation failed: {}. This indicates an internal server configuration error.",
+                reason
+            )),
             VersionInterceptorError::InnerError(status) => status,
         }
     }
@@ -301,7 +297,10 @@ type InterceptedFuture =
 
 impl<S> Service<Request<BoxBody>> for GrpcVersionInterceptor<S>
 where
-    S: Service<Request<BoxBody>, Response = Response<BoxBody>, Error = Status> + Clone + Send + 'static,
+    S: Service<Request<BoxBody>, Response = Response<BoxBody>, Error = Status>
+        + Clone
+        + Send
+        + 'static,
     S::Future: Send + 'static,
 {
     type Response = Response<BoxBody>;
@@ -382,9 +381,10 @@ where
                 config.default_version
             };
 
-            response
-                .metadata_mut()
-                .insert("x-response-version", response_version.to_string().parse().unwrap());
+            response.metadata_mut().insert(
+                "x-response-version",
+                response_version.to_string().parse().unwrap(),
+            );
 
             tracing::debug!(
                 response_version = %response_version,
@@ -511,10 +511,7 @@ mod tests {
         type Error = Status;
         type Future = std::future::Ready<Result<Self::Response, Self::Error>>;
 
-        fn poll_ready(
-            &mut self,
-            _cx: &mut Context<'_>,
-        ) -> Poll<Result<(), Self::Error>> {
+        fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
             Poll::Ready(Ok(()))
         }
 
@@ -584,10 +581,7 @@ mod tests {
         let config = GrpcVersionConfig {
             default_version: ApiVersion::new(2, 0, 0),
             adapter: Some(Arc::new(adapter)),
-            supported_versions: vec![
-                ApiVersion::new(1, 0, 0),
-                ApiVersion::new(2, 0, 0),
-            ],
+            supported_versions: vec![ApiVersion::new(1, 0, 0), ApiVersion::new(2, 0, 0)],
         };
         (config, req_count, resp_count)
     }
@@ -597,10 +591,7 @@ mod tests {
         GrpcVersionConfig {
             default_version: ApiVersion::new(2, 0, 0),
             adapter: None,
-            supported_versions: vec![
-                ApiVersion::new(1, 0, 0),
-                ApiVersion::new(2, 0, 0),
-            ],
+            supported_versions: vec![ApiVersion::new(1, 0, 0), ApiVersion::new(2, 0, 0)],
         }
     }
 
@@ -618,10 +609,9 @@ mod tests {
 
         // Simulate V1 request via x-api-version header
         let mut request = Request::new(empty_body());
-        request.metadata_mut().insert(
-            "x-api-version",
-            "1.0.0".parse().unwrap(),
-        );
+        request
+            .metadata_mut()
+            .insert("x-api-version", "1.0.0".parse().unwrap());
 
         // Should succeed with cross-version adaptation
         let result = interceptor.call(request).await;
@@ -647,10 +637,9 @@ mod tests {
         let mut interceptor = GrpcVersionInterceptor::new(service, config);
 
         let mut request = Request::new(empty_body());
-        request.metadata_mut().insert(
-            "x-api-version",
-            "2.0.0".parse().unwrap(),
-        );
+        request
+            .metadata_mut()
+            .insert("x-api-version", "2.0.0".parse().unwrap());
 
         let result = interceptor.call(request).await;
         assert!(result.is_ok());
@@ -699,10 +688,9 @@ mod tests {
 
         // Simulate V1 request (different from default V2)
         let mut request = Request::new(empty_body());
-        request.metadata_mut().insert(
-            "x-api-version",
-            "1.0.0".parse().unwrap(),
-        );
+        request
+            .metadata_mut()
+            .insert("x-api-version", "1.0.0".parse().unwrap());
 
         let result = interceptor.call(request).await;
         assert!(result.is_ok());
@@ -729,10 +717,9 @@ mod tests {
         let mut interceptor = GrpcVersionInterceptor::new(service, config);
 
         let mut request = Request::new(empty_body());
-        request.metadata_mut().insert(
-            "x-api-version",
-            "99.99.99".parse().unwrap(),
-        );
+        request
+            .metadata_mut()
+            .insert("x-api-version", "99.99.99".parse().unwrap());
 
         let result: Result<Response<BoxBody>, VersionInterceptorError> =
             interceptor.call(request).await;
@@ -762,10 +749,9 @@ mod tests {
         request
             .metadata_mut()
             .insert("x-custom-test", "propagation-check".parse().unwrap());
-        request.metadata_mut().insert(
-            "x-api-version",
-            "2.0.0".parse().unwrap(),
-        );
+        request
+            .metadata_mut()
+            .insert("x-api-version", "2.0.0".parse().unwrap());
 
         // Note: Full metadata echo testing requires a more sophisticated mock.
         // This test verifies basic version header propagation works correctly.

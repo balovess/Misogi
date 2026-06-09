@@ -605,20 +605,21 @@ mod tests {
             policy: &SanitizePolicy,
         ) -> Result<SanitizedOutput, ParseError> {
             // Validate file size constraint
-            if let Some(max_size) = policy.max_file_size_bytes {
-                if input.len() as u64 > max_size {
-                    return Err(ParseError::FileTooLarge(input.len() as u64));
-                }
+            if let Some(max_size) = policy.max_file_size_bytes
+                && input.len() as u64 > max_size
+            {
+                return Err(ParseError::FileTooLarge(input.len() as u64));
             }
 
             // Validate MIME type whitelist
-            if !policy.allowed_mime_types.is_empty() {
-                // For mock, we assume text/plain is always acceptable
-                if !policy.allowed_mime_types.contains(&"text/plain".to_string()) {
-                    return Err(ParseError::PolicyViolation(
-                        "MIME type not in allowed list".to_string(),
-                    ));
-                }
+            if !policy.allowed_mime_types.is_empty()
+                && !policy
+                    .allowed_mime_types
+                    .contains(&"text/plain".to_string())
+            {
+                return Err(ParseError::PolicyViolation(
+                    "MIME type not in allowed list".to_string(),
+                ));
             }
 
             // Simulate sanitization: convert to uppercase as "sanitization"
@@ -717,13 +718,16 @@ mod tests {
         };
 
         assert!(!custom_policy.remove_javascript, "JS removal disabled");
-        assert!(!custom_policy.remove_embedded_files, "Embed removal disabled");
-        assert!(custom_policy.remove_macros, "Macro removal still enabled");
-        assert!(custom_policy.remove_metadata, "Metadata removal still enabled");
-        assert_eq!(
-            custom_policy.max_file_size_bytes,
-            Some(50 * 1024 * 1024)
+        assert!(
+            !custom_policy.remove_embedded_files,
+            "Embed removal disabled"
         );
+        assert!(custom_policy.remove_macros, "Macro removal still enabled");
+        assert!(
+            custom_policy.remove_metadata,
+            "Metadata removal still enabled"
+        );
+        assert_eq!(custom_policy.max_file_size_bytes, Some(50 * 1024 * 1024));
         assert_eq!(custom_policy.allowed_mime_types.len(), 2);
     }
 
@@ -733,10 +737,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_mock_parser_basic_parsing() {
-        let parser = MockTextParser::new(
-            "TestTextParser",
-            vec!["text/plain", "text/csv"],
-        );
+        let parser = MockTextParser::new("TestTextParser", vec!["text/plain", "text/csv"]);
         let policy = SanitizePolicy::default();
         let input = Bytes::from_static(b"hello world");
 
@@ -746,7 +747,10 @@ mod tests {
 
         let output = result.unwrap();
         assert_eq!(output.parser_name, "TestTextParser");
-        assert!(output.has_actions(), "Default policy should trigger actions");
+        assert!(
+            output.has_actions(),
+            "Default policy should trigger actions"
+        );
         assert!(!output.has_warnings(), "Mock should not generate warnings");
         assert_eq!(
             output.clean_data,
@@ -857,11 +861,7 @@ mod tests {
         assert!(ratio.is_some());
         let ratio_val = ratio.unwrap();
         assert!(ratio_val < 1.0, "Should show size reduction: {}", ratio_val);
-        assert!(
-            ratio_val > 0.0,
-            "Ratio should be positive: {}",
-            ratio_val
-        );
+        assert!(ratio_val > 0.0, "Ratio should be positive: {}", ratio_val);
     }
 
     // -----------------------------------------------------------------------
@@ -946,8 +946,7 @@ mod tests {
     fn test_trait_object_safety() {
         // Verify that ContentParser can be used as a trait object
         // This is essential for dynamic parser registration in the registry
-        let parser: MockTextParser =
-            MockTextParser::new("ObjectSafeParser", vec!["text/plain"]);
+        let parser: MockTextParser = MockTextParser::new("ObjectSafeParser", vec!["text/plain"]);
 
         // Create trait object (this compilation proves object safety)
         let trait_object: Box<dyn ContentParser> = Box::new(parser);
@@ -1001,10 +1000,8 @@ mod tests {
     #[test]
     fn test_io_error_conversion() {
         // Verify that std::io::Error automatically converts via From trait
-        let io_err = std::io::Error::new(
-            std::io::ErrorKind::NotFound,
-            "configuration file missing",
-        );
+        let io_err =
+            std::io::Error::new(std::io::ErrorKind::NotFound, "configuration file missing");
 
         let parse_error: ParseError = io_err.into();
 

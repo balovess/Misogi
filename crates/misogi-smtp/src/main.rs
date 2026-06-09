@@ -25,7 +25,6 @@
 /// | 0    | Normal shutdown (via signal or clean exit) |
 /// | 1    | Configuration error (invalid config file, missing required fields) |
 /// | 2    | Runtime error (bind failure, permission denied, etc.) |
-
 use clap::Parser;
 use std::path::PathBuf;
 use tracing::info;
@@ -66,13 +65,12 @@ fn main() -> anyhow::Result<()> {
 
     tracing_subscriber::fmt()
         .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| {
-                    tracing_subscriber::EnvFilter::new(format!(
-                        "misogi_smtp={},tokio=warn,tower_http=warn",
-                        log_level
-                    ))
-                }),
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+                tracing_subscriber::EnvFilter::new(format!(
+                    "misogi_smtp={},tokio=warn,tower_http=warn",
+                    log_level
+                ))
+            }),
         )
         .with_target(false)
         .with_thread_ids(true)
@@ -149,7 +147,11 @@ fn load_config(path: &PathBuf) -> anyhow::Result<misogi_smtp::server::SmtpServer
 
     let content = std::fs::read_to_string(path)?;
     let value: toml::Value = content.parse().map_err(|e| {
-        anyhow::anyhow!("Failed to parse TOML configuration from '{}': {}", path.display(), e)
+        anyhow::anyhow!(
+            "Failed to parse TOML configuration from '{}': {}",
+            path.display(),
+            e
+        )
     })?;
 
     // Extract configuration sections with sensible defaults

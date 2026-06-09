@@ -160,9 +160,10 @@ impl TransferDriverConfig for PullConfig {
 ///
 /// Entries progress monotonically through these states:
 /// `Pending` → `Pulling` → `Acknowledged`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum PullEntryStatus {
     /// Entry has been written by the sender and awaits pickup by the receiver.
+    #[default]
     Pending,
 
     /// Entry is currently being pulled by the receiver (in-flight transfer).
@@ -170,12 +171,6 @@ pub enum PullEntryStatus {
 
     /// Entry has been acknowledged by the receiver and is eligible for eviction.
     Acknowledged,
-}
-
-impl Default for PullEntryStatus {
-    fn default() -> Self {
-        Self::Pending
-    }
 }
 
 /// A single entry stored in the pull buffer awaiting receiver pickup.

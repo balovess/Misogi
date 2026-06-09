@@ -82,14 +82,20 @@ struct BinarySafeFallbackParser;
 
 impl BinarySafeFallbackParser {
     #[allow(dead_code)]
-    fn new() -> Self { Self }
+    fn new() -> Self {
+        Self
+    }
 }
 
 #[async_trait]
 impl ContentParser for BinarySafeFallbackParser {
-    fn supported_types(&self) -> Vec<&'static str> { vec![] }
+    fn supported_types(&self) -> Vec<&'static str> {
+        vec![]
+    }
 
-    fn parser_name(&self) -> &str { "BinarySafeFallbackParser" }
+    fn parser_name(&self) -> &str {
+        "BinarySafeFallbackParser"
+    }
 
     async fn parse_and_sanitize(
         &self,
@@ -129,24 +135,28 @@ impl ParserRegistry {
     pub fn new() -> Self {
         Self {
             parsers: RwLock::new(Vec::new()),
-            fallback: Arc::new(BinarySafeFallbackParser::default()),
+            fallback: Arc::new(BinarySafeFallbackParser::new()),
         }
     }
 
     /// Create a pre-configured registry with default parser configuration.
-    pub fn with_default_parsers() -> Self { Self::new() }
+    pub fn with_default_parsers() -> Self {
+        Self::new()
+    }
 
     /// Create a pre-configured registry with given parser list.
     pub fn with_parsers(parsers: Vec<Arc<dyn ContentParser>>) -> Self {
         Self {
             parsers: RwLock::new(parsers),
-            fallback: Arc::new(BinarySafeFallbackParser::default()),
+            fallback: Arc::new(BinarySafeFallbackParser::new()),
         }
     }
 }
 
 impl Default for ParserRegistry {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 // -------------------------------------------------------------------------
@@ -169,7 +179,7 @@ impl ParserRegistry {
 
     /// Remove a parser from the registry by its parser_name().
     ///
-    /// Returns 	rue if a parser was found and removed, alse otherwise.
+    /// Returns true if a parser was found and removed, false otherwise.
     pub fn unregister(&self, name: &str) -> bool {
         let mut parsers = self.parsers.write().expect("parser lock poisoned");
         let initial_len = parsers.len();
@@ -217,13 +227,14 @@ impl ParserRegistry {
         let supported = parser.supported_types();
         for content_type in &supported {
             if let Some(fmt) = detected {
-                if *content_type == fmt.mime_type { return true; }
-                if content_type.starts_with('.') {
-                    if let Some(ext) = extension {
-                        if content_type.to_lowercase() == format!(".{}", ext.to_lowercase()) {
-                            return true;
-                        }
-                    }
+                if *content_type == fmt.mime_type {
+                    return true;
+                }
+                if content_type.starts_with('.')
+                    && let Some(ext) = extension
+                    && content_type.to_lowercase() == format!(".{}", ext.to_lowercase())
+                {
+                    return true;
                 }
             }
             if let Some(ext) = extension {
@@ -251,10 +262,10 @@ impl ParserRegistry {
         policy: &SanitizePolicy,
     ) -> Result<SanitizedOutput, ParseError> {
         // Check file size limit before routing to parser
-        if let Some(max_size) = policy.max_file_size_bytes {
-            if input.len() as u64 > max_size {
-                return Err(ParseError::FileTooLarge(input.len() as u64));
-            }
+        if let Some(max_size) = policy.max_file_size_bytes
+            && input.len() as u64 > max_size
+        {
+            return Err(ParseError::FileTooLarge(input.len() as u64));
         }
 
         let sample_size = input.len().min(MAGIC_MIN_SAMPLE_SIZE);
@@ -275,10 +286,10 @@ impl ParserRegistry {
         filename: &str,
     ) -> Result<SanitizedOutput, ParseError> {
         // Check file size limit before routing to parser
-        if let Some(max_size) = policy.max_file_size_bytes {
-            if input.len() as u64 > max_size {
-                return Err(ParseError::FileTooLarge(input.len() as u64));
-            }
+        if let Some(max_size) = policy.max_file_size_bytes
+            && input.len() as u64 > max_size
+        {
+            return Err(ParseError::FileTooLarge(input.len() as u64));
         }
 
         let sample_size = input.len().min(MAGIC_MIN_SAMPLE_SIZE);
@@ -300,7 +311,8 @@ impl ParserRegistry {
     /// Return information about all currently registered parsers.
     pub fn list_parsers(&self) -> Vec<ParserInfo> {
         let parsers = self.parsers.read().expect("parser lock poisoned");
-        parsers.iter()
+        parsers
+            .iter()
             .map(|p| ParserInfo {
                 name: p.parser_name().to_string(),
                 supported_types: p.supported_types().into_iter().map(String::from).collect(),
@@ -352,7 +364,9 @@ pub fn extract_extension(filename: &str) -> Option<String> {
     if dot_pos == 0 {
         return None;
     }
-    if dot_pos + 1 >= basename.len() { return None; }
+    if dot_pos + 1 >= basename.len() {
+        return None;
+    }
     let extension = &basename[dot_pos + 1..];
     if extension.chars().all(|c| c.is_alphanumeric()) {
         Some(extension.to_lowercase())
@@ -384,27 +398,44 @@ mod tests {
 
     impl MockParser {
         const fn new(name: &'static str, types: Vec<&'static str>) -> Self {
-            Self { name, types, should_fail: false }
+            Self {
+                name,
+                types,
+                should_fail: false,
+            }
         }
         fn failing(name: &'static str, types: Vec<&'static str>) -> Self {
-            Self { name, types, should_fail: true }
+            Self {
+                name,
+                types,
+                should_fail: true,
+            }
         }
     }
 
     #[async_trait]
     impl ContentParser for MockParser {
-        fn supported_types(&self) -> Vec<&'static str> { self.types.clone() }
-        fn parser_name(&self) -> &str { self.name }
+        fn supported_types(&self) -> Vec<&'static str> {
+            self.types.clone()
+        }
+        fn parser_name(&self) -> &str {
+            self.name
+        }
         async fn parse_and_sanitize(
-            &self, input: Bytes, _policy: &SanitizePolicy,
+            &self,
+            input: Bytes,
+            _policy: &SanitizePolicy,
         ) -> Result<SanitizedOutput, ParseError> {
             if self.should_fail {
                 return Err(ParseError::CorruptData("mock forced failure".to_string()));
             }
             let size = input.len() as u64;
             Ok(SanitizedOutput {
-                clean_data: input, original_size: size, sanitized_size: size,
-                actions_taken: vec![], warnings: vec![],
+                clean_data: input,
+                original_size: size,
+                sanitized_size: size,
+                actions_taken: vec![],
+                warnings: vec![],
                 parser_name: self.name.to_string(),
             })
         }
@@ -414,7 +445,7 @@ mod tests {
         Bytes::from_static(b"%PDF-1.4\nfake pdf content")
     }
     /// Create fake ZIP bytes for testing
-    #[allow(dead_code)]  // Reserved for future test expansion
+    #[allow(dead_code)] // Reserved for future test expansion
     fn make_zip_bytes() -> Bytes {
         Bytes::from_static(b"PK\x03\x04\nfake zip content")
     }
@@ -565,7 +596,10 @@ mod tests {
     #[tokio::test]
     async fn test_route_by_mime_type() {
         let r = ParserRegistry::new();
-        r.register(Arc::new(MockParser::new("PdfH", vec!["application/pdf", ".pdf"])));
+        r.register(Arc::new(MockParser::new(
+            "PdfH",
+            vec!["application/pdf", ".pdf"],
+        )));
         let p = r.find_parser(b"%PDF-1.4", Some("doc.pdf")).unwrap();
         assert_eq!(p.parser_name(), "PdfH");
     }
@@ -574,22 +608,33 @@ mod tests {
     async fn test_route_by_extension_only() {
         let r = ParserRegistry::new();
         r.register(Arc::new(MockParser::new("DocxH", vec![".docx", ".xlsx"])));
-        let p = r.find_parser(b"\x00\x00\x00\x00", Some("report.docx")).unwrap();
+        let p = r
+            .find_parser(b"\x00\x00\x00\x00", Some("report.docx"))
+            .unwrap();
         assert_eq!(p.parser_name(), "DocxH");
     }
 
     #[tokio::test]
     async fn test_no_match_returns_none() {
         let r = ParserRegistry::new();
-        r.register(Arc::new(MockParser::new("OnlyPdf", vec!["application/pdf"])));
+        r.register(Arc::new(MockParser::new(
+            "OnlyPdf",
+            vec!["application/pdf"],
+        )));
         assert!(r.find_parser(b"PK\x03\x04", None).is_none());
     }
 
     #[tokio::test]
     async fn test_priority_first_match_wins() {
         let r = ParserRegistry::new();
-        r.register(Arc::new(MockParser::new("SpecialZip", vec![".zip", "application/zip"])));
-        r.register(Arc::new(MockParser::new("GenericZip", vec![".zip", "application/zip"])));
+        r.register(Arc::new(MockParser::new(
+            "SpecialZip",
+            vec![".zip", "application/zip"],
+        )));
+        r.register(Arc::new(MockParser::new(
+            "GenericZip",
+            vec![".zip", "application/zip"],
+        )));
         let p = r.find_parser(b"PK\x03\x04", Some("f.zip")).unwrap();
         assert_eq!(p.parser_name(), "SpecialZip");
     }
@@ -601,27 +646,42 @@ mod tests {
     #[tokio::test]
     async fn test_parse_unknown_uses_fallback() {
         let r = ParserRegistry::new();
-        let result = r.parse(make_unknown_bytes(), &SanitizePolicy::default()).await.unwrap();
+        let result = r
+            .parse(make_unknown_bytes(), &SanitizePolicy::default())
+            .await
+            .unwrap();
         assert_eq!(result.parser_name, "BinarySafeFallbackParser");
-        assert!(matches!(&result.actions_taken[0], SanitizeAction::BinarySanitized(_)));
+        assert!(matches!(
+            &result.actions_taken[0],
+            SanitizeAction::BinarySanitized(_)
+        ));
     }
 
     #[tokio::test]
     async fn test_parse_known_routes_correctly() {
         let r = ParserRegistry::new();
-        r.register(Arc::new(MockParser::new("TestPdf", vec!["application/pdf", ".pdf"])));
-        let result = r.parse(make_pdf_bytes(), &SanitizePolicy::default()).await.unwrap();
+        r.register(Arc::new(MockParser::new(
+            "TestPdf",
+            vec!["application/pdf", ".pdf"],
+        )));
+        let result = r
+            .parse(make_pdf_bytes(), &SanitizePolicy::default())
+            .await
+            .unwrap();
         assert_eq!(result.parser_name, "TestPdf");
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn test_parse_propagates_error() {
         let r = ParserRegistry::new();
         r.register(Arc::new(MockParser::failing("FailP", vec!["app/fail"])));
         let parsers = r.parsers.read().unwrap();
         let fp = Arc::clone(parsers.first().unwrap());
         drop(parsers);
-        let result = fp.parse_and_sanitize(Bytes::from_static(b"x"), &SanitizePolicy::default()).await;
+        let result = fp
+            .parse_and_sanitize(Bytes::from_static(b"x"), &SanitizePolicy::default())
+            .await;
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), ParseError::CorruptData(_)));
     }
@@ -633,7 +693,10 @@ mod tests {
     #[test]
     fn test_list_parsers_info() {
         let r = ParserRegistry::new();
-        r.register(Arc::new(MockParser::new("PMock", vec!["app/pdf", ".pdf", "app/x-pdf"])));
+        r.register(Arc::new(MockParser::new(
+            "PMock",
+            vec!["app/pdf", ".pdf", "app/x-pdf"],
+        )));
         let infos = r.list_parsers();
         assert_eq!(infos.len(), 1);
         assert_eq!(infos[0].supported_types.len(), 3);
@@ -659,7 +722,11 @@ mod tests {
         for i in 0..10 {
             let reg = Arc::clone(&r);
             js.spawn(async move {
-                reg.parse(Bytes::from(format!("data {}", i)), &SanitizePolicy::default()).await
+                reg.parse(
+                    Bytes::from(format!("data {}", i)),
+                    &SanitizePolicy::default(),
+                )
+                .await
             });
         }
         let mut count = 0;
@@ -685,7 +752,9 @@ mod tests {
         for _ in 0..5usize {
             let reg = Arc::clone(&r);
             js.spawn(async move {
-                let _ = reg.parse(Bytes::from_static(b"d"), &SanitizePolicy::default()).await;
+                let _ = reg
+                    .parse(Bytes::from_static(b"d"), &SanitizePolicy::default())
+                    .await;
             });
         }
         while let Some(res) = js.join_next().await {
@@ -701,7 +770,10 @@ mod tests {
     #[tokio::test]
     async fn test_empty_input_goes_to_fallback() {
         let r = ParserRegistry::new();
-        let out = r.parse(Bytes::new(), &SanitizePolicy::default()).await.unwrap();
+        let out = r
+            .parse(Bytes::new(), &SanitizePolicy::default())
+            .await
+            .unwrap();
         assert_eq!(out.parser_name, "BinarySafeFallbackParser");
         assert_eq!(out.original_size, 0);
     }

@@ -29,11 +29,4 @@ pub mod traits;
 
 pub use config::{TcmConfig, TcmProviderType};
 pub use mock::MockTcmProvider;
-pub use traits::{
-    PcrValue,
-    QuoteAlgorithm,
-    TcmError,
-    TcmProvider,
-    TcmQuote,
-    TcmSealedData,
-};
+pub use traits::{PcrValue, QuoteAlgorithm, TcmError, TcmProvider, TcmQuote, TcmSealedData};

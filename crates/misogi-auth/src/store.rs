@@ -1,11 +1,11 @@
+use super::models::{SessionToken, User};
+use super::role::UserRole;
+use misogi_core::Result;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{info, warn};
-use super::models::{User, SessionToken};
-use super::role::UserRole;
-use misogi_core::Result;
 
 /// In-memory user store backed by optional JSON file persistence.
 /// Thread-safe via Arc<RwLock<>> pattern.
@@ -150,7 +150,8 @@ impl UserStore {
 
     pub async fn list_by_role(&self, role: &UserRole) -> Vec<User> {
         let users = self.users.read().await;
-        users.values()
+        users
+            .values()
             .filter(|u| &u.role == role)
             .cloned()
             .collect()

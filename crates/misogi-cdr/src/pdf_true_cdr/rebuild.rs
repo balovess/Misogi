@@ -23,7 +23,7 @@
 use std::collections::HashMap;
 
 #[cfg(feature = "pdf-cdr")]
-use lopdf::{dictionary, Document, Object, Stream};
+use lopdf::{Document, Object, Stream, dictionary};
 
 #[cfg(feature = "pdf-cdr")]
 use super::analyze::ObjectClassification;
@@ -63,9 +63,7 @@ pub(super) fn rebuild_pdf(
     let mut page_ref_ids = Vec::with_capacity(page_count);
 
     // Calculate total content bytes for output buffer estimation
-    let total_content_bytes: usize = content.page_contents.iter()
-        .map(|pc| pc.len())
-        .sum();
+    let total_content_bytes: usize = content.page_contents.iter().map(|pc| pc.len()).sum();
     // Estimate output size: content + per-page overhead + trailer/catalog (~4KB)
     let estimated_output_size = total_content_bytes
         .saturating_add(page_count.saturating_mul(PER_PAGE_OVERHEAD))
@@ -128,7 +126,10 @@ pub(super) fn rebuild_pdf(
         if !meta.is_empty() {
             let mut info_dict = dictionary! {};
             for (key, value) in meta {
-                info_dict.set(key.as_bytes(), Object::String(value.as_bytes().to_vec(), lopdf::StringFormat::Literal));
+                info_dict.set(
+                    key.as_bytes(),
+                    Object::String(value.as_bytes().to_vec(), lopdf::StringFormat::Literal),
+                );
             }
             let info_id = doc.add_object(Object::Dictionary(info_dict));
             doc.trailer.set("Info", Object::Reference(info_id));

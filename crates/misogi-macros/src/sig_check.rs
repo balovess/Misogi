@@ -335,9 +335,8 @@ impl syn::parse::Parse for MisogiPluginArgs {
             }
         }
 
-        let name = name.ok_or_else(|| {
-            syn::Error::new(proc_macro2::Span::call_site(), "`name` is required")
-        })?;
+        let name = name
+            .ok_or_else(|| syn::Error::new(proc_macro2::Span::call_site(), "`name` is required"))?;
         let version = version.ok_or_else(|| {
             syn::Error::new(proc_macro2::Span::call_site(), "`version` is required")
         })?;

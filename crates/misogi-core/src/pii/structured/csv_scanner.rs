@@ -16,9 +16,7 @@
 use std::time::Instant;
 
 use super::field_classifier::FieldClassifier;
-use super::types::{
-    FieldAction, FieldScanResult, StructuredFormat, StructuredScanResult,
-};
+use super::types::{FieldAction, FieldScanResult, StructuredFormat, StructuredScanResult};
 
 /// Configuration for CSV scanning behavior.
 #[derive(Debug, Clone)]
@@ -144,9 +142,7 @@ impl CsvPiiScanner {
 
         Ok(StructuredScanResult {
             format: StructuredFormat::Csv,
-            total_fields: pii_fields.len()
-                + (total_rows.saturating_sub(1)
-                    * headers.len().max(1)),
+            total_fields: pii_fields.len() + (total_rows.saturating_sub(1) * headers.len().max(1)),
             pii_fields,
             overall_action,
             bytes_processed,

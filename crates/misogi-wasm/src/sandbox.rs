@@ -222,15 +222,11 @@ impl SandboxConfig {
 
         // Security audit log for dangerous settings
         if self.allow_filesystem {
-            tracing::warn!(
-                "[SECURITY] Filesystem access enabled in WASM sandbox - DANGEROUS"
-            );
+            tracing::warn!("[SECURITY] Filesystem access enabled in WASM sandbox - DANGEROUS");
         }
 
         if self.allow_network {
-            tracing::warn!(
-                "[SECURITY] Network access enabled in WASM sandbox - DANGEROUS"
-            );
+            tracing::warn!("[SECURITY] Network access enabled in WASM sandbox - DANGEROUS");
         }
 
         Ok(())
@@ -315,8 +311,7 @@ impl ExecutionState {
         if self.config.max_function_calls > 0 && self.call_count > self.config.max_function_calls {
             Err(format!(
                 "function call limit exceeded: {} > {}",
-                self.call_count,
-                self.config.max_function_calls
+                self.call_count, self.config.max_function_calls
             ))
         } else {
             Ok(())

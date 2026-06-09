@@ -302,7 +302,11 @@ pub fn compile(yaml: &YamlConfig) -> Result<(MisogiConfig, CompileReport), Compi
     let sanitization = compile_sanitization(&yaml.sanitization);
 
     // Step 3: Compile routing section with cross-reference validation
-    let routing = compile_routing(&yaml.routing, &authentication.identity_providers, &mut report)?;
+    let routing = compile_routing(
+        &yaml.routing,
+        &authentication.identity_providers,
+        &mut report,
+    )?;
 
     // Step 4: Compile optional sections
     let retention = yaml.retention.as_ref().map(compile_retention);
@@ -342,13 +346,10 @@ fn compile_authentication(
 
     for (i, provider) in auth.identity_providers.iter().enumerate() {
         let prefix = format!("identity_providers[{}]", i);
-        
+
         // Resolve environment variables in provider fields
-        let resolved_url = resolve_env_var(
-            provider.url.as_deref(),
-            &format!("{}.url", prefix),
-        )?;
-        
+        let resolved_url = resolve_env_var(provider.url.as_deref(), &format!("{}.url", prefix))?;
+
         let resolved_client_id = resolve_env_var(
             provider.client_id.as_deref(),
             &format!("{}.client_id", prefix),
@@ -359,13 +360,14 @@ fn compile_authentication(
             &format!("{}.client_secret", prefix),
         )?;
 
-        let resolved_issuer = resolve_env_var(
-            provider.issuer.as_deref(),
-            &format!("{}.issuer", prefix),
-        )?;
+        let resolved_issuer =
+            resolve_env_var(provider.issuer.as_deref(), &format!("{}.issuer", prefix))?;
 
-        if resolved_url.is_some() || resolved_client_id.is_some() || 
-           resolved_client_secret.is_some() || resolved_issuer.is_some() {
+        if resolved_url.is_some()
+            || resolved_client_id.is_some()
+            || resolved_client_secret.is_some()
+            || resolved_issuer.is_some()
+        {
             report.env_vars_resolved += 1;
         }
 
@@ -399,7 +401,9 @@ fn compile_authentication(
 }
 
 /// Compile sanitization configuration (no env var resolution needed).
-fn compile_sanitization(sanitization: &crate::schema::SanitizationConfig) -> CompiledSanitizationConfig {
+fn compile_sanitization(
+    sanitization: &crate::schema::SanitizationConfig,
+) -> CompiledSanitizationConfig {
     let rules = sanitization
         .rules
         .iter()
@@ -425,10 +429,8 @@ fn compile_routing(
     providers: &[CompiledIdentityProvider],
     report: &mut CompileReport,
 ) -> Result<CompiledRoutingConfig, CompileError> {
-    let provider_names: std::collections::HashSet<&str> = providers
-        .iter()
-        .map(|p| p.name.as_str())
-        .collect();
+    let provider_names: std::collections::HashSet<&str> =
+        providers.iter().map(|p| p.name.as_str()).collect();
 
     let mut compiled_rules = Vec::new();
 
@@ -460,10 +462,7 @@ fn compile_routing(
         });
     }
 
-    report.add_info(format!(
-        "Compiled {} routing rule(s)",
-        compiled_rules.len()
-    ));
+    report.add_info(format!("Compiled {} routing rule(s)", compiled_rules.len()));
 
     Ok(CompiledRoutingConfig {
         incoming: compiled_rules,
@@ -497,10 +496,7 @@ fn compile_notifications(
     for (i, rule) in notifications.on_error.iter().enumerate() {
         let prefix = format!("on_error[{}]", i);
 
-        let resolved_url = resolve_env_var(
-            rule.url.as_deref(),
-            &format!("{}.url", prefix),
-        )?;
+        let resolved_url = resolve_env_var(rule.url.as_deref(), &format!("{}.url", prefix))?;
 
         let severity_strings = rule
             .severity
@@ -530,10 +526,7 @@ fn compile_notifications(
 /// Supports the pattern `${VAR_NAME}` which is replaced with the value
 /// of the environment variable `VAR_NAME`. If the variable is not found
 /// or the input does not contain a reference pattern, returns the original value.
-fn resolve_env_var(
-    value: Option<&str>,
-    path: &str,
-) -> Result<Option<String>, CompileError> {
+fn resolve_env_var(value: Option<&str>, path: &str) -> Result<Option<String>, CompileError> {
     let value = match value {
         Some(v) => v,
         None => return Ok(None),
@@ -541,12 +534,12 @@ fn resolve_env_var(
 
     // Check if this is an environment variable reference
     if let Some(var_name) = extract_env_var_ref(value) {
-        std::env::var(&var_name).map(Some).map_err(|_| {
-            CompileError::EnvResolution {
+        std::env::var(&var_name)
+            .map(Some)
+            .map_err(|_| CompileError::EnvResolution {
                 var_name,
                 path: path.to_string(),
-            }
-        })
+            })
     } else {
         Ok(Some(value.to_string()))
     }
@@ -557,9 +550,9 @@ fn resolve_env_var(
 /// Returns None if the input does not match the expected pattern.
 fn extract_env_var_ref(value: &str) -> Option<String> {
     let trimmed = value.trim();
-    
+
     if trimmed.starts_with("${") && trimmed.ends_with("}") {
-        let var_name = &trimmed[2..trimmed.len()-1];
+        let var_name = &trimmed[2..trimmed.len() - 1];
         if !var_name.is_empty() && var_name.chars().all(|c| c.is_alphanumeric() || c == '_') {
             return Some(var_name.to_string());
         }
@@ -577,7 +570,7 @@ fn parse_rate_limit(rate_limit: &str, path: &str) -> Result<u64, CompileError> {
     }
 
     let parts: Vec<&str> = rate_limit.split('/').collect();
-    
+
     if parts.len() != 2 || parts[1] != "min" {
         return Err(CompileError::ValueTransform {
             path: path.to_string(),
@@ -588,15 +581,15 @@ fn parse_rate_limit(rate_limit: &str, path: &str) -> Result<u64, CompileError> {
         });
     }
 
-    parts[0].parse::<u64>().map_err(|_| {
-        CompileError::ValueTransform {
+    parts[0]
+        .parse::<u64>()
+        .map_err(|_| CompileError::ValueTransform {
             path: path.to_string(),
             message: format!(
                 "Invalid rate limit value '{}'. Must be a non-negative integer",
                 parts[0]
             ),
-        }
-    })
+        })
 }
 
 // =============================================================================
@@ -614,7 +607,8 @@ mod tests {
 
     #[test]
     fn test_compile_minimal_config_successfully() {
-        let yaml = YamlConfig::from_yaml_str(r#"
+        let yaml = YamlConfig::from_yaml_str(
+            r#"
 version: "1.0"
 environment: production
 authentication:
@@ -630,7 +624,9 @@ routing:
     - source_pattern: "*"
       require_auth: false
       rate_limit: 100/min
-"#).unwrap();
+"#,
+        )
+        .unwrap();
 
         let (config, report) = compile(&yaml).unwrap();
 
@@ -648,10 +644,15 @@ routing:
     #[test]
     fn test_compile_resolves_environment_variables() {
         // Set test environment variable
-        unsafe { std::env::set_var("TEST_OIDC_CLIENT_ID", "my-test-client-id-12345"); }
-        unsafe { std::env::set_var("TEST_WEBHOOK_URL", "https://hooks.example.com/misogi"); }
+        unsafe {
+            std::env::set_var("TEST_OIDC_CLIENT_ID", "my-test-client-id-12345");
+        }
+        unsafe {
+            std::env::set_var("TEST_WEBHOOK_URL", "https://hooks.example.com/misogi");
+        }
 
-        let yaml = YamlConfig::from_yaml_str(r#"
+        let yaml = YamlConfig::from_yaml_str(
+            r#"
 version: "1.0"
 environment: production
 authentication:
@@ -676,7 +677,9 @@ notifications:
   on_error:
     - channel: webhook
       url: "${TEST_WEBHOOK_URL}"
-"#).unwrap();
+"#,
+        )
+        .unwrap();
 
         // Should fail because TEST_MISSING_SECRET is not set
         let result = compile(&yaml);
@@ -690,17 +693,28 @@ notifications:
         }
 
         // Cleanup
-        unsafe { std::env::remove_var("TEST_OIDC_CLIENT_ID"); }
-        unsafe { std::env::remove_var("TEST_WEBHOOK_URL"); }
+        unsafe {
+            std::env::remove_var("TEST_OIDC_CLIENT_ID");
+        }
+        unsafe {
+            std::env::remove_var("TEST_WEBHOOK_URL");
+        }
     }
 
     #[test]
     fn test_compile_all_env_vars_resolved_successfully() {
-        unsafe { std::env::set_var("MISOGI_TEST_CLIENT_ID", "resolved-client-id"); }
-        unsafe { std::env::set_var("MISOGI_TEST_SECRET", "resolved-secret-value"); }
-        unsafe { std::env::set_var("MISOGI_TEST_HOOK", "https://hooks.example.com/test"); }
+        unsafe {
+            std::env::set_var("MISOGI_TEST_CLIENT_ID", "resolved-client-id");
+        }
+        unsafe {
+            std::env::set_var("MISOGI_TEST_SECRET", "resolved-secret-value");
+        }
+        unsafe {
+            std::env::set_var("MISOGI_TEST_HOOK", "https://hooks.example.com/test");
+        }
 
-        let yaml = YamlConfig::from_yaml_str(r#"
+        let yaml = YamlConfig::from_yaml_str(
+            r#"
 version: "1.0"
 environment: production
 authentication:
@@ -725,25 +739,39 @@ notifications:
   on_error:
     - channel: webhook
       url: "${MISOGI_TEST_HOOK}"
-"#).unwrap();
+"#,
+        )
+        .unwrap();
 
         let (config, report) = compile(&yaml).unwrap();
 
         // Verify resolved values
         let oidc_provider = &config.authentication.identity_providers[0];
-        assert_eq!(oidc_provider.client_id.as_deref().unwrap(), "resolved-client-id");
+        assert_eq!(
+            oidc_provider.client_id.as_deref().unwrap(),
+            "resolved-client-id"
+        );
 
         // Verify notification URL resolved
         let notif_rule = &config.notifications.unwrap().on_error[0];
-        assert_eq!(notif_rule.url.as_deref().unwrap(), "https://hooks.example.com/test");
+        assert_eq!(
+            notif_rule.url.as_deref().unwrap(),
+            "https://hooks.example.com/test"
+        );
 
         // Verify report shows env var resolution
         assert!(report.env_vars_resolved > 0);
 
         // Cleanup
-        unsafe { std::env::remove_var("MISOGI_TEST_CLIENT_ID"); }
-        unsafe { std::env::remove_var("MISOGI_TEST_SECRET"); }
-        unsafe { std::env::remove_var("MISOGI_TEST_HOOK"); }
+        unsafe {
+            std::env::remove_var("MISOGI_TEST_CLIENT_ID");
+        }
+        unsafe {
+            std::env::remove_var("MISOGI_TEST_SECRET");
+        }
+        unsafe {
+            std::env::remove_var("MISOGI_TEST_HOOK");
+        }
     }
 
     // =========================================================================
@@ -752,7 +780,8 @@ notifications:
 
     #[test]
     fn test_compile_detects_invalid_cross_reference() {
-        let yaml = YamlConfig::from_yaml_str(r#"
+        let yaml = YamlConfig::from_yaml_str(
+            r#"
 version: "1.0"
 environment: production
 authentication:
@@ -773,7 +802,9 @@ routing:
       require_auth: true
       allowed_providers: [NonExistentProvider]
       rate_limit: 100/min
-"#).unwrap();
+"#,
+        )
+        .unwrap();
 
         let result = compile(&yaml);
         assert!(result.is_err(), "Should fail on invalid cross-reference");
@@ -789,7 +820,8 @@ routing:
 
     #[test]
     fn test_compile_valid_cross_reference_passes() {
-        let yaml = YamlConfig::from_yaml_str(r#"
+        let yaml = YamlConfig::from_yaml_str(
+            r#"
 version: "1.0"
 environment: production
 authentication:
@@ -810,7 +842,9 @@ routing:
       require_auth: true
       allowed_providers: [MyLDAP]
       rate_limit: 100/min
-"#).unwrap();
+"#,
+        )
+        .unwrap();
 
         let (config, _report) = compile(&yaml).unwrap();
         assert_eq!(config.routing.incoming[0].allowed_providers, vec!["MyLDAP"]);
@@ -840,7 +874,8 @@ routing:
 
     #[test]
     fn test_jwt_ttl_conversion_to_seconds() {
-        let yaml = YamlConfig::from_yaml_str(r#"
+        let yaml = YamlConfig::from_yaml_str(
+            r#"
 version: "1.0"
 environment: production
 authentication:
@@ -856,7 +891,9 @@ routing:
     - source_pattern: "*"
       require_auth: false
       rate_limit: 100/min
-"#).unwrap();
+"#,
+        )
+        .unwrap();
 
         let (config, _) = compile(&yaml).unwrap();
         assert_eq!(config.authentication.jwt_ttl_seconds, 24 * 3600);
@@ -868,7 +905,8 @@ routing:
 
     #[test]
     fn test_compilation_report_contains_info() {
-        let yaml = YamlConfig::from_yaml_str(r#"
+        let yaml = YamlConfig::from_yaml_str(
+            r#"
 version: "1.0"
 environment: production
 authentication:
@@ -898,7 +936,9 @@ routing:
     - source_pattern: "*/public/*"
       require_auth: false
       rate_limit: 50/min
-"#).unwrap();
+"#,
+        )
+        .unwrap();
 
         let (_config, report) = compile(&yaml).unwrap();
 
@@ -915,7 +955,8 @@ routing:
 
     #[test]
     fn test_compile_without_optional_sections() {
-        let yaml = YamlConfig::from_yaml_str(r#"
+        let yaml = YamlConfig::from_yaml_str(
+            r#"
 version: "1.0"
 environment: production
 authentication:
@@ -931,7 +972,9 @@ routing:
     - source_pattern: "*"
       require_auth: false
       rate_limit: 100/min
-"#).unwrap();
+"#,
+        )
+        .unwrap();
 
         let (config, _report) = compile(&yaml).unwrap();
 
@@ -941,7 +984,8 @@ routing:
 
     #[test]
     fn test_compile_with_all_sections_populated() {
-        let yaml = YamlConfig::from_yaml_str(r#"
+        let yaml = YamlConfig::from_yaml_str(
+            r#"
 version: "1.0"
 environment: production
 authentication:
@@ -966,7 +1010,9 @@ notifications:
   on_error:
     - channel: email
       recipients: [admin@example.com]
-"#).unwrap();
+"#,
+        )
+        .unwrap();
 
         let (config, _report) = compile(&yaml).unwrap();
 

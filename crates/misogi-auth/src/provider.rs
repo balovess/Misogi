@@ -189,11 +189,7 @@ impl MisogiIdentity {
     }
 
     /// Builder-style method: insert an extra attribute.
-    pub fn with_extra(
-        mut self,
-        key: impl Into<String>,
-        value: serde_json::Value,
-    ) -> Self {
+    pub fn with_extra(mut self, key: impl Into<String>, value: serde_json::Value) -> Self {
         self.extra.insert(key.into(), value);
         self
     }
@@ -321,10 +317,7 @@ pub trait IdentityProvider: Send + Sync {
     /// # Security
     ///
     /// MUST NOT log passwords or sensitive tokens. Mitigate timing side-channels.
-    async fn authenticate(
-        &self,
-        input: AuthRequest,
-    ) -> Result<MisogiIdentity, IdentityError>;
+    async fn authenticate(&self, input: AuthRequest) -> Result<MisogiIdentity, IdentityError>;
 
     /// Health check against the backend identity provider.
     ///

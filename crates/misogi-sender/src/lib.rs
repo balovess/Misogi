@@ -5,8 +5,8 @@
 
 pub mod cli;
 pub mod config;
-pub mod state;
 pub mod driver_instance;
+pub mod state;
 pub mod upload_engine;
 
 pub use driver_instance::TransferDriverInstance;

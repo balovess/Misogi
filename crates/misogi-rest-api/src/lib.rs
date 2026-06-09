@@ -96,12 +96,11 @@ pub mod version_middleware;
 
 pub use error::ApiError;
 pub use models::{
-    AuditEntry, AuditQuery, ComponentHealth, CreatePolicyRequest,
-    FileDetail, FileItem, HealthStatus, JobCreated, JobStatus,
-    ListFilesQuery, PaginatedResponse, PolicyInfo, RestApiConfig,
-    SanitizationReport, ScanRequest, ThreatDetail, UpdatePolicyRequest,
+    AuditEntry, AuditQuery, ComponentHealth, CreatePolicyRequest, FileDetail, FileItem,
+    HealthStatus, JobCreated, JobStatus, ListFilesQuery, PaginatedResponse, PolicyInfo,
+    RestApiConfig, SanitizationReport, ScanRequest, ThreatDetail, UpdatePolicyRequest,
 };
 pub use version_middleware::{
-    VersionConfig, VersionConfigBuilder, VersionExtractorMiddleware,
-    VersionRouter, VersionAwareState, VersionExtractionError,
+    VersionAwareState, VersionConfig, VersionConfigBuilder, VersionExtractionError,
+    VersionExtractorMiddleware, VersionRouter,
 };

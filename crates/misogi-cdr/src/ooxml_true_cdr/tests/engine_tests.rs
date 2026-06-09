@@ -2,10 +2,7 @@
 
 use std::collections::HashSet;
 
-use super::super::{
-    engine::*,
-    report::*,
-};
+use super::super::{engine::*, report::*};
 
 #[test]
 fn test_dangerous_entry_detection() {

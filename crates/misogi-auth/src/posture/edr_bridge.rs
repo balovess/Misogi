@@ -22,14 +22,8 @@ use crate::device::fingerprint::DeviceFingerprint;
 use crate::edr::models::{EdrDevicePosture, EdrOsInfo};
 
 use super::types::{
-    CheckSeverity,
-    DevicePosture,
-    EncryptionStatus,
-    OsPlatform,
-    OsPosture,
-    PatchStatus,
-    PostureCheckResult,
-    SecuritySoftwarePosture,
+    CheckSeverity, DevicePosture, EncryptionStatus, OsPlatform, OsPosture, PatchStatus,
+    PostureCheckResult, SecuritySoftwarePosture,
 };
 
 // ---------------------------------------------------------------------------
@@ -292,7 +286,10 @@ fn build_checks_from_edr(edr: &EdrDevicePosture) -> Vec<PostureCheckResult> {
         passed: !edr.has_active_threats,
         severity: CheckSeverity::Critical,
         details: if edr.has_active_threats {
-            format!("{} active detection(s) on device", edr.active_detection_count)
+            format!(
+                "{} active detection(s) on device",
+                edr.active_detection_count
+            )
         } else {
             "No active threats detected".into()
         },
@@ -358,7 +355,8 @@ mod tests {
     fn make_test_fp(ua_entropy: f64, confidence: f64) -> DeviceFingerprint {
         DeviceFingerprint {
             user_agent: FingerprintSignal {
-                value_hash: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2".into(),
+                value_hash: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
+                    .into(),
                 entropy_bits: ua_entropy,
                 is_stable: true,
             },
@@ -456,7 +454,10 @@ mod tests {
         assert_eq!(map_platform_string("Linux"), OsPlatform::Linux);
         assert_eq!(map_platform_string("iOS"), OsPlatform::Ios);
         assert_eq!(map_platform_string("Android 14"), OsPlatform::Android);
-        assert!(matches!(map_platform_string("FreeBSD"), OsPlatform::Unknown(_)));
+        assert!(matches!(
+            map_platform_string("FreeBSD"),
+            OsPlatform::Unknown(_)
+        ));
     }
 
     // ===================================================================

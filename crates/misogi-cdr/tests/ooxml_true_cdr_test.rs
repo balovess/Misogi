@@ -48,7 +48,10 @@ fn create_minimal_docx() -> Vec<u8> {
   <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
 </Types>"#;
     writer
-        .start_file("[Content_Types].xml", zip::write::FileOptions::<()>::default())
+        .start_file(
+            "[Content_Types].xml",
+            zip::write::FileOptions::<()>::default(),
+        )
         .unwrap();
     writer.write_all(content_types).unwrap();
 
@@ -86,7 +89,10 @@ fn create_minimal_docx() -> Vec<u8> {
   </w:body>
 </w:document>"#;
     writer
-        .start_file("word/document.xml", zip::write::FileOptions::<()>::default())
+        .start_file(
+            "word/document.xml",
+            zip::write::FileOptions::<()>::default(),
+        )
         .unwrap();
     writer.write_all(document_xml).unwrap();
 
@@ -111,7 +117,10 @@ fn create_docx_with_vba() -> Vec<u8> {
   <Override PartName="/word/vbaProject.bin" ContentType="application/vnd.ms-office.vbaProject"/>
 </Types>"#;
     writer
-        .start_file("[Content_Types].xml", zip::write::FileOptions::<()>::default())
+        .start_file(
+            "[Content_Types].xml",
+            zip::write::FileOptions::<()>::default(),
+        )
         .unwrap();
     writer.write_all(content_types).unwrap();
 
@@ -150,14 +159,20 @@ fn create_docx_with_vba() -> Vec<u8> {
   </w:body>
 </w:document>"#;
     writer
-        .start_file("word/document.xml", zip::write::FileOptions::<()>::default())
+        .start_file(
+            "word/document.xml",
+            zip::write::FileOptions::<()>::default(),
+        )
         .unwrap();
     writer.write_all(document_xml).unwrap();
 
     // word/vbaProject.bin — fake VBA project data
     let vba_data = b"This is fake VBA macro data for testing purposes";
     writer
-        .start_file("word/vbaProject.bin", zip::write::FileOptions::<()>::default())
+        .start_file(
+            "word/vbaProject.bin",
+            zip::write::FileOptions::<()>::default(),
+        )
         .unwrap();
     writer.write_all(vba_data).unwrap();
 
@@ -181,7 +196,10 @@ fn create_docx_with_dangerous_elements() -> Vec<u8> {
   <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
 </Types>"#;
     writer
-        .start_file("[Content_Types].xml", zip::write::FileOptions::<()>::default())
+        .start_file(
+            "[Content_Types].xml",
+            zip::write::FileOptions::<()>::default(),
+        )
         .unwrap();
     writer.write_all(content_types).unwrap();
 
@@ -247,7 +265,10 @@ fn create_docx_with_dangerous_elements() -> Vec<u8> {
   </w:body>
 </w:document>"#;
     writer
-        .start_file("word/document.xml", zip::write::FileOptions::<()>::default())
+        .start_file(
+            "word/document.xml",
+            zip::write::FileOptions::<()>::default(),
+        )
         .unwrap();
     writer.write_all(document_xml).unwrap();
 
@@ -270,7 +291,10 @@ fn create_minimal_xlsx() -> Vec<u8> {
   <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.worksheet+xml"/>
 </Types>"#;
     writer
-        .start_file("[Content_Types].xml", zip::write::FileOptions::<()>::default())
+        .start_file(
+            "[Content_Types].xml",
+            zip::write::FileOptions::<()>::default(),
+        )
         .unwrap();
     writer.write_all(content_types).unwrap();
 
@@ -333,7 +357,10 @@ fn create_xlsx_with_dde() -> Vec<u8> {
   <Override PartName="/xl/externalLinks/externalLink1.xml" ContentType="application/vnd.openxmlformats-officedocument.externalLink+xml"/>
 </Types>"#;
     writer
-        .start_file("[Content_Types].xml", zip::write::FileOptions::<()>::default())
+        .start_file(
+            "[Content_Types].xml",
+            zip::write::FileOptions::<()>::default(),
+        )
         .unwrap();
     writer.write_all(content_types).unwrap();
 
@@ -723,7 +750,10 @@ fn test_binary_resource_preservation() {
   <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
 </Types>"#;
     writer
-        .start_file("[Content_Types].xml", zip::write::FileOptions::<()>::default())
+        .start_file(
+            "[Content_Types].xml",
+            zip::write::FileOptions::<()>::default(),
+        )
         .unwrap();
     writer.write_all(content_types).unwrap();
 
@@ -732,14 +762,20 @@ fn test_binary_resource_preservation() {
   <w:body><w:p><w:r><w:t>Image test</w:t></w:r></w:p></w:body>
 </w:document>"#;
     writer
-        .start_file("word/document.xml", zip::write::FileOptions::<()>::default())
+        .start_file(
+            "word/document.xml",
+            zip::write::FileOptions::<()>::default(),
+        )
         .unwrap();
     writer.write_all(document_xml).unwrap();
 
     // Add a fake PNG image (valid enough to pass validation)
     let fake_png = b"\x89PNG\r\n\x1a\nfake png data for testing";
     writer
-        .start_file("word/media/image1.png", zip::write::FileOptions::<()>::default())
+        .start_file(
+            "word/media/image1.png",
+            zip::write::FileOptions::<()>::default(),
+        )
         .unwrap();
     writer.write_all(fake_png).unwrap();
 

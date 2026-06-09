@@ -59,13 +59,7 @@ fn custom_pool(user_ids: &[&str]) -> ApproverPool {
 
 #[test]
 fn test_execute_template_creates_pending_request() {
-    let tpl = make_template(
-        "tpl-1",
-        1,
-        custom_pool(&["approver-1"]),
-        24,
-        false,
-    );
+    let tpl = make_template("tpl-1", 1, custom_pool(&["approver-1"]), 24, false);
     let exec = ApprovalExecutor::new(vec![tpl]);
     let attrs = make_attr_map(vec![]);
 
@@ -159,7 +153,9 @@ fn test_role_based_multiple_roles_union() {
         ),
     ]);
 
-    let req = exec.execute_template("tpl-multi", "r", "u", "d", &attrs).unwrap();
+    let req = exec
+        .execute_template("tpl-multi", "r", "u", "d", &attrs)
+        .unwrap();
     assert_eq!(req.selected_approvers.len(), 2);
 }
 
@@ -210,7 +206,9 @@ fn test_custom_list_approver_selection() {
     let exec = ApprovalExecutor::new(vec![tpl]);
     let attrs = make_attr_map(vec![]);
 
-    let req = exec.execute_template("tpl-custom", "r", "u", "d", &attrs).unwrap();
+    let req = exec
+        .execute_template("tpl-custom", "r", "u", "d", &attrs)
+        .unwrap();
     assert_eq!(req.selected_approvers, vec!["user-x", "user-y", "user-z"]);
     assert_eq!(req.required_approvers, 2);
 }
@@ -232,7 +230,13 @@ fn test_template_not_found_error() {
 
 #[test]
 fn test_no_approvers_available_error_for_empty_role_list() {
-    let tpl = make_template("tpl-empty-role", 1, role_pool(&["nonexistent_role"]), 24, false);
+    let tpl = make_template(
+        "tpl-empty-role",
+        1,
+        role_pool(&["nonexistent_role"]),
+        24,
+        false,
+    );
     let exec = ApprovalExecutor::new(vec![tpl]);
     let attrs = make_attr_map(vec![]); // No role_members_* keys
 
@@ -252,7 +256,9 @@ fn test_handle_timeout_with_escalation() {
     let exec = ApprovalExecutor::new(vec![tpl]);
     let attrs = make_attr_map(vec![]);
 
-    let req = exec.execute_template("tpl-e", "r", "u", "d", &attrs).unwrap();
+    let req = exec
+        .execute_template("tpl-e", "r", "u", "d", &attrs)
+        .unwrap();
     let req_id = req.request_id.clone();
 
     // Run in a blocking context for synchronous test
@@ -270,7 +276,9 @@ fn test_handle_timeout_without_escalation() {
     let exec = ApprovalExecutor::new(vec![tpl]);
     let attrs = make_attr_map(vec![]);
 
-    let req = exec.execute_template("tpl-te", "r", "u", "d", &attrs).unwrap();
+    let req = exec
+        .execute_template("tpl-te", "r", "u", "d", &attrs)
+        .unwrap();
     let req_id = req.request_id.clone();
 
     let rt = tokio::runtime::Runtime::new().unwrap();
@@ -300,7 +308,9 @@ fn test_handle_timeout_already_completed() {
     exec.record_approval(&req.request_id, "a", true).unwrap();
 
     let rt = tokio::runtime::Runtime::new().unwrap();
-    let err = rt.block_on(exec.handle_timeout(&req.request_id)).unwrap_err();
+    let err = rt
+        .block_on(exec.handle_timeout(&req.request_id))
+        .unwrap_err();
     assert!(
         matches!(err, ExecutorError::InvalidStateTransition { .. }),
         "expected InvalidStateTransition, got {:?}",
@@ -317,7 +327,9 @@ fn test_record_approval_progresses_toward_completion() {
     let tpl = make_template("tpl-2", 2, custom_pool(&["a1", "a2", "a3"]), 24, false);
     let exec = ApprovalExecutor::new(vec![tpl]);
     let attrs = make_attr_map(vec![]);
-    let req = exec.execute_template("tpl-2", "r", "u", "d", &attrs).unwrap();
+    let req = exec
+        .execute_template("tpl-2", "r", "u", "d", &attrs)
+        .unwrap();
 
     // First approval: still pending (need 2)
     let s1 = exec.record_approval(&req.request_id, "a1", true).unwrap();
@@ -332,7 +344,9 @@ fn test_record_approval_auto_completes_when_threshold_met() {
     let tpl = make_template("tpl-2ok", 2, custom_pool(&["a1", "a2"]), 24, false);
     let exec = ApprovalExecutor::new(vec![tpl]);
     let attrs = make_attr_map(vec![]);
-    let req = exec.execute_template("tpl-2ok", "r", "u", "d", &attrs).unwrap();
+    let req = exec
+        .execute_template("tpl-2ok", "r", "u", "d", &attrs)
+        .unwrap();
 
     // First approval
     exec.record_approval(&req.request_id, "a1", true).unwrap();
@@ -349,7 +363,9 @@ fn test_record_approval_rejects_if_any_rejects() {
     let tpl = make_template("tpl-rej", 2, custom_pool(&["a1", "a2", "a3"]), 24, false);
     let exec = ApprovalExecutor::new(vec![tpl]);
     let attrs = make_attr_map(vec![]);
-    let req = exec.execute_template("tpl-rej", "r", "u", "d", &attrs).unwrap();
+    let req = exec
+        .execute_template("tpl-rej", "r", "u", "d", &attrs)
+        .unwrap();
 
     // One approval first
     exec.record_approval(&req.request_id, "a1", true).unwrap();
@@ -367,7 +383,9 @@ fn test_duplicate_approval_error() {
     let tpl = make_template("tpl-dup", 2, custom_pool(&["a1", "a2"]), 24, false);
     let exec = ApprovalExecutor::new(vec![tpl]);
     let attrs = make_attr_map(vec![]);
-    let req = exec.execute_template("tpl-dup", "r", "u", "d", &attrs).unwrap();
+    let req = exec
+        .execute_template("tpl-dup", "r", "u", "d", &attrs)
+        .unwrap();
 
     // First response is fine (still pending since need 2 approvals)
     exec.record_approval(&req.request_id, "a1", true).unwrap();
@@ -381,9 +399,7 @@ fn test_duplicate_approval_error() {
 #[test]
 fn test_record_approval_nonexistent_request() {
     let exec = ApprovalExecutor::new(vec![]);
-    let err = exec
-        .record_approval("ghost", "someone", true)
-        .unwrap_err();
+    let err = exec.record_approval("ghost", "someone", true).unwrap_err();
     assert!(matches!(err, ExecutorError::RequestNotFound(_)));
 }
 
@@ -392,7 +408,9 @@ fn test_record_approval_already_terminal_state() {
     let tpl = make_template("tpl-term", 1, custom_pool(&["a"]), 24, false);
     let exec = ApprovalExecutor::new(vec![tpl]);
     let attrs = make_attr_map(vec![]);
-    let req = exec.execute_template("tpl-term", "r", "u", "d", &attrs).unwrap();
+    let req = exec
+        .execute_template("tpl-term", "r", "u", "d", &attrs)
+        .unwrap();
 
     // Complete the request
     exec.record_approval(&req.request_id, "a", true).unwrap();
@@ -417,7 +435,9 @@ fn test_get_request_status_existing() {
     let tpl = make_template("tpl-q", 1, custom_pool(&["a"]), 1, false);
     let exec = ApprovalExecutor::new(vec![tpl]);
     let attrs = make_attr_map(vec![]);
-    let req = exec.execute_template("tpl-q", "r", "u", "d", &attrs).unwrap();
+    let req = exec
+        .execute_template("tpl-q", "r", "u", "d", &attrs)
+        .unwrap();
 
     let found = exec.get_request_status(&req.request_id);
     assert!(found.is_some());
@@ -437,7 +457,9 @@ fn test_list_pending_for_approver_filters_correctly() {
     let attrs = make_attr_map(vec![]);
 
     // Create a request where both app-a and app-b are approvers
-    let req = exec.execute_template("tpl-lp", "r", "u", "d", &attrs).unwrap();
+    let req = exec
+        .execute_template("tpl-lp", "r", "u", "d", &attrs)
+        .unwrap();
 
     // app-a should see this request
     let for_a = exec.list_pending_for_approver("app-a");
@@ -453,7 +475,8 @@ fn test_list_pending_for_approver_filters_correctly() {
     assert!(for_c.is_empty());
 
     // After completion, no one should see it as pending
-    exec.record_approval(&req.request_id, "app-a", true).unwrap();
+    exec.record_approval(&req.request_id, "app-a", true)
+        .unwrap();
     let for_a_after = exec.list_pending_for_approver("app-a");
     assert!(for_a_after.is_empty());
 }
@@ -467,7 +490,9 @@ fn test_cancel_request_success() {
     let tpl = make_template("tpl-can", 1, custom_pool(&["a"]), 1, false);
     let exec = ApprovalExecutor::new(vec![tpl]);
     let attrs = make_attr_map(vec![]);
-    let req = exec.execute_template("tpl-can", "r", "u", "d", &attrs).unwrap();
+    let req = exec
+        .execute_template("tpl-can", "r", "u", "d", &attrs)
+        .unwrap();
 
     exec.cancel_request(&req.request_id).unwrap();
 
@@ -487,7 +512,9 @@ fn test_cancel_already_completed_request() {
     let tpl = make_template("tpl-can-done", 1, custom_pool(&["a"]), 1, false);
     let exec = ApprovalExecutor::new(vec![tpl]);
     let attrs = make_attr_map(vec![]);
-    let req = exec.execute_template("tpl-can-done", "r", "u", "d", &attrs).unwrap();
+    let req = exec
+        .execute_template("tpl-can-done", "r", "u", "d", &attrs)
+        .unwrap();
 
     // Complete first
     exec.record_approval(&req.request_id, "a", true).unwrap();
@@ -523,11 +550,19 @@ fn test_register_template_replaces_existing() {
     let tpl_v1 = make_template("tpl-v1", 1, custom_pool(&["old-approver"]), 24, false);
     let exec = ApprovalExecutor::new(vec![tpl_v1]);
 
-    let tpl_v2 = make_template("tpl-v1", 2, custom_pool(&["new-approver-a", "new-approver-b"]), 48, true);
+    let tpl_v2 = make_template(
+        "tpl-v1",
+        2,
+        custom_pool(&["new-approver-a", "new-approver-b"]),
+        48,
+        true,
+    );
     exec.register_template(tpl_v2);
 
     let attrs = make_attr_map(vec![]);
-    let req = exec.execute_template("tpl-v1", "r", "u", "d", &attrs).unwrap();
+    let req = exec
+        .execute_template("tpl-v1", "r", "u", "d", &attrs)
+        .unwrap();
     assert_eq!(req.required_approvers, 2);
     assert_eq!(req.selected_approvers.len(), 2);
     assert_eq!(req.timeout_hours, 48);

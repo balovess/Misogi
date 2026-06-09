@@ -59,8 +59,18 @@ pub struct AbacEngine {
 
 impl AbacEngine {
     /// Constructs a new engine with explicit parameters.
-    pub fn new(rules: Vec<AbacPolicyRule>, default_effect: PolicyEffect, cache_ttl_secs: u64) -> Self {
-        Self { rules, default_effect, evaluator: ConditionEvaluator, cache: RwLock::new(HashMap::new()), cache_ttl: Duration::from_secs(cache_ttl_secs) }
+    pub fn new(
+        rules: Vec<AbacPolicyRule>,
+        default_effect: PolicyEffect,
+        cache_ttl_secs: u64,
+    ) -> Self {
+        Self {
+            rules,
+            default_effect,
+            evaluator: ConditionEvaluator,
+            cache: RwLock::new(HashMap::new()),
+            cache_ttl: Duration::from_secs(cache_ttl_secs),
+        }
     }
 
     /// Constructs an engine from an [`AbacConfig`] configuration object.
@@ -68,7 +78,11 @@ impl AbacEngine {
     /// Extracts `rules`, `default_effect`, and `decision_cache_ttl_secs`.
     /// Callers should invoke `config.validate()` beforehand if validation is desired.
     pub fn from_config(config: &AbacConfig) -> Self {
-        let effect = if config.default_effect == "permit" { PolicyEffect::Permit } else { PolicyEffect::Deny };
+        let effect = if config.default_effect == "permit" {
+            PolicyEffect::Permit
+        } else {
+            PolicyEffect::Deny
+        };
         Self::new(config.rules.clone(), effect, config.decision_cache_ttl_secs)
     }
 
@@ -82,11 +96,13 @@ impl AbacEngine {
     pub async fn evaluate(&self, attributes: &HashMap<String, AbacValue>) -> AbacDecision {
         // --- Step 1: Cache lookup ---
         let attr_hash = Self::hash_attributes(attributes);
-        if let Some(cached) = self.get_cached_decision(attr_hash) { return cached; }
+        if let Some(cached) = self.get_cached_decision(attr_hash) {
+            return cached;
+        }
 
         // --- Step 2: Sort enabled rules by priority DESC ---
         let mut sorted: Vec<&AbacPolicyRule> = self.rules.iter().filter(|r| r.enabled).collect();
-        sorted.sort_by(|a, b| b.priority.cmp(&a.priority));
+        sorted.sort_by_key(|b| std::cmp::Reverse(b.priority));
 
         // --- Step 3-4: Evaluate ---
         let mut matched_permit_id: Option<String> = None;
@@ -95,10 +111,18 @@ impl AbacEngine {
 
         for rule in &sorted {
             evaluated_count += 1;
-            if !Self::match_rule(rule, attributes) { continue; }
+            if !Self::match_rule(rule, attributes) {
+                continue;
+            }
             match rule.effect {
                 PolicyEffect::Deny => {
-                    let d = AbacDecision { effect: PolicyEffect::Deny, matched_rule_id: Some(rule.rule_id.clone()), obligation: None, evaluated_rules: evaluated_count, cache_hit: false };
+                    let d = AbacDecision {
+                        effect: PolicyEffect::Deny,
+                        matched_rule_id: Some(rule.rule_id.clone()),
+                        obligation: None,
+                        evaluated_rules: evaluated_count,
+                        cache_hit: false,
+                    };
                     self.cache_decision(attr_hash, d.clone());
                     return d;
                 }
@@ -113,8 +137,20 @@ impl AbacEngine {
 
         // --- Step 5: Finalize ---
         let decision = match &matched_permit_id {
-            Some(pid) => AbacDecision { effect: PolicyEffect::Permit, matched_rule_id: Some(pid.clone()), obligation: matched_obligation, evaluated_rules: evaluated_count, cache_hit: false },
-            None => AbacDecision { effect: self.default_effect, matched_rule_id: None, obligation: None, evaluated_rules: evaluated_count, cache_hit: false },
+            Some(pid) => AbacDecision {
+                effect: PolicyEffect::Permit,
+                matched_rule_id: Some(pid.clone()),
+                obligation: matched_obligation,
+                evaluated_rules: evaluated_count,
+                cache_hit: false,
+            },
+            None => AbacDecision {
+                effect: self.default_effect,
+                matched_rule_id: None,
+                obligation: None,
+                evaluated_rules: evaluated_count,
+                cache_hit: false,
+            },
         };
 
         self.cache_decision(attr_hash, decision.clone());
@@ -145,24 +181,34 @@ impl AbacEngine {
     // -------------------------------------------------------------------
 
     fn cache_decision(&self, hash: u64, decision: AbacDecision) {
-        if self.cache_ttl.is_zero() { return; }
-        if let Ok(mut c) = self.cache.write() { c.insert(hash, (decision, Instant::now())); }
+        if self.cache_ttl.is_zero() {
+            return;
+        }
+        if let Ok(mut c) = self.cache.write() {
+            c.insert(hash, (decision, Instant::now()));
+        }
     }
 
     fn get_cached_decision(&self, hash: u64) -> Option<AbacDecision> {
-        if self.cache_ttl.is_zero() { return None; }
+        if self.cache_ttl.is_zero() {
+            return None;
+        }
         let c = self.cache.read().ok()?;
-        let &(ref d, ref t) = c.get(&hash)?;
+        let (d, t) = c.get(&hash)?;
         if t.elapsed() < self.cache_ttl {
             let mut result = d.clone();
             result.cache_hit = true;
             Some(result)
-        } else { None }
+        } else {
+            None
+        }
     }
 
     /// Removes all entries from the decision cache.
     pub fn invalidate_cache(&self) {
-        if let Ok(mut c) = self.cache.write() { c.clear(); }
+        if let Ok(mut c) = self.cache.write() {
+            c.clear();
+        }
     }
 
     // -------------------------------------------------------------------
@@ -170,7 +216,9 @@ impl AbacEngine {
     // -------------------------------------------------------------------
 
     /// Appends a new rule. Call [`invalidate_cache`] afterward to prevent stale hits.
-    pub fn add_rule(&mut self, rule: AbacPolicyRule) { self.rules.push(rule); }
+    pub fn add_rule(&mut self, rule: AbacPolicyRule) {
+        self.rules.push(rule);
+    }
 
     /// Removes a rule by ID. Returns `true` if found and removed.
     pub fn remove_rule(&mut self, rule_id: &str) -> bool {
@@ -192,12 +240,18 @@ impl AbacEngine {
     /// Computes a deterministic FNV-1a-style hash of sorted attribute map.
     /// Uses BTreeMap for order-independent hashing.
     fn hash_attributes(attributes: &HashMap<String, AbacValue>) -> u64 {
-        let sorted: BTreeMap<&String, &AbacValue> = attributes.iter().map(|(k, v)| (k, v)).collect();
+        let sorted: BTreeMap<&String, &AbacValue> = attributes.iter().collect();
         let mut h = 0u64;
         for (key, val) in &sorted {
-            for b in key.as_bytes() { h ^= *b as u64; h = h.wrapping_mul(0x100000001b3); }
+            for b in key.as_bytes() {
+                h ^= *b as u64;
+                h = h.wrapping_mul(0x100000001b3);
+            }
             let s = format!("{:?}", val);
-            for b in s.as_bytes() { h ^= *b as u64; h = h.wrapping_mul(0x100000001b3); }
+            for b in s.as_bytes() {
+                h ^= *b as u64;
+                h = h.wrapping_mul(0x100000001b3);
+            }
         }
         h
     }

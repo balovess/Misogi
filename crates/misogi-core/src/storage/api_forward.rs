@@ -106,7 +106,7 @@ impl fmt::Display for HttpMethod {
 
 impl HttpMethod {
     /// Convert to reqwest's [`Method`] enum for HTTP client construction.
-    fn to_reqwest_method(&self) -> Method {
+    fn to_reqwest_method(self) -> Method {
         match self {
             Self::Post => Method::POST,
             Self::Put => Method::PUT,
@@ -212,7 +212,7 @@ pub(crate) fn expand_env_vars(input: &str) -> Result<String, String> {
             let mut var_name = String::new();
             let mut found_close = false;
 
-            while let Some(c) = chars.next() {
+            for c in chars.by_ref() {
                 if c == '}' {
                     found_close = true;
                     break;
@@ -320,14 +320,9 @@ impl ApiForwardStorage {
     /// - HTTP client initialization fails.
     pub fn new(config: ApiForwardConfig) -> Result<Self, StorageError> {
         // Validate endpoint: reject empty or placeholder hosts
-        let host = config
-            .endpoint
-            .host_str()
-            .ok_or_else(|| {
-                StorageError::ConfigurationError(
-                    "Endpoint URL must have a valid host".to_string(),
-                )
-            })?;
+        let host = config.endpoint.host_str().ok_or_else(|| {
+            StorageError::ConfigurationError("Endpoint URL must have a valid host".to_string())
+        })?;
 
         if host.is_empty() || host == "invalid-placeholder.local" {
             return Err(StorageError::ConfigurationError(
@@ -364,10 +359,7 @@ impl ApiForwardStorage {
             .connect_timeout(timeout)
             .build()
             .map_err(|e| {
-                StorageError::InternalError(format!(
-                    "Failed to initialize HTTP client: {}",
-                    e
-                ))
+                StorageError::InternalError(format!("Failed to initialize HTTP client: {}", e))
             })?;
 
         tracing::info!(
@@ -397,10 +389,7 @@ impl ApiForwardStorage {
     /// # Arguments
     ///
     /// * `content_type` — MIME type for the Content-Type header.
-    fn build_request(
-        &self,
-        content_type: Option<&str>,
-    ) -> reqwest::RequestBuilder {
+    fn build_request(&self, content_type: Option<&str>) -> reqwest::RequestBuilder {
         let method = self.config.method.to_reqwest_method();
         let mut request = self
             .http_client
@@ -533,9 +522,7 @@ impl StorageBackend for ApiForwardStorage {
                         "Data forwarded successfully"
                     );
                     Ok(info)
-                } else if status == StatusCode::UNAUTHORIZED
-                    || status == StatusCode::FORBIDDEN
-                {
+                } else if status == StatusCode::UNAUTHORIZED || status == StatusCode::FORBIDDEN {
                     let body_text = response.text().await.unwrap_or_default();
                     Err(StorageError::PermissionDenied(format!(
                         "HTTP {} from {}: {}",
@@ -639,7 +626,11 @@ impl StorageBackend for ApiForwardStorage {
         );
 
         // Try HEAD first (lighter), fall back to GET if needed
-        let head_result = self.http_client.head(self.config.endpoint.clone()).send().await;
+        let head_result = self
+            .http_client
+            .head(self.config.endpoint.clone())
+            .send()
+            .await;
 
         match head_result {
             Ok(response) => {

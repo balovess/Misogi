@@ -12,36 +12,18 @@
 // | [`keyword_engine`] | Configurable keyword-based rule engine |
 // | [`context_analyzer`] | Unified entry point (routes to provider or keywords) |
 
-pub mod types;
+pub mod context_analyzer;
 pub mod context_provider;
 pub mod keyword_engine;
-pub mod context_analyzer;
+pub mod types;
 
-pub use types::{
-    ContextAnalysisRequest,
-    ContextAnalysisResponse,
-    ContextError,
-    ContextMetadata,
-};
+pub use types::{ContextAnalysisRequest, ContextAnalysisResponse, ContextError, ContextMetadata};
 
-pub use context_provider::{
-    ContextProvider,
-    MockContextProvider,
-};
+pub use context_provider::{ContextProvider, MockContextProvider};
 
 pub use keyword_engine::{
-    KeywordRuleEngine,
-    KeywordRuleSet,
-    KeywordRule,
-    PiiTypeRules,
-    KeywordEngineConfig,
-    KeywordPosition,
-    RuleEngineBuilder,
-    KeywordRuleSource,
+    KeywordEngineConfig, KeywordPosition, KeywordRule, KeywordRuleEngine, KeywordRuleSet,
+    KeywordRuleSource, PiiTypeRules, RuleEngineBuilder,
 };
 
-pub use context_analyzer::{
-    ContextAnalyzer,
-    ContextAnalyzerConfig,
-    FallbackStrategy,
-};
+pub use context_analyzer::{ContextAnalyzer, ContextAnalyzerConfig, FallbackStrategy};

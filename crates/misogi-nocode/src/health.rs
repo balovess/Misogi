@@ -13,13 +13,7 @@
 
 use std::sync::Arc;
 
-use axum::{
-    extract::State,
-    http::StatusCode,
-    Json,
-    routing::get,
-    Router,
-};
+use axum::{Json, Router, extract::State, http::StatusCode, routing::get};
 use serde_json::json;
 
 use crate::runtime::NoCodeRuntime;
@@ -61,7 +55,6 @@ pub struct HealthState {
 /// // Merge into main app router:
 /// // app.merge(health_router)
 /// ```
-#[must_use]
 pub fn build_health_router(runtime: Arc<NoCodeRuntime>) -> Router {
     let state = HealthState { runtime };
 
@@ -79,9 +72,7 @@ pub fn build_health_router(runtime: Arc<NoCodeRuntime>) -> Router {
 ///
 /// Returns HTTP 200 when the runtime has been initialized (config loaded),
 /// or HTTP 503 (Service Unavailable) when no valid configuration is active.
-async fn nocode_status(
-    State(state): State<HealthState>,
-) -> (StatusCode, Json<serde_json::Value>) {
+async fn nocode_status(State(state): State<HealthState>) -> (StatusCode, Json<serde_json::Value>) {
     let status = state.runtime.status().await;
     let code = if status.initialized {
         StatusCode::OK
@@ -147,7 +138,7 @@ async fn nocode_config_check(
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     use crate::schema::YamlConfig;
 
     fn make_test_runtime() -> NoCodeRuntime {
@@ -166,7 +157,8 @@ sanitization:
 routing:
   incoming: []
 "#,
-        ).expect("Valid test YAML");
+        )
+        .expect("Valid test YAML");
         NoCodeRuntime::new(yaml)
     }
 

@@ -326,7 +326,7 @@ fn default_shutdown_timeout() -> u64 {
 /// http_port = 8080
 /// grpc_port = 9090
 /// ```
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct MisogiConfig {
     /// JWT authentication subsystem configuration.
@@ -351,19 +351,6 @@ pub struct MisogiConfig {
     /// General application settings.
     #[serde(default)]
     pub app: AppSection,
-}
-
-impl Default for MisogiConfig {
-    fn default() -> Self {
-        Self {
-            jwt: None,
-            identity_providers: Vec::new(),
-            storage: None,
-            transport: None,
-            parsers: None,
-            app: AppSection::default(),
-        }
-    }
 }
 
 impl MisogiConfig {
@@ -417,7 +404,9 @@ impl MisogiConfig {
             errors.push(super::BootstrapError::MissingConfig("storage".to_string()));
         }
         if self.transport.is_none() {
-            errors.push(super::BootstrapError::MissingConfig("transport".to_string()));
+            errors.push(super::BootstrapError::MissingConfig(
+                "transport".to_string(),
+            ));
         }
 
         if errors.is_empty() {

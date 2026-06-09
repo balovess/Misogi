@@ -113,8 +113,8 @@ pub use app::MisogiApp;
 // --- Re-export configuration section types ---
 
 pub use config::{
-    AppSection, IdentityProviderConfig, JwtSection, ParsersSection,
-    StorageSection, TransportSection,
+    AppSection, IdentityProviderConfig, JwtSection, ParsersSection, StorageSection,
+    TransportSection,
 };
 
 // =============================================================================
@@ -125,5 +125,5 @@ pub use config::{
 ///
 /// Import with `use misogi_bootstrap::prelude::*;` for quick access.
 pub mod prelude {
-    pub use super::{BootstrapError, MisogiApp, MisogiConfig, MisogiApplicationBuilder};
+    pub use super::{BootstrapError, MisogiApp, MisogiApplicationBuilder, MisogiConfig};
 }

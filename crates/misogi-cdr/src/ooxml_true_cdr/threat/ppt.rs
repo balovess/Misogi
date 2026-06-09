@@ -28,24 +28,30 @@ pub fn scan_powerpoint_element_threats(
 ) -> bool {
     let mut force_drop = false;
 
-    let attr_vec: Vec<(String, String)> = attrs.flatten()
-        .map(|a| (
-            String::from_utf8_lossy(a.key.as_ref()).to_string(),
-            String::from_utf8_lossy(&a.value).to_string(),
-        ))
+    let attr_vec: Vec<(String, String)> = attrs
+        .flatten()
+        .map(|a| {
+            (
+                String::from_utf8_lossy(a.key.as_ref()).to_string(),
+                String::from_utf8_lossy(&a.value).to_string(),
+            )
+        })
         .collect();
 
     match elem_name {
         "oleObj" => {
-            let obj_id = attr_vec.iter()
+            let obj_id = attr_vec
+                .iter()
                 .find(|(k, _)| k == "r:id" || k == "id")
                 .map(|(_, v)| v.clone())
                 .unwrap_or_else(|| "unknown".to_string());
 
             report.powerpoint_threats_neutralized += 1;
-            report.actions_taken.push(OoxmlCdrAction::OleObjectDetected {
-                object_id: obj_id.clone(),
-            });
+            report
+                .actions_taken
+                .push(OoxmlCdrAction::OleObjectDetected {
+                    object_id: obj_id.clone(),
+                });
             removed_targets.push(obj_id);
 
             tracing::warn!(
@@ -55,7 +61,8 @@ pub fn scan_powerpoint_element_threats(
         }
 
         "snd" => {
-            let sound_name = attr_vec.iter()
+            let sound_name = attr_vec
+                .iter()
                 .find(|(k, _)| k == "name")
                 .map(|(_, v)| v.clone())
                 .unwrap_or_default();
@@ -68,9 +75,11 @@ pub fn scan_powerpoint_element_threats(
 
             if is_external {
                 report.powerpoint_threats_neutralized += 1;
-                report.actions_taken.push(OoxmlCdrAction::ExternalSoundStripped {
-                    sound_ref: sound_name.clone(),
-                });
+                report
+                    .actions_taken
+                    .push(OoxmlCdrAction::ExternalSoundStripped {
+                        sound_ref: sound_name.clone(),
+                    });
 
                 tracing::warn!(
                     sound_ref = %sound_name,
@@ -81,7 +90,8 @@ pub fn scan_powerpoint_element_threats(
         }
 
         "extLst" => {
-            let location = attr_vec.iter()
+            let location = attr_vec
+                .iter()
                 .find(|(k, _)| k == "id" || k == "uri")
                 .map(|(_, v)| v.clone())
                 .unwrap_or_else(|| "slide".to_string());
@@ -100,17 +110,13 @@ pub fn scan_powerpoint_element_threats(
 
         "cBhvr" => {
             let has_malicious_action = attr_vec.iter().any(|(k, v)| {
-                (k == "action" || k == "verb") && (
-                    has_blocked_url_protocol(v)
-                        || contains_script_injection(v)
-                )
+                (k == "action" || k == "verb")
+                    && (has_blocked_url_protocol(v) || contains_script_injection(v))
             });
 
             if has_malicious_action {
                 report.powerpoint_threats_neutralized += 1;
-                tracing::warn!(
-                    "Animation behavior with malicious action verb detected — stripped"
-                );
+                tracing::warn!("Animation behavior with malicious action verb detected — stripped");
                 force_drop = true;
             }
         }

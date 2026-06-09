@@ -24,11 +24,9 @@ use async_trait::async_trait;
 
 use crate::error::{MisogiError, Result};
 use crate::hash::compute_file_md5;
-use crate::scanners::{
-    ChainMode, ExternalScanner, ScanResult, ScannerChain,
-};
+use crate::scanners::{ChainMode, ExternalScanner, ScanResult, ScannerChain};
 use crate::traits::{
-    CDRStrategy, PIIAction, SanitizeContext, SanitizationReport, StrategyDecision,
+    CDRStrategy, PIIAction, SanitizationReport, SanitizeContext, StrategyDecision,
 };
 
 // =============================================================================
@@ -175,9 +173,10 @@ impl CDRStrategy for ExternalScannerStrategy {
             }
         };
 
-        let scan_result = self.chain.scan(&file_data).await.map_err(|e| {
-            MisogiError::Protocol(format!("Scanner chain execution failed: {}", e))
-        })?;
+        let scan_result =
+            self.chain.scan(&file_data).await.map_err(|e| {
+                MisogiError::Protocol(format!("Scanner chain execution failed: {}", e))
+            })?;
 
         match scan_result {
             ScanResult::Clean => {
@@ -205,11 +204,8 @@ impl CDRStrategy for ExternalScannerStrategy {
                     ),
                 })
             }
-            ScanResult::Error {
-                message,
-                transient,
-            } => {
-                if self.chain.len() == 0 {
+            ScanResult::Error { message, transient } => {
+                if self.chain.is_empty() {
                     tracing::warn!(
                         message = %message,
                         "No scanners configured — treating as clean"
@@ -222,10 +218,7 @@ impl CDRStrategy for ExternalScannerStrategy {
                         "External scanner chain reported ERROR"
                     );
                     Ok(StrategyDecision::Block {
-                        reason: format!(
-                            "Scanner error (transient: {}): {}",
-                            transient, message
-                        ),
+                        reason: format!("Scanner error (transient: {}): {}", transient, message),
                     })
                 }
             }
@@ -269,11 +262,7 @@ impl CDRStrategy for ExternalScannerStrategy {
         let elapsed_ms = start_time.elapsed().as_millis() as u64;
 
         let (success, details, actions_performed) = match decision {
-            StrategyDecision::Block { reason } => (
-                true,
-                format!("File blocked: {}", reason),
-                1u32,
-            ),
+            StrategyDecision::Block { reason } => (true, format!("File blocked: {}", reason), 1u32),
             _ => (
                 true,
                 format!(

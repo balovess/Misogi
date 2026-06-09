@@ -208,15 +208,14 @@ impl UniversalCdrPolicy {
             max_nesting_depth: 5,
             max_compression_ratio: 500,
             block_embedded_executables: true,
-            blocked_catalog_entries: vec![
-                "/OpenAction".to_string(),
-                "/JS".to_string(),
-            ],
+            blocked_catalog_entries: vec!["/OpenAction".to_string(), "/JS".to_string()],
         }
     }
 
     /// Check if a given PDF catalog key is in the blocklist.
     pub fn is_blocked_entry(&self, key: &str) -> bool {
-        self.blocked_catalog_entries.iter().any(|e| e.eq_ignore_ascii_case(key))
+        self.blocked_catalog_entries
+            .iter()
+            .any(|e| e.eq_ignore_ascii_case(key))
     }
 }

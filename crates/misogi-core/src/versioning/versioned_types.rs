@@ -180,7 +180,10 @@ mod tests {
     #[test]
     fn test_versioned_request_creation_and_access() {
         let req = VersionedRequest::new(
-            TestPayload { id: "req-001".to_string(), value: 42 },
+            TestPayload {
+                id: "req-001".to_string(),
+                value: 42,
+            },
             ApiVersion::new(2, 1, 0),
         );
 
@@ -229,7 +232,10 @@ mod tests {
     #[test]
     fn test_versioned_request_serde_roundtrip() {
         let original = VersionedRequest::new(
-            TestPayload { id: "test".to_string(), value: 42 },
+            TestPayload {
+                id: "test".to_string(),
+                value: 42,
+            },
             ApiVersion::new(1, 2, 3),
         );
 

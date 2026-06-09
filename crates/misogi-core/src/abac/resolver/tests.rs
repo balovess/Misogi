@@ -1,7 +1,7 @@
 //! Unit tests for [`super::AttributeResolver`].
 
-use super::AttributeResolver;
 use super::super::attribute::AbacValue;
+use super::AttributeResolver;
 
 // ===========================================================================
 // Helper
@@ -21,7 +21,10 @@ fn test_resolve_subject_produces_core_keys() {
     let a = r.resolve_subject_attributes("u1", "admin", "IT", attrs(vec![]));
     assert_eq!(a.get("user_id"), Some(&AbacValue::String("u1".to_string())));
     assert_eq!(a.get("role"), Some(&AbacValue::String("admin".to_string())));
-    assert_eq!(a.get("department"), Some(&AbacValue::String("IT".to_string())));
+    assert_eq!(
+        a.get("department"),
+        Some(&AbacValue::String("IT".to_string()))
+    );
 }
 
 #[test]
@@ -43,7 +46,10 @@ fn test_resolve_subject_group_membership() {
     let r = AttributeResolver::new(0);
     let a = r.resolve_subject_attributes("u3", "auditor", "Compliance", attrs(vec![]));
     match &a["group_membership"] {
-        AbacValue::List(items) => assert_eq!(items[0], AbacValue::String("Compliance/auditor".to_string())),
+        AbacValue::List(items) => assert_eq!(
+            items[0],
+            AbacValue::String("Compliance/auditor".to_string())
+        ),
         _ => panic!("expected List"),
     }
 }
@@ -64,11 +70,30 @@ fn test_resolve_subject_extra_overrides() {
 #[test]
 fn test_resolve_resource_all_keys_present() {
     let r = AttributeResolver::new(0);
-    let a = r.resolve_resource_attributes("confidential", "application/pdf", 10485760, "dmz", true, attrs(vec![]));
-    assert_eq!(a.get("data_classification"), Some(&AbacValue::String("confidential".to_string())));
-    assert_eq!(a.get("file_type"), Some(&AbacValue::String("application/pdf".to_string())));
-    assert_eq!(a.get("file_size_bytes"), Some(&AbacValue::Integer(10485760)));
-    assert_eq!(a.get("destination_zone"), Some(&AbacValue::String("dmz".to_string())));
+    let a = r.resolve_resource_attributes(
+        "confidential",
+        "application/pdf",
+        10485760,
+        "dmz",
+        true,
+        attrs(vec![]),
+    );
+    assert_eq!(
+        a.get("data_classification"),
+        Some(&AbacValue::String("confidential".to_string()))
+    );
+    assert_eq!(
+        a.get("file_type"),
+        Some(&AbacValue::String("application/pdf".to_string()))
+    );
+    assert_eq!(
+        a.get("file_size_bytes"),
+        Some(&AbacValue::Integer(10485760))
+    );
+    assert_eq!(
+        a.get("destination_zone"),
+        Some(&AbacValue::String("dmz".to_string()))
+    );
     assert_eq!(a.get("contains_pii"), Some(&AbacValue::Boolean(true)));
 }
 
@@ -83,7 +108,10 @@ fn test_resolve_environment_temporal_keys() {
 
     // time_of_day must be "HH:MM" format.
     match &a["time_of_day"] {
-        AbacValue::String(s) => { assert_eq!(s.len(), 5); assert!(&s[2..3] == ":"); }
+        AbacValue::String(s) => {
+            assert_eq!(s.len(), 5);
+            assert!(&s[2..3] == ":");
+        }
         _ => panic!("expected String"),
     }
 
@@ -94,21 +122,27 @@ fn test_resolve_environment_temporal_keys() {
     }
 
     // business_day is boolean.
-    assert!(a.get("business_day").is_some());
+    assert!(a.contains_key("business_day"));
 }
 
 #[test]
 fn test_source_network_corporate_lan_10() {
     let r = AttributeResolver::new(0);
     let a = r.resolve_environment_attributes("10.100.50.23", "JP-13", true, true, attrs(vec![]));
-    assert_eq!(a.get("source_network"), Some(&AbacValue::String("corporate-lan".to_string())));
+    assert_eq!(
+        a.get("source_network"),
+        Some(&AbacValue::String("corporate-lan".to_string()))
+    );
 }
 
 #[test]
 fn test_source_network_unknown() {
     let r = AttributeResolver::new(0);
     let a = r.resolve_environment_attributes("203.0.113.42", "US-DC", false, false, attrs(vec![]));
-    assert_eq!(a.get("source_network"), Some(&AbacValue::String("unknown".to_string())));
+    assert_eq!(
+        a.get("source_network"),
+        Some(&AbacValue::String("unknown".to_string()))
+    );
 }
 
 // ===========================================================================
@@ -171,7 +205,10 @@ fn test_invalidate_key() {
     r.cache_set("keep", AbacValue::String("ok".to_string()));
     r.cache_set("drop", AbacValue::String("go".to_string()));
     r.invalidate_key("drop");
-    assert_eq!(r.cache_get("keep"), Some(AbacValue::String("ok".to_string())));
+    assert_eq!(
+        r.cache_get("keep"),
+        Some(AbacValue::String("ok".to_string()))
+    );
     assert!(r.cache_get("drop").is_none());
 }
 
@@ -189,12 +226,18 @@ fn test_invalidate_nonexistent_noop() {
 
 #[test]
 fn test_classify_10_prefix() {
-    assert_eq!(AttributeResolver::new(0).classify_source_network("10.0.0.1"), "corporate-lan");
+    assert_eq!(
+        AttributeResolver::new(0).classify_source_network("10.0.0.1"),
+        "corporate-lan"
+    );
 }
 
 #[test]
 fn test_classify_192_168_prefix() {
-    assert_eq!(AttributeResolver::new(0).classify_source_network("192.168.1.100"), "corporate-lan");
+    assert_eq!(
+        AttributeResolver::new(0).classify_source_network("192.168.1.100"),
+        "corporate-lan"
+    );
 }
 
 #[test]
@@ -206,5 +249,8 @@ fn test_classify_172_16_range() {
 
 #[test]
 fn test_classify_172_32_unknown() {
-    assert_eq!(AttributeResolver::new(0).classify_source_network("172.32.0.1"), "unknown");
+    assert_eq!(
+        AttributeResolver::new(0).classify_source_network("172.32.0.1"),
+        "unknown"
+    );
 }

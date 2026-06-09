@@ -33,9 +33,9 @@
 use chrono::Utc;
 use tracing::{debug, info, instrument};
 
-use super::{generate_random_token, JwtConfig, JwtError, JwtToken, ValidatedClaims};
 use super::issuer::JwtIssuer;
 use super::validator::JwtValidator;
+use super::{JwtConfig, JwtError, JwtToken, ValidatedClaims, generate_random_token};
 use crate::claims::MisogiClaims;
 use crate::models::User;
 
@@ -232,10 +232,7 @@ impl JwtAuthenticator {
     /// Same as [`validate_token`](Self::validate_token), except [`JwtError::TokenExpired`]
     /// will never be returned.
     #[instrument(skip(self, token))]
-    pub fn validate_token_no_expire(
-        &self,
-        token: &str,
-    ) -> Result<ValidatedClaims, JwtError> {
+    pub fn validate_token_no_expire(&self, token: &str) -> Result<ValidatedClaims, JwtError> {
         let validated = self.validator.validate_without_expiry_check(token)?;
 
         Ok(ValidatedClaims {
@@ -279,30 +276,21 @@ impl JwtAuthenticator {
         let bits = 2048;
 
         // Generate RSA-2048 private key using rsa crate (ring 0.17 removed generate)
-        let private_key = RsaPrivateKey::new(&mut rng.clone(), bits)
-            .map_err(|e| {
-                JwtError::KeyGenerationFailed(format!(
-                    "RSA keypair generation failed: {e}"
-                ))
-            })?;
+        let private_key = RsaPrivateKey::new(&mut rng.clone(), bits).map_err(|e| {
+            JwtError::KeyGenerationFailed(format!("RSA keypair generation failed: {e}"))
+        })?;
 
         // Export private key in PEM format (PKCS#1 DER)
-        let private_der = private_key.to_pkcs1_der()
-            .map_err(|e| {
-                JwtError::KeyGenerationFailed(format!(
-                    "Private key DER encoding failed: {e}"
-                ))
-            })?;
+        let private_der = private_key.to_pkcs1_der().map_err(|e| {
+            JwtError::KeyGenerationFailed(format!("Private key DER encoding failed: {e}"))
+        })?;
         let private_pem = super::pem_encode("RSA PRIVATE KEY", private_der.as_bytes());
 
         // Export public key in PEM format (PKCS#1 DER)
         let public_key = private_key.to_public_key();
-        let public_der = public_key.to_pkcs1_der()
-            .map_err(|e| {
-                JwtError::KeyGenerationFailed(format!(
-                    "Public key DER encoding failed: {e}"
-                ))
-            })?;
+        let public_der = public_key.to_pkcs1_der().map_err(|e| {
+            JwtError::KeyGenerationFailed(format!("Public key DER encoding failed: {e}"))
+        })?;
         let public_pem = super::pem_encode("RSA PUBLIC KEY", public_der.as_bytes());
 
         // Write both files
@@ -312,21 +300,24 @@ impl JwtAuthenticator {
         std::fs::create_dir_all(output_dir).map_err(|e| {
             JwtError::IoError(format!(
                 "Failed to create output directory {}: {}",
-                output_dir.display(), e
+                output_dir.display(),
+                e
             ))
         })?;
 
         std::fs::write(&private_path, &private_pem).map_err(|e| {
             JwtError::IoError(format!(
                 "Failed to write private key to {}: {}",
-                private_path.display(), e
+                private_path.display(),
+                e
             ))
         })?;
 
         std::fs::write(&public_path, &public_pem).map_err(|e| {
             JwtError::IoError(format!(
                 "Failed to write public key to {}: {}",
-                public_path.display(), e
+                public_path.display(),
+                e
             ))
         })?;
 

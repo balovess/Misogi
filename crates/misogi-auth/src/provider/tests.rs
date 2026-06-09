@@ -47,10 +47,7 @@ impl IdentityProvider for MockIdp {
         &self.name
     }
 
-    async fn authenticate(
-        &self,
-        input: AuthRequest,
-    ) -> Result<MisogiIdentity, IdentityError> {
+    async fn authenticate(&self, input: AuthRequest) -> Result<MisogiIdentity, IdentityError> {
         match input {
             AuthRequest::Credentials { username, .. } => {
                 if username.is_empty() {
@@ -78,19 +75,17 @@ impl IdentityProvider for MockIdp {
                         "empty SAML response".into(),
                     ));
                 }
-                Ok(MisogiIdentity::new(
-                    "saml-user".to_string(),
-                    self.provider_id(),
+                Ok(
+                    MisogiIdentity::new("saml-user".to_string(), self.provider_id())
+                        .with_original_subject("urn:saml:subject".to_string()),
                 )
-                .with_original_subject("urn:saml:subject".to_string()))
             }
             AuthRequest::ApiKey { key } => {
                 if key == "valid-key" {
-                    Ok(MisogiIdentity::new(
-                        "api-user".to_string(),
-                        self.provider_id(),
+                    Ok(
+                        MisogiIdentity::new("api-user".to_string(), self.provider_id())
+                            .with_roles(vec!["service-account".to_string()]),
                     )
-                    .with_roles(vec!["service-account".to_string()]))
                 } else {
                     Err(IdentityError::InvalidCredentials)
                 }
@@ -178,10 +173,7 @@ async fn test_authenticate_with_empty_code_fails() {
     };
 
     let result = provider.authenticate(request).await;
-    assert!(matches!(
-        result,
-        Err(IdentityError::TokenExchangeFailed(_))
-    ));
+    assert!(matches!(result, Err(IdentityError::TokenExchangeFailed(_))));
 }
 
 #[tokio::test]
@@ -237,10 +229,7 @@ async fn test_health_check_passes_for_healthy_provider() {
 async fn test_health_check_fails_for_unhealthy_provider() {
     let provider = MockIdp::unhealthy("broken", "Broken Provider");
     let result = provider.health_check().await;
-    assert!(matches!(
-        result,
-        Err(IdentityError::ProviderUnavailable(_))
-    ));
+    assert!(matches!(result, Err(IdentityError::ProviderUnavailable(_))));
 }
 
 // ---- Test Cases: Trait Object Safety ----
@@ -428,10 +417,7 @@ fn test_identity_builder_pattern() {
     assert_eq!(identity.display_name.as_deref(), Some("鈴木花子"));
     assert_eq!(identity.roles.len(), 2);
     assert!(identity.roles.contains(&"admin".to_string()));
-    assert!(
-        identity.original_subject.as_deref()
-            == Some("uid=suzuki,ou=users,dc=corp")
-    );
+    assert!(identity.original_subject.as_deref() == Some("uid=suzuki,ou=users,dc=corp"));
     assert_eq!(
         identity.extra.get("email").unwrap(),
         &serde_json::json!("suzuki@corp.jp")
@@ -483,6 +469,12 @@ fn test_identity_to_claims_preserves_extra_flattened() {
 
     let claims: MisogiClaims = identity.into();
 
-    assert_eq!(claims.extra.get("locale").unwrap(), &serde_json::json!("ja-JP"));
-    assert_eq!(claims.extra.get("tenant").unwrap(), &serde_json::json!("corp-main"));
+    assert_eq!(
+        claims.extra.get("locale").unwrap(),
+        &serde_json::json!("ja-JP")
+    );
+    assert_eq!(
+        claims.extra.get("tenant").unwrap(),
+        &serde_json::json!("corp-main")
+    );
 }

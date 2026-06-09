@@ -82,9 +82,7 @@ impl ClamAvIntegrationStrategy {
             #[cfg(unix)]
             {
                 crate::scanners::ClamAvConfig {
-                    connection: crate::scanners::ClamAvConnection::Unix {
-                        path: socket_path,
-                    },
+                    connection: crate::scanners::ClamAvConnection::Unix { path: socket_path },
                     ..Default::default()
                 }
             }
@@ -121,7 +119,6 @@ impl ClamAvIntegrationStrategy {
 
 #[cfg(test)]
 mod tests {
-    
 
     #[cfg(not(feature = "clamav"))]
     use super::*;
@@ -196,7 +193,9 @@ mod tests {
         );
 
         let input_path = tmp_dir.path().join("input.txt");
-        tokio::fs::write(&input_path, b"test content").await.unwrap();
+        tokio::fs::write(&input_path, b"test content")
+            .await
+            .unwrap();
 
         let context = crate::traits::SanitizeContext {
             filename: "input.txt".to_string(),

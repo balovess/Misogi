@@ -11,14 +11,10 @@
 //! | GET      | `/api/v1/health/readiness`| [`readiness_probe`]  | Dependency health check  |
 
 #[allow(unused_imports)]
-use axum::{
-    extract::State,
-    http::StatusCode,
-    Json,
-};
-use tracing::{debug, info, instrument, warn};
+use axum::{Json, extract::State, http::StatusCode};
 use std::path::PathBuf;
 use std::time::Instant;
+use tracing::{debug, info, instrument, warn};
 
 use crate::error::ApiError;
 use crate::models::{ComponentHealth, HealthStatus};
@@ -31,10 +27,7 @@ fn build_health_base(components: Vec<ComponentHealth>) -> HealthStatus {
     let uptime_secs = 0u64; // TODO: track actual startup time
 
     // Determine overall status based on components
-    let overall_status = if components
-        .iter()
-        .all(|c| c.status == "healthy")
-    {
+    let overall_status = if components.iter().all(|c| c.status == "healthy") {
         "ok".to_string()
     } else {
         "degraded".to_string()

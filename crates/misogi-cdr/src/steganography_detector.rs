@@ -337,10 +337,10 @@ impl SteganographyDetector {
             }
             "jpeg" | "jpg" => {
                 // JPEG-specific: check for EXIF overflow
-                if let Some(finding) = self.check_jpeg_exif_overflow(data) {
-                    if finding.confidence >= self.sensitivity_threshold {
-                        findings.push(finding);
-                    }
+                if let Some(finding) = self.check_jpeg_exif_overflow(data)
+                    && finding.confidence >= self.sensitivity_threshold
+                {
+                    findings.push(finding);
                 }
             }
             "bmp" => {
@@ -473,23 +473,23 @@ impl SteganographyDetector {
             }
             "gif" => {
                 // GIF trailer is 0x3B
-                if let Some(&last_byte) = data.last() {
-                    if last_byte != 0x3B {
-                        // Missing trailer or data after it
-                        // Search for trailer byte
-                        for i in (0..data.len()).rev() {
-                            if data[i] == 0x3B && i < data.len() - 1 {
-                                let appended_len = data.len() - i - 1;
-                                return Some(StegoFinding {
-                                    technique: StegoTechnique::AppendedData,
-                                    confidence: 0.93,
-                                    location: format!("offset {}", i + 1),
-                                    description: format!(
-                                        "{} bytes of data after GIF trailer",
-                                        appended_len
-                                    ),
-                                });
-                            }
+                if let Some(&last_byte) = data.last()
+                    && last_byte != 0x3B
+                {
+                    // Missing trailer or data after it
+                    // Search for trailer byte
+                    for i in (0..data.len()).rev() {
+                        if data[i] == 0x3B && i < data.len() - 1 {
+                            let appended_len = data.len() - i - 1;
+                            return Some(StegoFinding {
+                                technique: StegoTechnique::AppendedData,
+                                confidence: 0.93,
+                                location: format!("offset {}", i + 1),
+                                description: format!(
+                                    "{} bytes of data after GIF trailer",
+                                    appended_len
+                                ),
+                            });
                         }
                     }
                 }
@@ -601,8 +601,8 @@ impl SteganographyDetector {
         let mut consecutive_same: usize = 0;
         let mut prev_bit: Option<bool> = None;
 
-        for i in 0..sample_len {
-            let lsb = pixel_data[i] & 0x01;
+        for &pixel in pixel_data.iter().take(sample_len) {
+            let lsb = pixel & 0x01;
             if lsb == 0 {
                 zero_count += 1;
             } else {
@@ -611,10 +611,10 @@ impl SteganographyDetector {
 
             // Track run-length of same bits (detects sequential encoding)
             let current_bit = lsb == 1;
-            if let Some(prev) = prev_bit {
-                if prev == current_bit {
-                    consecutive_same += 1;
-                }
+            if let Some(prev) = prev_bit
+                && prev == current_bit
+            {
+                consecutive_same += 1;
             }
             prev_bit = Some(current_bit);
         }
@@ -629,7 +629,7 @@ impl SteganographyDetector {
 
         // For large samples, chi-score > 3.84 indicates p < 0.05 (significant deviation)
         if chi_score > 6.0 && sample_len > 1000 {
-            let confidence = ((chi_score / 50.0).min(0.90)).max(0.25) as f32;
+            let confidence = (chi_score / 50.0).clamp(0.25, 0.90) as f32;
 
             findings.push(StegoFinding {
                 technique: StegoTechnique::LsbReplacement,
@@ -904,7 +904,7 @@ impl SteganographyDetector {
             return None;
         }
 
-        let row_size = ((bits_per_pixel * width + 31) / 32) * 4; // Rows are padded to 4-byte boundaries
+        let row_size = (bits_per_pixel * width).div_ceil(32) * 4; // Rows are padded to 4-byte boundaries
         let expected_pixel_data_size = row_size * height;
 
         let available = data.len().saturating_sub(pixel_offset);

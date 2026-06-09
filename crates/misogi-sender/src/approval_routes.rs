@@ -1,15 +1,15 @@
+use crate::state::SharedState;
 use axum::{
+    Json,
     extract::{Path, Query, State},
     http::StatusCode,
-    Json,
+};
+use misogi_core::{
+    FileStatus,
+    approval::{ApprovalStatus, TransferRequest},
+    audit_log::{AuditEventType, AuditLogEntry},
 };
 use serde::{Deserialize, Serialize};
-use misogi_core::{
-    approval::{ApprovalStatus, TransferRequest},
-    audit_log::{AuditLogEntry, AuditEventType},
-    FileStatus,
-};
-use crate::state::SharedState;
 
 // ============================================================================
 // Request / Response DTOs
@@ -64,7 +64,13 @@ pub struct ApiError {
 
 impl ApiError {
     fn new(msg: impl Into<String>, code: StatusCode) -> (StatusCode, Json<Self>) {
-        (code, Json(Self { error: msg.into(), code }))
+        (
+            code,
+            Json(Self {
+                error: msg.into(),
+                code,
+            }),
+        )
     }
 }
 
@@ -134,7 +140,11 @@ pub async fn create_transfer_request(
         body.transfer_reason.clone(),
     )
     .with_approver(body.approver_id.clone(), approver_name)
-    .with_file_info(file_info.filename.clone(), file_info.total_size, file_info.file_md5.clone())
+    .with_file_info(
+        file_info.filename.clone(),
+        file_info.total_size,
+        file_info.file_md5.clone(),
+    )
     .with_expiry(24);
 
     // Store request in shared state
@@ -169,7 +179,9 @@ pub async fn list_pending_requests(
     State(state): State<SharedState>,
     Query(query): Query<ListPendingQuery>,
 ) -> Json<Vec<TransferRequest>> {
-    let pending = state.list_pending_requests(query.approver_id.as_deref()).await;
+    let pending = state
+        .list_pending_requests(query.approver_id.as_deref())
+        .await;
     Json(pending)
 }
 
@@ -182,12 +194,15 @@ pub async fn approve_request(
     Path(request_id): Path<String>,
     Json(body): Json<ApproveBody>,
 ) -> Result<(StatusCode, Json<TransferRequest>), (StatusCode, Json<ApiError>)> {
-    let mut request = state.get_transfer_request(&request_id).await.ok_or_else(|| {
-        ApiError::new(
-            format!("Transfer request not found: {}", request_id),
-            StatusCode::NOT_FOUND,
-        )
-    })?;
+    let mut request = state
+        .get_transfer_request(&request_id)
+        .await
+        .ok_or_else(|| {
+            ApiError::new(
+                format!("Transfer request not found: {}", request_id),
+                StatusCode::NOT_FOUND,
+            )
+        })?;
 
     // Validation: current status must be PendingApproval
     if request.status != ApprovalStatus::PendingApproval {
@@ -224,16 +239,22 @@ pub async fn approve_request(
     // state transitions (PendingApproval → Approved via machine.transition()).
     // Blocking issue: ApprovalStatus does not implement Hash trait required by
     // StateMachine. Resolution pending enum derivation update.
-    request.approve(&body.approver_id).map_err(|e| {
-        ApiError::new(e.to_string(), StatusCode::INTERNAL_SERVER_ERROR)
-    })?;
+    request
+        .approve(&body.approver_id)
+        .map_err(|e| ApiError::new(e.to_string(), StatusCode::INTERNAL_SERVER_ERROR))?;
 
     // Persist updated request back to state
-    state.update_transfer_request(&request_id, request.clone()).await;
+    state
+        .update_transfer_request(&request_id, request.clone())
+        .await;
 
     // Record audit log: TransferApproved
     let audit_entry = AuditLogEntry::new(AuditEventType::TransferApproved)
-        .with_actor(&body.approver_id, request.approver_name.as_deref().unwrap_or(""), "approver")
+        .with_actor(
+            &body.approver_id,
+            request.approver_name.as_deref().unwrap_or(""),
+            "approver",
+        )
         .with_file(&request.file_id, &request.original_filename)
         .with_approver(&body.approver_id)
         .with_transfer_request(&request_id, &request.transfer_reason);
@@ -243,7 +264,8 @@ pub async fn approve_request(
     let trigger_result = crate::http_routes::trigger_transfer(
         axum::extract::Path(request.file_id.clone()),
         State(state.clone()),
-    ).await;
+    )
+    .await;
 
     match trigger_result {
         Ok(_) => {
@@ -284,12 +306,15 @@ pub async fn reject_request(
         ));
     }
 
-    let mut request = state.get_transfer_request(&request_id).await.ok_or_else(|| {
-        ApiError::new(
-            format!("Transfer request not found: {}", request_id),
-            StatusCode::NOT_FOUND,
-        )
-    })?;
+    let mut request = state
+        .get_transfer_request(&request_id)
+        .await
+        .ok_or_else(|| {
+            ApiError::new(
+                format!("Transfer request not found: {}", request_id),
+                StatusCode::NOT_FOUND,
+            )
+        })?;
 
     // Validation: current status must be PendingApproval
     if request.status != ApprovalStatus::PendingApproval {
@@ -313,16 +338,22 @@ pub async fn reject_request(
     // Execute rejection on the domain entity (legacy approach, backward compatible)
     //
     // Task 5.14 Note: See approve_request() above regarding StateMachine integration.
-    request.reject(&body.approver_id, body.rejection_reason.clone()).map_err(|e| {
-        ApiError::new(e.to_string(), StatusCode::INTERNAL_SERVER_ERROR)
-    })?;
+    request
+        .reject(&body.approver_id, body.rejection_reason.clone())
+        .map_err(|e| ApiError::new(e.to_string(), StatusCode::INTERNAL_SERVER_ERROR))?;
 
     // Persist updated request back to state
-    state.update_transfer_request(&request_id, request.clone()).await;
+    state
+        .update_transfer_request(&request_id, request.clone())
+        .await;
 
     // Record audit log: TransferRejected
     let audit_entry = AuditLogEntry::new(AuditEventType::TransferRejected)
-        .with_actor(&body.approver_id, request.approver_name.as_deref().unwrap_or(""), "approver")
+        .with_actor(
+            &body.approver_id,
+            request.approver_name.as_deref().unwrap_or(""),
+            "approver",
+        )
         .with_file(&request.file_id, &request.original_filename)
         .with_rejection_reason(&body.rejection_reason)
         .with_approver(&body.approver_id)
@@ -380,12 +411,15 @@ pub async fn get_transfer(
     State(state): State<SharedState>,
     Path(request_id): Path<String>,
 ) -> Result<(StatusCode, Json<TransferRequest>), (StatusCode, Json<ApiError>)> {
-    let request = state.get_transfer_request(&request_id).await.ok_or_else(|| {
-        ApiError::new(
-            format!("Transfer request not found: {}", request_id),
-            StatusCode::NOT_FOUND,
-        )
-    })?;
+    let request = state
+        .get_transfer_request(&request_id)
+        .await
+        .ok_or_else(|| {
+            ApiError::new(
+                format!("Transfer request not found: {}", request_id),
+                StatusCode::NOT_FOUND,
+            )
+        })?;
 
     Ok((StatusCode::OK, Json(request)))
 }

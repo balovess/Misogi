@@ -26,9 +26,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::{MisogiError, Result};
 
-use super::types::{
-    ContextAnalysisRequest, ContextAnalysisResponse, ContextError,
-};
+use super::types::{ContextAnalysisRequest, ContextAnalysisResponse, ContextError};
 
 // =============================================================================
 // Constants
@@ -233,11 +231,17 @@ impl KeywordRuleEngine {
     /// Load rules from a YAML file path.
     pub fn from_yaml_file(path: &str) -> Result<Self> {
         let content = std::fs::read_to_string(path).map_err(|e| {
-            MisogiError::Protocol(format!("Failed to read context rules file '{}': {}", path, e))
+            MisogiError::Protocol(format!(
+                "Failed to read context rules file '{}': {}",
+                path, e
+            ))
         })?;
 
         let rule_set: KeywordRuleSet = serde_yaml::from_str(&content).map_err(|e| {
-            MisogiError::Protocol(format!("Invalid YAML in context rules file '{}': {}", path, e))
+            MisogiError::Protocol(format!(
+                "Invalid YAML in context rules file '{}': {}",
+                path, e
+            ))
         })?;
 
         let config = rule_set.global_settings.clone();
@@ -256,20 +260,21 @@ impl KeywordRuleEngine {
                 KeywordRuleSource::BuiltinUniversal => Self::builtin_universal_rules(),
                 KeywordRuleSource::File(path) => {
                     let content = std::fs::read_to_string(&path).map_err(|e| {
-                        MisogiError::Protocol(format!(
-                            "Failed to read rule file '{}': {}", path, e
-                        ))
+                        MisogiError::Protocol(format!("Failed to read rule file '{}': {}", path, e))
                     })?;
                     serde_yaml::from_str(&content).map_err(|e| {
                         MisogiError::Protocol(format!(
-                            "Invalid YAML in rule file '{}': {}", path, e
+                            "Invalid YAML in rule file '{}': {}",
+                            path, e
                         ))
                     })?
                 }
                 KeywordRuleSource::Inline(rules) => rules,
             };
 
-            merged.global_anti_keywords.extend(source_rules.global_anti_keywords);
+            merged
+                .global_anti_keywords
+                .extend(source_rules.global_anti_keywords);
             for (type_id, type_rules) in source_rules.pii_types {
                 merged.pii_types.insert(type_id, type_rules);
             }
@@ -287,12 +292,14 @@ impl KeywordRuleEngine {
         &self,
         request: &ContextAnalysisRequest,
     ) -> std::result::Result<ContextAnalysisResponse, ContextError> {
-        let rules = self.rules.read().map_err(|e| {
-            ContextError::Internal(format!("Rules lock poisoned: {}", e))
-        })?;
-        let config = self.config.read().map_err(|e| {
-            ContextError::Internal(format!("Config lock poisoned: {}", e))
-        })?;
+        let rules = self
+            .rules
+            .read()
+            .map_err(|e| ContextError::Internal(format!("Rules lock poisoned: {}", e)))?;
+        let config = self
+            .config
+            .read()
+            .map_err(|e| ContextError::Internal(format!("Config lock poisoned: {}", e)))?;
 
         let pii_type = &request.pii_type;
         let combined = request.combined_context();
@@ -306,14 +313,24 @@ impl KeywordRuleEngine {
 
         if let Some(tr) = type_rules {
             for kw in &tr.positive {
-                if self.keyword_matches_position(&kw, &request.prefix, &request.suffix, config.case_sensitive) {
+                if self.keyword_matches_position(
+                    &kw,
+                    &request.prefix,
+                    &request.suffix,
+                    config.case_sensitive,
+                ) {
                     positive_score += kw.weight;
                     matched_positives.push(kw.keyword.clone());
                 }
             }
 
             for kw in &tr.anti {
-                if self.keyword_matches_position(&kw, &request.prefix, &request.suffix, config.case_sensitive) {
+                if self.keyword_matches_position(
+                    &kw,
+                    &request.prefix,
+                    &request.suffix,
+                    config.case_sensitive,
+                ) {
                     negative_score += kw.weight;
                     matched_negatives.push(kw.keyword.clone());
                 }
@@ -321,7 +338,12 @@ impl KeywordRuleEngine {
         }
 
         for kw in &rules.global_anti_keywords {
-            if self.keyword_matches_position(kw, &request.prefix, &request.suffix, config.case_sensitive) {
+            if self.keyword_matches_position(
+                kw,
+                &request.prefix,
+                &request.suffix,
+                config.case_sensitive,
+            ) {
                 negative_score += kw.weight;
                 matched_negatives.push(format!("global:{}", kw.keyword));
             }
@@ -367,14 +389,11 @@ impl KeywordRuleEngine {
     }
 
     /// Add a keyword rule at runtime (hot-update).
-    pub fn add_keyword(
-        &self,
-        pii_type: &str,
-        keyword: KeywordRule,
-    ) -> Result<()> {
-        let mut rules = self.rules.write().map_err(|e| {
-            ContextError::Internal(format!("Rules write lock poisoned: {}", e))
-        })?;
+    pub fn add_keyword(&self, pii_type: &str, keyword: KeywordRule) -> Result<()> {
+        let mut rules = self
+            .rules
+            .write()
+            .map_err(|e| ContextError::Internal(format!("Rules write lock poisoned: {}", e)))?;
 
         rules
             .pii_types
@@ -387,14 +406,11 @@ impl KeywordRuleEngine {
     }
 
     /// Remove a keyword rule at runtime.
-    pub fn remove_keyword(
-        &self,
-        pii_type: &str,
-        keyword_text: &str,
-    ) -> Result<bool> {
-        let mut rules = self.rules.write().map_err(|e| {
-            ContextError::Internal(format!("Rules write lock poisoned: {}", e))
-        })?;
+    pub fn remove_keyword(&self, pii_type: &str, keyword_text: &str) -> Result<bool> {
+        let mut rules = self
+            .rules
+            .write()
+            .map_err(|e| ContextError::Internal(format!("Rules write lock poisoned: {}", e)))?;
 
         if let Some(type_rules) = rules.pii_types.get_mut(pii_type) {
             let original_len = type_rules.positive.len();
@@ -408,9 +424,10 @@ impl KeywordRuleEngine {
     /// Hot-reload rules from a YAML file (runtime update without restart).
     pub fn reload_from_file(&self, path: &str) -> Result<()> {
         let new_rules = Self::from_yaml_file(path)?;
-        let mut rules = self.rules.write().map_err(|e| {
-            ContextError::Internal(format!("Rules write lock poisoned: {}", e))
-        })?;
+        let mut rules = self
+            .rules
+            .write()
+            .map_err(|e| ContextError::Internal(format!("Rules write lock poisoned: {}", e)))?;
         *rules = new_rules.rules.read().unwrap().clone();
         Ok(())
     }

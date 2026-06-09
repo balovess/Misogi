@@ -17,10 +17,7 @@ use super::constants::DANGEROUS_CONTENT_TYPES;
 use super::report::OoxmlCdrReport;
 use super::types::{FilteredXmlResult, OoxmlDocumentType};
 
-use super::threat::{
-    scan_element_threats,
-    scan_text_content_threats,
-};
+use super::threat::{scan_element_threats, scan_text_content_threats};
 
 // =============================================================================
 // Public API Functions
@@ -44,7 +41,8 @@ pub fn filter_content_types(
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Decl(decl)) => {
-                writer.write_event(Event::Decl(decl))
+                writer
+                    .write_event(Event::Decl(decl))
                     .map_err(|e| MisogiError::Io(xml_write_error(e)))?;
                 break;
             }
@@ -103,23 +101,28 @@ pub fn filter_content_types(
                     }
 
                     if is_override {
-                        writer.write_event(Event::Start(new_elem))
+                        writer
+                            .write_event(Event::Start(new_elem))
                             .map_err(|e| MisogiError::Io(xml_write_error(e)))?;
                     } else {
-                        writer.write_event(Event::Empty(new_elem))
+                        writer
+                            .write_event(Event::Empty(new_elem))
                             .map_err(|e| MisogiError::Io(xml_write_error(e)))?;
                     }
                 } else {
-                    writer.write_event(Event::Start(e.to_owned()))
+                    writer
+                        .write_event(Event::Start(e.to_owned()))
                         .map_err(|e| MisogiError::Io(xml_write_error(e)))?;
                 }
             }
             Ok(Event::End(e)) => {
-                writer.write_event(Event::End(e))
+                writer
+                    .write_event(Event::End(e))
                     .map_err(|e| MisogiError::Io(xml_write_error(e)))?;
             }
             Ok(Event::Text(e)) => {
-                writer.write_event(Event::Text(e))
+                writer
+                    .write_event(Event::Text(e))
                     .map_err(|e| MisogiError::Io(xml_write_error(e)))?;
             }
             Ok(Event::Eof) => break,
@@ -178,7 +181,8 @@ pub fn filter_document_xml(
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Decl(decl)) => {
-                writer.write_event(Event::Decl(decl))
+                writer
+                    .write_event(Event::Decl(decl))
                     .map_err(|e| MisogiError::Io(xml_write_error(e)))?;
                 break;
             }
@@ -195,7 +199,10 @@ pub fn filter_document_xml(
 
                 // Namespace-aware whitelist matching
                 let in_whitelist = whitelist.contains(&elem_name)
-                    || elem_name.split(':').last().map_or(false, |local| whitelist.contains(local));
+                    || elem_name
+                        .split(':')
+                        .next_back()
+                        .is_some_and(|local| whitelist.contains(local));
 
                 // Document-type-specific pre-filter threat scanning
                 let force_drop = scan_element_threats(
@@ -219,7 +226,8 @@ pub fn filter_document_xml(
                     depth_stack.push(true);
                     current_text_parent = Some(elem_name.clone());
 
-                    writer.write_event(Event::Start(new_start))
+                    writer
+                        .write_event(Event::Start(new_start))
                         .map_err(|e| MisogiError::Io(xml_write_error(e)))?;
                 } else {
                     name_stack.push(elem_name.clone());
@@ -236,7 +244,10 @@ pub fn filter_document_xml(
                 let elem_name = resolve_element_name(e);
                 let parent_kept = *depth_stack.last().unwrap_or(&true);
                 let in_whitelist = whitelist.contains(&elem_name)
-                    || elem_name.split(':').last().map_or(false, |local| whitelist.contains(local));
+                    || elem_name
+                        .split(':')
+                        .next_back()
+                        .is_some_and(|local| whitelist.contains(local));
 
                 let _force_drop = scan_element_threats(
                     &elem_name,
@@ -255,7 +266,8 @@ pub fn filter_document_xml(
                         new_empty.push_attribute((key.as_str(), value.as_str()));
                     }
 
-                    writer.write_event(Event::Empty(new_empty))
+                    writer
+                        .write_event(Event::Empty(new_empty))
                         .map_err(|e| MisogiError::Io(xml_write_error(e)))?;
                 } else {
                     elements_dropped += 1;
@@ -268,7 +280,8 @@ pub fn filter_document_xml(
 
                     if was_kept && !elem_name.is_empty() {
                         let end_tag = BytesEnd::new(elem_name.as_str());
-                        writer.write_event(Event::End(end_tag))
+                        writer
+                            .write_event(Event::End(end_tag))
                             .map_err(|e| MisogiError::Io(xml_write_error(e)))?;
                     }
                 }
@@ -287,7 +300,8 @@ pub fn filter_document_xml(
                     );
 
                     if text_safe {
-                        writer.write_event(Event::Text(e))
+                        writer
+                            .write_event(Event::Text(e))
                             .map_err(|e| MisogiError::Io(xml_write_error(e)))?;
                     }
                 }
@@ -339,8 +353,10 @@ pub(crate) fn filter_attributes(attrs: Attributes<'_>) -> Vec<(String, String)> 
         let value = String::from_utf8_lossy(&attr.value).to_string();
 
         let is_dangerous = DANGEROUS_ATTRIBUTES.iter().any(|dangerous| {
-            key.to_ascii_lowercase() == dangerous.to_ascii_lowercase()
-                || value.to_ascii_lowercase().contains(&dangerous.to_ascii_lowercase())
+            key.eq_ignore_ascii_case(dangerous)
+                || value
+                    .to_ascii_lowercase()
+                    .contains(&dangerous.to_ascii_lowercase())
         });
 
         if !is_dangerous {
@@ -366,5 +382,5 @@ pub(crate) fn extract_element_target_id(
 
 /// Format XML write error with context.
 fn xml_write_error(e: quick_xml::Error) -> std::io::Error {
-    std::io::Error::new(std::io::ErrorKind::Other, format!("XML write error: {}", e))
+    std::io::Error::other(format!("XML write error: {}", e))
 }

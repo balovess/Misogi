@@ -23,9 +23,7 @@ use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 
 use crate::error::{MisogiError, Result};
 use crate::hash::compute_file_md5;
-use crate::traits::{
-    CDRStrategy, SanitizeContext, SanitizationReport, StrategyDecision,
-};
+use crate::traits::{CDRStrategy, SanitizationReport, SanitizeContext, StrategyDecision};
 
 // =============================================================================
 // Types
@@ -37,10 +35,11 @@ use crate::traits::{
 /// but defined locally to avoid cyclic crate dependencies.
 /// The application layer is responsible for mapping between this type
 /// and the concrete `misogi_cdr::SanitizationPolicy` when integrating.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub enum PdfSanitizationPolicy {
     /// Strip active content (JavaScript, VBA macros, embedded scripts)
     /// while preserving document editability.
+    #[default]
     StripActiveContent,
 
     /// Convert document to flat/read-only format, destroying all interactive elements.
@@ -48,12 +47,6 @@ pub enum PdfSanitizationPolicy {
 
     /// Extract text content only, discarding formatting and structure.
     TextOnly,
-}
-
-impl Default for PdfSanitizationPolicy {
-    fn default() -> Self {
-        Self::StripActiveContent
-    }
 }
 
 /// Internal struct representing a detected PDF threat during basic scanning.
@@ -190,10 +183,7 @@ impl BuiltinPdfStrategy {
                 break;
             }
 
-            if let Some(threat) = sorted_threats
-                .iter()
-                .find(|t| t.offset as u64 == read_pos)
-            {
+            if let Some(threat) = sorted_threats.iter().find(|t| t.offset as u64 == read_pos) {
                 let replacement: Vec<u8> = vec![b' '; threat.length];
                 output.write_all(&replacement).await?;
 

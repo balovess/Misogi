@@ -83,7 +83,10 @@ fn test_from_file_success() {
 
     // Verify values loaded correctly
     assert_eq!(config.general.environment, "production");
-    assert_eq!(config.jwt.as_ref().unwrap().issuer, "https://misogi.example.com");
+    assert_eq!(
+        config.jwt.as_ref().unwrap().issuer,
+        "https://misogi.example.com"
+    );
     assert_eq!(config.storage.as_ref().unwrap().backend, "filesystem");
     assert_eq!(config.transport.as_ref().unwrap().mode, "streaming");
 }
@@ -133,7 +136,11 @@ environment = "production"  # Missing closing bracket
     assert!(result.is_err());
 
     match result.unwrap_err() {
-        ConfigError::TomlParseError { line, column, message } => {
+        ConfigError::TomlParseError {
+            line,
+            column,
+            message,
+        } => {
             // Note: `line` is usize (unsigned), so >= 0 is always true by type guarantee
             assert!(!message.is_empty(), "Error message should not be empty");
             println!("TOML parse error at {}:{}: {}", line, column, message);
@@ -252,7 +259,11 @@ backend = "ftp"
 
     assert!(result.is_err());
     match result.unwrap_err() {
-        ConfigError::ValidationError { section, field, reason } => {
+        ConfigError::ValidationError {
+            section,
+            field,
+            reason,
+        } => {
             assert_eq!(section, "storage");
             assert_eq!(field, "backend");
             assert!(reason.contains("unknown backend"));
@@ -518,7 +529,11 @@ ttl_secs = 14400
 
     // Validation should pass (missing optional sections are OK)
     let result = config.validate();
-    assert!(result.is_ok(), "Validation should succeed with partial config: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Validation should succeed with partial config: {:?}",
+        result.err()
+    );
 }
 
 // ===========================================================================
@@ -541,7 +556,11 @@ fn test_full_config_all_sections_present() {
 
     // Validate should succeed
     let result = config.validate();
-    assert!(result.is_ok(), "Full config should validate: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Full config should validate: {:?}",
+        result.err()
+    );
 
     // Check specific values
     assert_eq!(config.jwt.as_ref().unwrap().refresh_ttl_secs, 604800);
@@ -558,7 +577,9 @@ fn test_full_config_all_sections_present() {
 #[serial]
 fn test_env_override_jwt_issuer() {
     // Set environment variable (unsafe in Rust 2024)
-    unsafe { std::env::set_var("MISOGI_JWT_ISSUER", "env-overridden-issuer"); }
+    unsafe {
+        std::env::set_var("MISOGI_JWT_ISSUER", "env-overridden-issuer");
+    }
 
     let toml_str = r#"
 [jwt]
@@ -573,13 +594,17 @@ ttl_secs = 3600
     assert_eq!(config.jwt.as_ref().unwrap().issuer, "env-overridden-issuer");
 
     // Cleanup (unsafe in Rust 2024)
-    unsafe { std::env::remove_var("MISOGI_JWT_ISSUER"); }
+    unsafe {
+        std::env::remove_var("MISOGI_JWT_ISSUER");
+    }
 }
 
 #[test]
 #[serial]
 fn test_env_override_storage_backend() {
-    unsafe { std::env::set_var("MISOGI_STORAGE_BACKEND", "s3"); }
+    unsafe {
+        std::env::set_var("MISOGI_STORAGE_BACKEND", "s3");
+    }
 
     let toml_str = r#"
 [storage]
@@ -591,13 +616,17 @@ backend = "filesystem"
 
     assert_eq!(config.storage.as_ref().unwrap().backend, "s3");
 
-    unsafe { std::env::remove_var("MISOGI_STORAGE_BACKEND"); }
+    unsafe {
+        std::env::remove_var("MISOGI_STORAGE_BACKEND");
+    }
 }
 
 #[test]
 #[serial]
 fn test_env_override_transport_mode() {
-    unsafe { std::env::set_var("MISOGI_TRANSPORT_MODE", "buffered"); }
+    unsafe {
+        std::env::set_var("MISOGI_TRANSPORT_MODE", "buffered");
+    }
 
     let toml_str = r#"
 [transport]
@@ -609,13 +638,17 @@ mode = "streaming"
 
     assert_eq!(config.transport.as_ref().unwrap().mode, "buffered");
 
-    unsafe { std::env::remove_var("MISOGI_TRANSPORT_MODE"); }
+    unsafe {
+        std::env::remove_var("MISOGI_TRANSPORT_MODE");
+    }
 }
 
 #[test]
 #[serial]
 fn test_env_override_general_environment() {
-    unsafe { std::env::set_var("MISOGI_ENVIRONMENT", "staging"); }
+    unsafe {
+        std::env::set_var("MISOGI_ENVIRONMENT", "staging");
+    }
 
     let toml_str = r#"
 [general]
@@ -627,17 +660,23 @@ environment = "production"
 
     assert_eq!(config.general.environment, "staging");
 
-    unsafe { std::env::remove_var("MISOGI_ENVIRONMENT"); }
+    unsafe {
+        std::env::remove_var("MISOGI_ENVIRONMENT");
+    }
 }
 
 #[test]
 #[serial]
 fn test_env_override_empty_value_does_not_replace() {
     // Ensure clean state first (remove any existing value)
-    unsafe { std::env::remove_var("MISOGI_JWT_ISSUER"); }
+    unsafe {
+        std::env::remove_var("MISOGI_JWT_ISSUER");
+    }
 
     // Empty string should NOT override existing value
-    unsafe { std::env::set_var("MISOGI_JWT_ISSUER", ""); }
+    unsafe {
+        std::env::set_var("MISOGI_JWT_ISSUER", "");
+    }
 
     let toml_str = r#"
 [jwt]
@@ -651,18 +690,24 @@ issuer = "original-value"
     assert_eq!(config.jwt.as_ref().unwrap().issuer, "original-value");
 
     // Cleanup (unsafe in Rust 2024)
-    unsafe { std::env::remove_var("MISOGI_JWT_ISSUER"); }
+    unsafe {
+        std::env::remove_var("MISOGI_JWT_ISSUER");
+    }
 }
 
 #[test]
 #[serial]
 fn test_env_override_creates_missing_sections() {
     // Ensure clean state first (remove any existing value)
-    unsafe { std::env::remove_var("MISOGI_STORAGE_BACKEND"); }
+    unsafe {
+        std::env::remove_var("MISOGI_STORAGE_BACKEND");
+    }
 
     // If env var is set but section doesn't exist in TOML,
     // the section should be created with defaults + env override
-    unsafe { std::env::set_var("MISOGI_STORAGE_BACKEND", "gcs"); }
+    unsafe {
+        std::env::set_var("MISOGI_STORAGE_BACKEND", "gcs");
+    }
 
     let toml_str = r#"
 [general]
@@ -676,7 +721,9 @@ environment = "production"
     assert!(config.storage.is_some());
     assert_eq!(config.storage.as_ref().unwrap().backend, "gcs");
 
-    unsafe { std::env::remove_var("MISOGI_STORAGE_BACKEND"); }
+    unsafe {
+        std::env::remove_var("MISOGI_STORAGE_BACKEND");
+    }
 }
 
 // ===========================================================================
@@ -701,12 +748,10 @@ fn test_serialize_deserialize_roundtrip() {
     let original = MisogiConfig::default();
 
     // Serialize to TOML string
-    let toml_str = toml::to_string(&original)
-        .expect("Serialization failed");
+    let toml_str = toml::to_string(&original).expect("Serialization failed");
 
     // Deserialize back
-    let deserialized: MisogiConfig = toml::from_str(&toml_str)
-        .expect("Deserialization failed");
+    let deserialized: MisogiConfig = toml::from_str(&toml_str).expect("Deserialization failed");
 
     // Values should match
     assert_eq!(

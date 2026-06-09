@@ -311,14 +311,20 @@ mod tests {
     #[test]
     fn test_report_default_includes_is_linearized() {
         let report = super::super::types::PdfCdrReport::default();
-        assert!(!report.is_linearized, "Default report should not be linearized");
+        assert!(
+            !report.is_linearized,
+            "Default report should not be linearized"
+        );
     }
 
     #[cfg(feature = "pdf-cdr")]
     #[test]
     fn test_extracted_content_default_includes_mediaboxes() {
         let content = super::super::extract::ExtractedContent::default();
-        assert!(content.page_mediaboxes.is_empty(), "Default content should have empty MediaBox array");
+        assert!(
+            content.page_mediaboxes.is_empty(),
+            "Default content should have empty MediaBox array"
+        );
     }
 
     #[cfg(feature = "pdf-cdr")]

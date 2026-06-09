@@ -244,12 +244,10 @@ impl DeviceFingerprint {
 
         let canonical = format!(
             "ua:{}|screen:{}",
-            self.user_agent.value_hash,
-            self.screen_resolution,
+            self.user_agent.value_hash, self.screen_resolution,
         );
 
-        let mut mac =
-            HmacSha256::new_from_slice(secret).expect("HMAC accepts any key size");
+        let mut mac = HmacSha256::new_from_slice(secret).expect("HMAC accepts any key size");
         mac.update(canonical.as_bytes());
 
         let result = mac.finalize();

@@ -4,11 +4,11 @@ pub mod types;
 // Core modules (always available)
 pub mod abac;
 pub mod approval;
-pub mod presets;
-pub mod pii;
 pub mod fec;
 pub mod hash;
 pub mod integrity;
+pub mod pii;
+pub mod presets;
 
 // Protocol module: contains framing utilities, some async functions gated internally
 pub mod protocol;
@@ -93,10 +93,10 @@ pub mod contrib;
 // Re-exports
 // ===========================================================================
 
-pub use error::{MisogiError, Result};
-pub use types::*;
-pub use protocol::*;
 pub use abac::*;
+pub use error::{MisogiError, Result};
+pub use protocol::*;
+pub use types::*;
 
 #[cfg(feature = "runtime")]
 pub use tunnel::*;
@@ -114,61 +114,54 @@ pub use presets::*;
 // JTD traits and storage traits require runtime feature
 #[cfg(feature = "runtime")]
 pub use traits::{
-    StateMachine, TransferDriverConfig, ChunkAck, DriverHealthStatus,
-    TransferDriver, StrategyDecision, SanitizeContext, SanitizationReport,
-    CDRStrategy, FileDetectionResult, FileTypeDetector,
-    LogFormatter, ApprovalTrigger, Holiday, HolidayCategory, CalendarProvider,
-    DetectedEncoding, EncodingHandler,
-    JtdConverter, JtdConversionResult, JtdConversionError,
+    ApprovalTrigger, CDRStrategy, CalendarProvider, ChunkAck, DetectedEncoding, DriverHealthStatus,
+    EncodingHandler, FileDetectionResult, FileTypeDetector, Holiday, HolidayCategory,
+    JtdConversionError, JtdConversionResult, JtdConverter, LogFormatter, SanitizationReport,
+    SanitizeContext, StateMachine, StrategyDecision, TransferDriver, TransferDriverConfig,
 };
 
 // PII types always available (used by wasm_compat layer)
-pub use traits::{
-    PIIAction, PIIMatch, PIIScanResult, PIIDetector,
-};
+pub use traits::{PIIAction, PIIDetector, PIIMatch, PIIScanResult};
 
 // PII Enhancement module re-exports (feature-gated)
 #[cfg(feature = "pii-context")]
 pub use pii::context::{
-    ContextAnalyzer, ContextAnalyzerConfig, ContextAnalysisRequest,
-    ContextAnalysisResponse, ContextError, ContextMetadata,
-    ContextProvider, FallbackStrategy, KeywordEngineConfig, KeywordPosition,
-    KeywordRule, KeywordRuleEngine, KeywordRuleSet, MockContextProvider,
-    PiiTypeRules, RuleEngineBuilder, KeywordRuleSource,
+    ContextAnalysisRequest, ContextAnalysisResponse, ContextAnalyzer, ContextAnalyzerConfig,
+    ContextError, ContextMetadata, ContextProvider, FallbackStrategy, KeywordEngineConfig,
+    KeywordPosition, KeywordRule, KeywordRuleEngine, KeywordRuleSet, KeywordRuleSource,
+    MockContextProvider, PiiTypeRules, RuleEngineBuilder,
 };
 
 #[cfg(feature = "pii-structured")]
 pub use pii::structured::{
-    ArrayHandling, CsvPiiScanner, CsvScannerConfig, FieldAction,
-    FieldClassification, FieldClassifier, FieldClassifierBuilder,
-    FieldClassifierConfig, FieldMapping, FieldScanResult, JsonPiiScanner,
-    JsonScannerConfig, StructuredFormat, StructuredScanResult,
+    ArrayHandling, CsvPiiScanner, CsvScannerConfig, FieldAction, FieldClassification,
+    FieldClassifier, FieldClassifierBuilder, FieldClassifierConfig, FieldMapping, FieldScanResult,
+    JsonPiiScanner, JsonScannerConfig, StructuredFormat, StructuredScanResult,
     StructuredScannerConfig, XmlPiiScanner, XmlScannerConfig,
 };
 
 #[cfg(feature = "pii-ocr")]
 pub use pii::ocr::{
-    OcrBoundingBox, OcrError, OcrExtractionResult, OcrImageMetadata,
-    OcrPiiDetector, OcrPiiMatch, OcrPiiScanResult, OcrDetectorConfig,
-    OcrProvider, OcrTextBlock, MockOcrProvider,
+    MockOcrProvider, OcrBoundingBox, OcrDetectorConfig, OcrError, OcrExtractionResult,
+    OcrImageMetadata, OcrPiiDetector, OcrPiiMatch, OcrPiiScanResult, OcrProvider, OcrTextBlock,
 };
 
 #[cfg(feature = "pii-secrecy")]
 pub use pii::secrecy::{
-    Condition, ControlRequirement, FallbackPolicy, RuleResult,
-    SecrecyClassificationResult, SecrecyLevelDef, ClassificationRule,
-    SecrecyClassifier, SecrecySchemeBuilder, SecrecySchemeConfig,
-};
-#[cfg(feature = "runtime")]
-pub use traits::jtd_pipeline::{
-    JtdConversionPipeline, JtdFailurePolicy, JtdPipelineConfig, PipelineOutput,
-    JtdConverterType, should_convert_jtd,
+    ClassificationRule, Condition, ControlRequirement, FallbackPolicy, RuleResult,
+    SecrecyClassificationResult, SecrecyClassifier, SecrecyLevelDef, SecrecySchemeBuilder,
+    SecrecySchemeConfig,
 };
 #[cfg(feature = "runtime")]
 pub use traits::jtd_dummy::DummyAction;
+#[cfg(feature = "runtime")]
+pub use traits::jtd_pipeline::{
+    JtdConversionPipeline, JtdConverterType, JtdFailurePolicy, JtdPipelineConfig, PipelineOutput,
+    should_convert_jtd,
+};
 
 #[cfg(feature = "runtime")]
-pub use traits::storage::{StorageBackend, StorageInfo, StorageError};
+pub use traits::storage::{StorageBackend, StorageError, StorageInfo};
 
 #[cfg(feature = "runtime")]
 pub use storage::{LocalConfig, LocalStorage};

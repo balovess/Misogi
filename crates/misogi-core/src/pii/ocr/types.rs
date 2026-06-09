@@ -131,16 +131,11 @@ impl OcrExtractionResult {
 pub enum OcrError {
     /// The configured OCR provider is unavailable or misconfigured.
     #[error("OCR provider '{provider}' unavailable: {message}")]
-    ProviderUnavailable {
-        provider: String,
-        message: String,
-    },
+    ProviderUnavailable { provider: String, message: String },
 
     /// Unsupported image format.
     #[error("Unsupported image format: {format}")]
-    UnsupportedFormat {
-        format: String,
-    },
+    UnsupportedFormat { format: String },
 
     /// Image too large or too small.
     #[error("Image size out of bounds: {width}x{height}px (min={min}, max={max})")]
@@ -161,22 +156,15 @@ pub enum OcrError {
 
     /// Rate limit or quota exceeded.
     #[error("Rate limited by OCR provider '{provider}'")]
-    RateLimited {
-        provider: String,
-    },
+    RateLimited { provider: String },
 
     /// Authentication failure.
     #[error("OCR authentication failed for provider '{provider}': {message}")]
-    Authentication {
-        provider: String,
-        message: String,
-    },
+    Authentication { provider: String, message: String },
 
     /// Timeout waiting for OCR response.
     #[error("OCR timeout after {timeout_ms}ms")]
-    Timeout {
-        timeout_ms: u64,
-    },
+    Timeout { timeout_ms: u64 },
 
     /// Internal processing error.
     #[error("Internal OCR error: {0}")]

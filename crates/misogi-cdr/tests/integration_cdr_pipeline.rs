@@ -17,10 +17,8 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use bytes::Bytes;
 use misogi_cdr::{
-    parser_registry::{detect_format_from_bytes, extract_extension, ParserRegistry},
-    parser_trait::{
-        ContentParser, ParseError, SanitizeAction, SanitizePolicy, SanitizedOutput,
-    },
+    parser_registry::{ParserRegistry, detect_format_from_bytes, extract_extension},
+    parser_trait::{ContentParser, ParseError, SanitizeAction, SanitizePolicy, SanitizedOutput},
 };
 
 // ===========================================================================
@@ -52,10 +50,10 @@ impl ContentParser for MockPdfCdrParser {
         let original_size = input.len() as u64;
 
         // Validate file size limit
-        if let Some(max_size) = policy.max_file_size_bytes {
-            if original_size > max_size {
-                return Err(ParseError::FileTooLarge(original_size));
-            }
+        if let Some(max_size) = policy.max_file_size_bytes
+            && original_size > max_size
+        {
+            return Err(ParseError::FileTooLarge(original_size));
         }
 
         // Simulate PDF sanitization: record actions based on policy
@@ -63,10 +61,10 @@ impl ContentParser for MockPdfCdrParser {
 
         // Check for JavaScript in PDF (simplified detection)
         let input_str = String::from_utf8_lossy(&input);
-        if input_str.contains("/JavaScript") || input_str.contains("/JS ") {
-            if policy.remove_javascript {
-                actions_taken.push(SanitizeAction::JavaScriptRemoved);
-            }
+        if (input_str.contains("/JavaScript") || input_str.contains("/JS "))
+            && policy.remove_javascript
+        {
+            actions_taken.push(SanitizeAction::JavaScriptRemoved);
         }
 
         // Simulate embedded file removal
@@ -129,10 +127,10 @@ impl ContentParser for MockOoxmlCdrParser {
     ) -> Result<SanitizedOutput, ParseError> {
         let original_size = input.len() as u64;
 
-        if let Some(max_size) = policy.max_file_size_bytes {
-            if original_size > max_size {
-                return Err(ParseError::FileTooLarge(original_size));
-            }
+        if let Some(max_size) = policy.max_file_size_bytes
+            && original_size > max_size
+        {
+            return Err(ParseError::FileTooLarge(original_size));
         }
 
         let mut actions_taken = Vec::new();
@@ -201,20 +199,20 @@ impl ContentParser for MockZipCdrParser {
     ) -> Result<SanitizedOutput, ParseError> {
         let original_size = input.len() as u64;
 
-        if let Some(max_size) = policy.max_file_size_bytes {
-            if original_size > max_size {
-                return Err(ParseError::FileTooLarge(original_size));
-            }
+        if let Some(max_size) = policy.max_file_size_bytes
+            && original_size > max_size
+        {
+            return Err(ParseError::FileTooLarge(original_size));
         }
 
         let mut actions_taken = Vec::new();
 
         // Simulate detecting nested archives
         let input_str = String::from_utf8_lossy(&input);
-        if input_str.contains("nested") || input_str.contains("PK\x03\x04") {
-            if policy.remove_embedded_files {
-                actions_taken.push(SanitizeAction::EmbeddedFileRemoved);
-            }
+        if (input_str.contains("nested") || input_str.contains("PK\x03\x04"))
+            && policy.remove_embedded_files
+        {
+            actions_taken.push(SanitizeAction::EmbeddedFileRemoved);
         }
 
         // Always record binary sanitization action for archives
@@ -246,7 +244,9 @@ struct MockWasmParserAdapter {
 
 impl MockWasmParserAdapter {
     fn new(name: &str) -> Self {
-        Self { name: name.to_string() }
+        Self {
+            name: name.to_string(),
+        }
     }
 }
 
@@ -267,10 +267,10 @@ impl ContentParser for MockWasmParserAdapter {
     ) -> Result<SanitizedOutput, ParseError> {
         let original_size = input.len() as u64;
 
-        if let Some(max_size) = policy.max_file_size_bytes {
-            if original_size > max_size {
-                return Err(ParseError::FileTooLarge(original_size));
-            }
+        if let Some(max_size) = policy.max_file_size_bytes
+            && original_size > max_size
+        {
+            return Err(ParseError::FileTooLarge(original_size));
         }
 
         // Simulate WASM sandbox execution
@@ -380,7 +380,10 @@ async fn test_pdf_sanitization_end_to_end() {
     let policy = SanitizePolicy::default(); // Maximum security defaults
 
     let pdf_input = make_sample_pdf_with_threats();
-    let result = registry.parse(pdf_input, &policy).await.expect("PDF parsing should succeed");
+    let result = registry
+        .parse(pdf_input, &policy)
+        .await
+        .expect("PDF parsing should succeed");
 
     // Verify parser identification
     assert_eq!(result.parser_name, "MockPdfCdrParser");
@@ -394,25 +397,33 @@ async fn test_pdf_sanitization_end_to_end() {
 
     // Verify JavaScript was removed (default policy has remove_javascript=true)
     assert!(
-        result.actions_taken.contains(&SanitizeAction::JavaScriptRemoved),
+        result
+            .actions_taken
+            .contains(&SanitizeAction::JavaScriptRemoved),
         "should detect and remove JavaScript from PDF"
     );
 
     // Verify metadata stripping
     assert!(
-        result.actions_taken.contains(&SanitizeAction::MetadataStripped),
+        result
+            .actions_taken
+            .contains(&SanitizeAction::MetadataStripped),
         "should strip PDF metadata under default policy"
     );
 
     // Verify external link removal
     assert!(
-        result.actions_taken.contains(&SanitizeAction::ExternalLinkRemoved),
+        result
+            .actions_taken
+            .contains(&SanitizeAction::ExternalLinkRemoved),
         "should remove external links from PDF"
     );
 
     // Verify embedded file removal
     assert!(
-        result.actions_taken.contains(&SanitizeAction::EmbeddedFileRemoved),
+        result
+            .actions_taken
+            .contains(&SanitizeAction::EmbeddedFileRemoved),
         "should remove embedded files from PDF"
     );
 }
@@ -431,18 +442,25 @@ async fn test_pdf_sanitization_clean_document_no_actions() {
 ...",
     );
 
-    let result = registry.parse(clean_pdf, &policy).await.expect("clean PDF should succeed");
+    let result = registry
+        .parse(clean_pdf, &policy)
+        .await
+        .expect("clean PDF should succeed");
     assert_eq!(result.parser_name, "MockPdfCdrParser");
 
     // Clean PDF should still have metadata stripped (policy default)
     assert!(
-        result.actions_taken.contains(&SanitizeAction::MetadataStripped),
+        result
+            .actions_taken
+            .contains(&SanitizeAction::MetadataStripped),
         "metadata is always stripped by default policy"
     );
 
     // But should NOT have JS/macro/embedded removals
     assert!(
-        !result.actions_taken.contains(&SanitizeAction::JavaScriptRemoved),
+        !result
+            .actions_taken
+            .contains(&SanitizeAction::JavaScriptRemoved),
         "clean PDF should not trigger JS removal"
     );
 }
@@ -458,26 +476,35 @@ async fn test_ooxml_docx_processing_sanitizes_macros() {
 
     let docx_input = make_sample_docx_with_macros();
     // Use parse_with_filename to provide extension hint for correct routing
-    let result = registry.parse_with_filename(docx_input, &policy, "document.docx").await.expect("OOXML parsing should succeed");
+    let result = registry
+        .parse_with_filename(docx_input, &policy, "document.docx")
+        .await
+        .expect("OOXML parsing should succeed");
 
     assert_eq!(result.parser_name, "MockOoxmlCdrParser");
     assert!(result.has_actions());
 
     // Macro removal
     assert!(
-        result.actions_taken.contains(&SanitizeAction::MacroStripped),
+        result
+            .actions_taken
+            .contains(&SanitizeAction::MacroStripped),
         "should strip VBA macros from OOXML document"
     );
 
     // OLE object removal
     assert!(
-        result.actions_taken.contains(&SanitizeAction::EmbeddedFileRemoved),
+        result
+            .actions_taken
+            .contains(&SanitizeAction::EmbeddedFileRemoved),
         "should remove OLE objects from OOXML document"
     );
 
     // External link removal
     assert!(
-        result.actions_taken.contains(&SanitizeAction::ExternalLinkRemoved),
+        result
+            .actions_taken
+            .contains(&SanitizeAction::ExternalLinkRemoved),
         "should remove hyperlinks from OOXML document"
     );
 
@@ -519,14 +546,20 @@ async fn test_zip_archive_traversal_nested_content() {
     let policy = SanitizePolicy::default();
 
     let zip_input = make_sample_zip_nested();
-    let result = registry.parse(zip_input, &policy).await.expect("ZIP parsing should succeed");
+    let result = registry
+        .parse(zip_input, &policy)
+        .await
+        .expect("ZIP parsing should succeed");
 
     assert_eq!(result.parser_name, "MockZipCdrParser");
     assert!(result.has_actions());
 
     // Should detect nested content
     assert!(
-        result.actions_taken.iter().any(|a| matches!(a, SanitizeAction::BinarySanitized(_))),
+        result
+            .actions_taken
+            .iter()
+            .any(|a| matches!(a, SanitizeAction::BinarySanitized(_))),
         "ZIP parser should report binary sanitization action"
     );
 
@@ -559,11 +592,17 @@ async fn test_unknown_format_fallback_binary_safe() {
     let policy = SanitizePolicy::default();
 
     let unknown = make_unknown_binary();
-    let result = registry.parse(unknown, &policy).await.expect("fallback should always succeed");
+    let result = registry
+        .parse(unknown, &policy)
+        .await
+        .expect("fallback should always succeed");
 
     // Fallback parser should handle it
     assert_eq!(result.parser_name, "BinarySafeFallbackParser");
-    assert!(!result.has_actions() || matches!(&result.actions_taken[0], SanitizeAction::BinarySanitized(_)));
+    assert!(
+        !result.has_actions()
+            || matches!(&result.actions_taken[0], SanitizeAction::BinarySanitized(_))
+    );
 
     // Data should be preserved unchanged
     assert_eq!(result.sanitized_size, result.original_size);
@@ -575,7 +614,10 @@ async fn test_unknown_format_with_registered_parsers_still_falls_back() {
     let policy = SanitizePolicy::default();
 
     let truly_unknown = Bytes::from_static(b"\xCA\xFE\xBA\xBE completely unknown format");
-    let result = registry.parse(truly_unknown, &policy).await.expect("should fall back gracefully");
+    let result = registry
+        .parse(truly_unknown, &policy)
+        .await
+        .expect("should fall back gracefully");
 
     // No parser matched → fallback
     assert_eq!(result.parser_name, "BinarySafeFallbackParser");
@@ -595,7 +637,10 @@ async fn test_parser_routing_pdf_magic_bytes() {
 
     // Find parser for PDF magic bytes
     let parser = registry.find_parser(b"%PDF-1.4", Some("document.pdf"));
-    assert!(parser.is_some(), "should find PDF parser for PDF magic bytes");
+    assert!(
+        parser.is_some(),
+        "should find PDF parser for PDF magic bytes"
+    );
     assert_eq!(parser.unwrap().parser_name(), "MockPdfCdrParser");
 }
 
@@ -605,7 +650,10 @@ async fn test_parser_routing_zip_magic_bytes() {
 
     // Find parser for ZIP magic bytes
     let parser = registry.find_parser(b"PK\x03\x04", Some("archive.zip"));
-    assert!(parser.is_some(), "should find ZIP parser for ZIP magic bytes");
+    assert!(
+        parser.is_some(),
+        "should find ZIP parser for ZIP magic bytes"
+    );
     assert_eq!(parser.unwrap().parser_name(), "MockZipCdrParser");
 }
 
@@ -615,7 +663,10 @@ async fn test_parser_routing_ooxml_by_extension() {
 
     // OOXML has same magic as ZIP but different extension
     let parser = registry.find_parser(b"PK\x03\x04", Some("document.docx"));
-    assert!(parser.is_some(), "should find OOXML parser for .docx extension");
+    assert!(
+        parser.is_some(),
+        "should find OOXML parser for .docx extension"
+    );
     assert_eq!(parser.unwrap().parser_name(), "MockOoxmlCdrParser");
 }
 
@@ -625,10 +676,16 @@ async fn test_parser_routing_priority_first_match_wins() {
 
     // Register two parsers both claiming ZIP — first one wins
     registry.register_at(0, Arc::new(MockZipCdrParser)); // Priority 0
-    registry.register(Arc::new(MockOoxmlCdrParser));      // Lower priority
+    registry.register(Arc::new(MockOoxmlCdrParser)); // Lower priority
 
-    let parser = registry.find_parser(b"PK\x03\x04", Some("file.zip")).unwrap();
-    assert_eq!(parser.parser_name(), "MockZipCdrParser", "first matching parser should win");
+    let parser = registry
+        .find_parser(b"PK\x03\x04", Some("file.zip"))
+        .unwrap();
+    assert_eq!(
+        parser.parser_name(),
+        "MockZipCdrParser",
+        "first matching parser should win"
+    );
 }
 
 // ===========================================================================
@@ -641,22 +698,33 @@ async fn test_policy_strict_rejects_dangerous_content() {
 
     // Strict (default) policy: everything removed
     let strict_policy = SanitizePolicy::default();
-    let pdf_result = registry.parse(make_sample_pdf_with_threats(), &strict_policy).await.unwrap();
+    let pdf_result = registry
+        .parse(make_sample_pdf_with_threats(), &strict_policy)
+        .await
+        .unwrap();
 
     assert!(
-        pdf_result.actions_taken.contains(&SanitizeAction::JavaScriptRemoved),
+        pdf_result
+            .actions_taken
+            .contains(&SanitizeAction::JavaScriptRemoved),
         "strict policy must remove JavaScript"
     );
     assert!(
-        pdf_result.actions_taken.contains(&SanitizeAction::MetadataStripped),
+        pdf_result
+            .actions_taken
+            .contains(&SanitizeAction::MetadataStripped),
         "strict policy must strip metadata"
     );
     assert!(
-        pdf_result.actions_taken.contains(&SanitizeAction::ExternalLinkRemoved),
+        pdf_result
+            .actions_taken
+            .contains(&SanitizeAction::ExternalLinkRemoved),
         "strict policy must remove external links"
     );
     assert!(
-        pdf_result.actions_taken.contains(&SanitizeAction::EmbeddedFileRemoved),
+        pdf_result
+            .actions_taken
+            .contains(&SanitizeAction::EmbeddedFileRemoved),
         "strict policy must remove embedded files"
     );
 }
@@ -668,7 +736,7 @@ async fn test_policy_lenient_allows_more_content() {
     // Lenient policy: allow most things, only remove critical threats
     let lenient_policy = SanitizePolicy {
         remove_javascript: false,
-        remove_macros: true,       // Still remove macros (critical)
+        remove_macros: true, // Still remove macros (critical)
         remove_embedded_files: false,
         remove_external_links: false,
         remove_metadata: false,
@@ -676,28 +744,46 @@ async fn test_policy_lenient_allows_more_content() {
         ..Default::default()
     };
 
-    let pdf_result = registry.parse(make_sample_pdf_with_threats(), &lenient_policy).await.unwrap();
+    let pdf_result = registry
+        .parse(make_sample_pdf_with_threats(), &lenient_policy)
+        .await
+        .unwrap();
 
     // JavaScript NOT removed (lenient)
     assert!(
-        !pdf_result.actions_taken.contains(&SanitizeAction::JavaScriptRemoved),
+        !pdf_result
+            .actions_taken
+            .contains(&SanitizeAction::JavaScriptRemoved),
         "lenient policy should preserve JavaScript"
     );
 
     // Metadata NOT stripped
     assert!(
-        !pdf_result.actions_taken.contains(&SanitizeAction::MetadataStripped),
+        !pdf_result
+            .actions_taken
+            .contains(&SanitizeAction::MetadataStripped),
         "lenient policy should preserve metadata"
     );
 
     // For OOXML with macros — only macros should be removed
-    let docx_result = registry.parse_with_filename(make_sample_docx_with_macros(), &lenient_policy, "document.docx").await.unwrap();
+    let docx_result = registry
+        .parse_with_filename(
+            make_sample_docx_with_macros(),
+            &lenient_policy,
+            "document.docx",
+        )
+        .await
+        .unwrap();
     assert!(
-        docx_result.actions_taken.contains(&SanitizeAction::MacroStripped),
+        docx_result
+            .actions_taken
+            .contains(&SanitizeAction::MacroStripped),
         "even lenient policy should still remove macros"
     );
     assert!(
-        !docx_result.actions_taken.contains(&SanitizeAction::EmbeddedFileRemoved),
+        !docx_result
+            .actions_taken
+            .contains(&SanitizeAction::EmbeddedFileRemoved),
         "lenient policy allows embedded files"
     );
 }
@@ -763,7 +849,10 @@ async fn test_error_recovery_corrupt_input_graceful_failure() {
 
     // Should not panic — either falls back or returns error
     // Since %PD doesn't match any parser's magic bytes, it goes to fallback
-    assert!(result.is_ok(), "unrecognized format should use fallback, not panic");
+    assert!(
+        result.is_ok(),
+        "unrecognized format should use fallback, not panic"
+    );
     assert_eq!(result.unwrap().parser_name, "BinarySafeFallbackParser");
 }
 
@@ -787,15 +876,15 @@ async fn test_parse_error_display_human_readable() {
         (ParseError::UnsupportedFormat, "unsupported"),
         (ParseError::FileTooLarge(99999), "too large"),
         (ParseError::CorruptData("bad data".to_string()), "corrupt"),
-        (ParseError::PolicyViolation("blocked".to_string()), "violation"),
+        (
+            ParseError::PolicyViolation("blocked".to_string()),
+            "violation",
+        ),
         (
             ParseError::WasmRuntimeError("trap".to_string()),
             "WASM runtime",
         ),
-        (
-            ParseError::InternalError("bug".to_string()),
-            "internal",
-        ),
+        (ParseError::InternalError("bug".to_string()), "internal"),
     ];
 
     for (error, expected_substr) in errors {
@@ -836,7 +925,10 @@ async fn test_wasm_plugin_in_registry_route_and_execute() {
     assert_eq!(result.parser_name, "CustomWasmParser-v1");
     assert!(result.has_actions());
     assert!(
-        result.actions_taken.iter().any(|a| matches!(a, SanitizeAction::CustomAction(_))),
+        result
+            .actions_taken
+            .iter()
+            .any(|a| matches!(a, SanitizeAction::CustomAction(_))),
         "WASM parser should report CustomAction"
     );
     assert!(result.has_warnings(), "WASM parser should produce warnings");
@@ -897,12 +989,15 @@ async fn test_concurrent_parsing_50_simultaneous_operations() {
             Ok(parse_result) => match parse_result {
                 Ok(output) => {
                     success_count += 1;
-                    assert!(!output.parser_name.is_empty(), "output should have parser name");
+                    assert!(
+                        !output.parser_name.is_empty(),
+                        "output should have parser name"
+                    );
                 }
                 Err(_) => {
                     failure_count += 1;
                 }
-            }
+            },
             Err(join_err) => {
                 panic!("task panicked: {}", join_err);
             }
@@ -910,7 +1005,11 @@ async fn test_concurrent_parsing_50_simultaneous_operations() {
     }
 
     // Most should succeed (only truly unknown might go to fallback which succeeds too)
-    assert_eq!(success_count + failure_count, 50, "all 50 tasks should complete");
+    assert_eq!(
+        success_count + failure_count,
+        50,
+        "all 50 tasks should complete"
+    );
     assert!(
         success_count >= 45,
         "at least 45 of 50 parses should succeed (got {})",
@@ -938,7 +1037,9 @@ async fn test_concurrent_register_and_parse_thread_safety() {
         } else {
             // Parsing task
             handles.spawn(async move {
-                let _ = reg.parse(Bytes::from(format!("concurrent-data-{}", i)), &pol).await;
+                let _ = reg
+                    .parse(Bytes::from(format!("concurrent-data-{}", i)), &pol)
+                    .await;
             });
         }
     }
@@ -949,7 +1050,10 @@ async fn test_concurrent_register_and_parse_thread_safety() {
 
     // Registry should be in consistent state
     let count = registry.parser_count();
-    assert!(count <= 10, "should have at most 10 registered parsers (got {count})");
+    assert!(
+        count <= 10,
+        "should have at most 10 registered parsers (got {count})"
+    );
 }
 
 // ===========================================================================
@@ -970,7 +1074,11 @@ async fn test_registry_introspection_list_parsers() {
 
     // Verify each parser reports its supported types
     for info in &infos {
-        assert!(!info.supported_types.is_empty(), "{} should report supported types", info.name);
+        assert!(
+            !info.supported_types.is_empty(),
+            "{} should report supported types",
+            info.name
+        );
     }
 }
 
@@ -987,7 +1095,10 @@ async fn test_registry_unregister_and_reroute() {
 
     // PDF input now falls back (no PDF parser available)
     let policy = SanitizePolicy::default();
-    let pdf_result = registry.parse(make_sample_pdf_with_threats(), &policy).await.unwrap();
+    let pdf_result = registry
+        .parse(make_sample_pdf_with_threats(), &policy)
+        .await
+        .unwrap();
     assert_eq!(pdf_result.parser_name, "BinarySafeFallbackParser");
 
     // Re-register PDF parser
@@ -996,7 +1107,10 @@ async fn test_registry_unregister_and_reroute() {
     assert!(registry.has_parser("MockPdfCdrParser"));
 
     // PDF routing restored
-    let pdf_restored = registry.parse(make_sample_pdf_with_threats(), &policy).await.unwrap();
+    let pdf_restored = registry
+        .parse(make_sample_pdf_with_threats(), &policy)
+        .await
+        .unwrap();
     assert_eq!(pdf_restored.parser_name, "MockPdfCdrParser");
 }
 
@@ -1010,7 +1124,10 @@ async fn test_registry_clear_resets_to_fallback_only() {
 
     // All inputs now go to fallback
     let policy = SanitizePolicy::default();
-    let result = registry.parse(make_sample_pdf_with_threats(), &policy).await.unwrap();
+    let result = registry
+        .parse(make_sample_pdf_with_threats(), &policy)
+        .await
+        .unwrap();
     assert_eq!(result.parser_name, "BinarySafeFallbackParser");
 }
 
@@ -1045,8 +1162,14 @@ fn test_detect_format_short_input_returns_none() {
 fn test_extract_extension_various_filenames() {
     assert_eq!(extract_extension("document.pdf"), Some("pdf".to_string()));
     assert_eq!(extract_extension("archive.TAR.GZ"), Some("gz".to_string()));
-    assert_eq!(extract_extension("/path/to/file.DOCX"), Some("docx".to_string()));
-    assert_eq!(extract_extension(r"C:\Users\test\DATA.XLSX"), Some("xlsx".to_string()));
+    assert_eq!(
+        extract_extension("/path/to/file.DOCX"),
+        Some("docx".to_string())
+    );
+    assert_eq!(
+        extract_extension(r"C:\Users\test\DATA.XLSX"),
+        Some("xlsx".to_string())
+    );
     assert_eq!(extract_extension("noextension"), None);
     assert_eq!(extract_extension(".hidden"), None);
     assert_eq!(extract_extension(""), None);
@@ -1083,7 +1206,11 @@ fn test_sanitized_output_reduction_ratio_calculation() {
     };
 
     let expanded_ratio = expanded.reduction_ratio().unwrap();
-    assert!(expanded_ratio > 1.0, "expanded output ratio > 1.0: {}", expanded_ratio);
+    assert!(
+        expanded_ratio > 1.0,
+        "expanded output ratio > 1.0: {}",
+        expanded_ratio
+    );
 
     // Zero-size edge case
     let empty = SanitizedOutput {
@@ -1095,7 +1222,10 @@ fn test_sanitized_output_reduction_ratio_calculation() {
         parser_name: "Empty".to_string(),
     };
 
-    assert!(empty.reduction_ratio().is_none(), "zero-size should return None");
+    assert!(
+        empty.reduction_ratio().is_none(),
+        "zero-size should return None"
+    );
 }
 
 #[test]

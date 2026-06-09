@@ -24,10 +24,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use axum::{
+    Router,
     http::Method,
     middleware as axum_middleware,
     routing::{get, post},
-    Router,
 };
 use tower_http::{
     cors::{Any, CorsLayer},
@@ -36,18 +36,13 @@ use tower_http::{
 use tracing::info;
 
 // Re-export handler functions for route registration
-use crate::handlers::{
-    audit, files, health, metrics, policies, scan,
-};
+use crate::handlers::{audit, files, health, metrics, policies, scan};
 use crate::models::RestApiConfig;
 use crate::rate_limit::RateLimiter;
 use crate::version_middleware::{VersionConfig, VersionRouter};
 
 #[cfg(feature = "openapi")]
-use {
-    utoipa::OpenApi,
-    utoipa_swagger_ui::SwaggerUi,
-};
+use {utoipa::OpenApi, utoipa_swagger_ui::SwaggerUi};
 
 /// Re-export AuthEngine from misogi-auth for AppState type signature.
 pub use misogi_auth::middleware::AuthEngine;
@@ -190,29 +185,30 @@ pub fn create_app(
             "/files/{file_id}",
             get(files::get_file).delete(files::delete_file),
         )
-        .route("/files/{file_id}/report", get(files::get_sanitization_report))
-
+        .route(
+            "/files/{file_id}/report",
+            get(files::get_sanitization_report),
+        )
         // --- Scan jobs ---
         .route("/scan", post(scan::submit_scan))
         .route("/jobs/{job_id}", get(scan::get_job_status))
         .route("/jobs/{job_id}/result", get(scan::download_job_result))
-
         // --- Policy CRUD ---
-        .route("/policies", get(policies::list_policies).post(policies::create_policy))
+        .route(
+            "/policies",
+            get(policies::list_policies).post(policies::create_policy),
+        )
         .route(
             "/policies/{policy_id}",
             get(policies::get_policy)
                 .put(policies::update_policy)
                 .delete(policies::delete_policy),
         )
-
         // --- Audit log ---
         .route("/audit", get(audit::query_audit_logs))
-
         // --- Health probes ---
         .route("/health/liveness", get(health::liveness_probe))
         .route("/health/readiness", get(health::readiness_probe))
-
         // --- Prometheus metrics ---
         .route("/metrics", get(metrics::prometheus_metrics))
         .with_state(state);
@@ -236,10 +232,9 @@ pub fn create_app(
     #[cfg(feature = "openapi")]
     let api_routes = {
         use crate::models::{
-            AuditEntry, AuditQuery, ComponentHealth, CreatePolicyRequest,
-            FileDetail, FileItem, HealthStatus, JobCreated, JobStatus,
-            ListFilesQuery, PaginatedResponse, PolicyInfo, SanitizationReport,
-            ScanRequest, ThreatDetail, UpdatePolicyRequest,
+            AuditEntry, AuditQuery, ComponentHealth, CreatePolicyRequest, FileDetail, FileItem,
+            HealthStatus, JobCreated, JobStatus, ListFilesQuery, PaginatedResponse, PolicyInfo,
+            SanitizationReport, ScanRequest, ThreatDetail, UpdatePolicyRequest,
         };
         use utoipa::schema;
 
@@ -331,13 +326,10 @@ pub fn create_app(
 
     let app = Router::new()
         .merge(version_router.into_router())
-
         // Layer 4 (innermost): Rate limiting
         // .layer(axum_middleware::from_fn(rate_limit_middleware)) // TODO: wire to state
-
         // Layer 3: CORS
         .layer(build_cors_layer())
-
         // Layer 2: Request/response tracing
         .layer(
             TraceLayer::new_for_http()
@@ -353,9 +345,16 @@ pub fn create_app(
                 .on_request(|_request: &axum::extract::Request, _span: &tracing::Span| {
                     tracing::debug!("Request started");
                 })
-                .on_response(|_response: &axum::response::Response, latency: Duration, _span: &tracing::Span| {
-                    tracing::debug!(duration_ms = latency.as_millis() as u64, "Request completed");
-                }),
+                .on_response(
+                    |_response: &axum::response::Response,
+                     latency: Duration,
+                     _span: &tracing::Span| {
+                        tracing::debug!(
+                            duration_ms = latency.as_millis() as u64,
+                            "Request completed"
+                        );
+                    },
+                ),
         );
 
     info!("Misogi REST API router constructed successfully");

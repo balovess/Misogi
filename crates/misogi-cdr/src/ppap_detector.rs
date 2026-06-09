@@ -100,7 +100,7 @@ impl PpapDetector {
         // Pre-check: file size limit
         let metadata = tokio::fs::metadata(file_path)
             .await
-            .map_err(|e| MisogiError::Io(e))?;
+            .map_err(MisogiError::Io)?;
 
         if metadata.len() > self.config.max_scan_size_bytes {
             return Ok(PpapDetectionResult {
@@ -121,9 +121,7 @@ impl PpapDetector {
         let mut reason_parts: Vec<String> = Vec::new();
 
         // Layer 1: Structural analysis — read file headers
-        let data = tokio::fs::read(file_path)
-            .await
-            .map_err(|e| MisogiError::Io(e))?;
+        let data = tokio::fs::read(file_path).await.map_err(MisogiError::Io)?;
         let structural_indicators = self.analyze_structure(&data, &filename);
         for ind in &structural_indicators {
             if let PpapIndicator::EncryptedZipEntry { .. } = ind {
@@ -173,9 +171,7 @@ impl PpapDetector {
     /// in WASM browser environments.
     #[cfg(feature = "runtime")]
     pub async fn is_likely_ppap(&self, file_path: &Path) -> Result<bool> {
-        let data = tokio::fs::read(file_path)
-            .await
-            .map_err(|e| MisogiError::Io(e))?;
+        let data = tokio::fs::read(file_path).await.map_err(MisogiError::Io)?;
         Ok(self.has_encrypted_entries(&data))
     }
 
@@ -391,13 +387,11 @@ impl PpapDetector {
     fn analyze_filename(&self, filename: &str) -> Vec<PpapIndicator> {
         let mut indicators = Vec::new();
 
-        for pattern_opt in self.filename_patterns.iter() {
-            if let Some(pattern) = pattern_opt {
-                if pattern.is_match(filename) {
-                    indicators.push(PpapIndicator::SensitiveFilenamePattern {
-                        pattern: pattern.as_str().to_string(),
-                    });
-                }
+        for pattern in self.filename_patterns.iter().flatten() {
+            if pattern.is_match(filename) {
+                indicators.push(PpapIndicator::SensitiveFilenamePattern {
+                    pattern: pattern.as_str().to_string(),
+                });
             }
         }
 
@@ -452,7 +446,7 @@ impl PpapDetector {
         };
 
         let total = encrypted_confidence + filename_score + container_score;
-        total.min(1.0).max(0.0)
+        total.clamp(0.0, 1.0)
     }
 }
 
@@ -469,8 +463,8 @@ impl Default for PpapDetector {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ppap_types::{PpapDisposition, PpapHandlingReport, PpapPolicy};
     use crate::ppap_types::default_sensitive_filename_patterns;
+    use crate::ppap_types::{PpapDisposition, PpapHandlingReport, PpapPolicy};
 
     #[test]
     fn test_default_config_values() {
@@ -483,20 +477,20 @@ mod tests {
 
     #[test]
     fn test_policy_from_str() {
-        assert_eq!(PpapPolicy::from_str("block"), Some(PpapPolicy::Block));
+        assert_eq!("block".parse::<PpapPolicy>(), Ok(PpapPolicy::Block));
         assert_eq!(
-            PpapPolicy::from_str("warn"),
-            Some(PpapPolicy::WarnAndSanitize)
+            "warn".parse::<PpapPolicy>(),
+            Ok(PpapPolicy::WarnAndSanitize)
         );
         assert_eq!(
-            PpapPolicy::from_str("quarantine"),
-            Some(PpapPolicy::Quarantine)
+            "quarantine".parse::<PpapPolicy>(),
+            Ok(PpapPolicy::Quarantine)
         );
         assert_eq!(
-            PpapPolicy::from_str("convert"),
-            Some(PpapPolicy::ConvertToSecure)
+            "convert".parse::<PpapPolicy>(),
+            Ok(PpapPolicy::ConvertToSecure)
         );
-        assert_eq!(PpapPolicy::from_str("invalid"), None);
+        assert!("invalid".parse::<PpapPolicy>().is_err());
     }
 
     #[test]

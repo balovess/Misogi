@@ -1,9 +1,8 @@
 #[cfg(test)]
-mod tests {
+mod test_cases {
     use crate::abac::config::AbacConfig;
     use crate::abac::policy::{
-        AbacPolicyRule, ApprovalTemplate, PolicyEffect, PolicyTarget,
-        ApproverPool,
+        AbacPolicyRule, ApprovalTemplate, ApproverPool, PolicyEffect, PolicyTarget,
     };
 
     // ===================================================================
@@ -52,29 +51,25 @@ mod tests {
             default_effect: "deny".to_string(),
             decision_cache_ttl_secs: 600,
             audit_log_all_decisions: true,
-            rules: vec![
-                AbacPolicyRule {
-                    rule_id: "rule-1".to_string(),
-                    effect: PolicyEffect::Deny,
-                    conditions: vec![],
-                    target: PolicyTarget {
-                        action: "*".to_string(),
-                        resource_type: None,
-                    },
-                    obligation: None,
-                    priority: 0,
-                    enabled: true,
+            rules: vec![AbacPolicyRule {
+                rule_id: "rule-1".to_string(),
+                effect: PolicyEffect::Deny,
+                conditions: vec![],
+                target: PolicyTarget {
+                    action: "*".to_string(),
+                    resource_type: None,
                 },
-            ],
-            approval_templates: vec![
-                ApprovalTemplate {
-                    template_id: "tpl-1".to_string(),
-                    required_approvers: 1,
-                    approver_pool: ApproverPool::DepartmentHead,
-                    timeout_hours: 24,
-                    escalation_on_timeout: false,
-                },
-            ],
+                obligation: None,
+                priority: 0,
+                enabled: true,
+            }],
+            approval_templates: vec![ApprovalTemplate {
+                template_id: "tpl-1".to_string(),
+                required_approvers: 1,
+                approver_pool: ApproverPool::DepartmentHead,
+                timeout_hours: 24,
+                escalation_on_timeout: false,
+            }],
         };
         assert!(cfg.is_valid());
     }
@@ -85,8 +80,10 @@ mod tests {
 
     #[test]
     fn invalid_default_effect_fails_validation() {
-        let mut cfg = AbacConfig::default();
-        cfg.default_effect = "maybe".to_string(); // Invalid value
+        let cfg = AbacConfig {
+            default_effect: "maybe".to_string(), // Invalid value
+            ..Default::default()
+        };
         let result = cfg.validate();
         assert!(result.is_err());
         let errors = result.unwrap_err();
@@ -138,16 +135,16 @@ mod tests {
 
     #[test]
     fn zero_required_approvers_fails_validation() {
-        let mut cfg = AbacConfig::default();
-        cfg.approval_templates = vec![
-            ApprovalTemplate {
+        let cfg = AbacConfig {
+            approval_templates: vec![ApprovalTemplate {
                 template_id: "bad-tpl".to_string(),
                 required_approvers: 0, // Invalid!
                 approver_pool: ApproverPool::DepartmentHead,
                 timeout_hours: 24,
                 escalation_on_timeout: false,
-            },
-        ];
+            }],
+            ..Default::default()
+        };
         let result = cfg.validate();
         assert!(result.is_err());
         let errors = result.unwrap_err();
@@ -156,8 +153,10 @@ mod tests {
 
     #[test]
     fn cache_ttl_exceeding_24h_fails_validation() {
-        let mut cfg = AbacConfig::default();
-        cfg.decision_cache_ttl_secs = 100_000; // > 86400
+        let cfg = AbacConfig {
+            decision_cache_ttl_secs: 100_000, // > 86400
+            ..Default::default()
+        };
         let result = cfg.validate();
         assert!(result.is_err());
         let errors = result.unwrap_err();
@@ -171,17 +170,29 @@ mod tests {
     #[test]
     fn rules_can_be_sorted_by_priority_descending() {
         let rules = vec![
-            AbacPolicyRule { rule_id: "low".to_string(), priority: 10, ..make_dummy_rule() },
-            AbacPolicyRule { rule_id: "high".to_string(), priority: 100, ..make_dummy_rule() },
-            AbacPolicyRule { rule_id: "mid".to_string(), priority: 50, ..make_dummy_rule() },
+            AbacPolicyRule {
+                rule_id: "low".to_string(),
+                priority: 10,
+                ..make_dummy_rule()
+            },
+            AbacPolicyRule {
+                rule_id: "high".to_string(),
+                priority: 100,
+                ..make_dummy_rule()
+            },
+            AbacPolicyRule {
+                rule_id: "mid".to_string(),
+                priority: 50,
+                ..make_dummy_rule()
+            },
         ];
 
         let mut sorted = rules.clone();
-        sorted.sort_by(|a, b| b.priority.cmp(&a.priority));
+        sorted.sort_by_key(|b| std::cmp::Reverse(b.priority));
 
-        assert_eq!(sorted[0].rule_id, "high");   // Highest first
+        assert_eq!(sorted[0].rule_id, "high"); // Highest first
         assert_eq!(sorted[1].rule_id, "mid");
-        assert_eq!(sorted[2].rule_id, "low");     // Lowest last
+        assert_eq!(sorted[2].rule_id, "low"); // Lowest last
     }
 
     /// Helper to create a minimal dummy `AbacPolicyRule` for test cases that

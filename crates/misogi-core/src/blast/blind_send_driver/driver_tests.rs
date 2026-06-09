@@ -7,8 +7,8 @@ use bytes::Bytes;
 
 use crate::traits::{TransferDriver, TransferDriverConfig};
 
-use super::{BlindSendConfig, BlindSendDriver, BlindSendEncoder, BlindSendDecoder};
 use super::packet::FecPacket;
+use super::{BlindSendConfig, BlindSendDecoder, BlindSendDriver, BlindSendEncoder};
 
 // =============================================================================
 // Test Group 1: Configuration defaults and validation
@@ -20,7 +20,10 @@ fn test_config_defaults_are_sane() {
     assert_eq!(cfg.udp_port, 9999);
     assert!((cfg.redundancy_factor - 2.0).abs() < f32::EPSILON);
     assert_eq!(cfg.packet_size, 1400);
-    assert_eq!(cfg.broadcast_addr, std::net::IpAddr::V4(std::net::Ipv4Addr::BROADCAST));
+    assert_eq!(
+        cfg.broadcast_addr,
+        std::net::IpAddr::V4(std::net::Ipv4Addr::BROADCAST)
+    );
     assert_eq!(cfg.fec_data_shards, 16); // Matches FecConfig::standard()
 }
 
@@ -31,38 +34,57 @@ fn test_config_validate_accepts_valid() {
 
 #[test]
 fn test_config_validate_rejects_zero_port() {
-    let cfg = BlindSendConfig { udp_port: 0, ..Default::default() };
+    let cfg = BlindSendConfig {
+        udp_port: 0,
+        ..Default::default()
+    };
     assert!(cfg.validate().is_err());
 }
 
 #[test]
 fn test_config_validate_rejects_low_redundancy() {
-    let cfg = BlindSendConfig { redundancy_factor: 1.0, ..Default::default() };
+    let cfg = BlindSendConfig {
+        redundancy_factor: 1.0,
+        ..Default::default()
+    };
     assert!(cfg.validate().is_err());
 }
 
 #[test]
 fn test_config_validate_rejects_high_redundancy() {
-    let cfg = BlindSendConfig { redundancy_factor: 4.0, ..Default::default() };
+    let cfg = BlindSendConfig {
+        redundancy_factor: 4.0,
+        ..Default::default()
+    };
     assert!(cfg.validate().is_err());
 }
 
 #[test]
 fn test_config_compute_parity_for_factor_2() {
-    let cfg = BlindSendConfig { redundancy_factor: 2.0, fec_data_shards: 16, ..Default::default() };
+    let cfg = BlindSendConfig {
+        redundancy_factor: 2.0,
+        fec_data_shards: 16,
+        ..Default::default()
+    };
     assert_eq!(cfg.compute_parity_shards(), 15); // Capped at data - 1
 }
 
 #[test]
 fn test_config_compute_parity_for_factor_15() {
-    let cfg = BlindSendConfig { redundancy_factor: 1.5, fec_data_shards: 8, ..Default::default() };
+    let cfg = BlindSendConfig {
+        redundancy_factor: 1.5,
+        fec_data_shards: 8,
+        ..Default::default()
+    };
     assert_eq!(cfg.compute_parity_shards(), 4);
 }
 
 #[test]
 fn test_config_to_fec_config_mapping() {
     let cfg = BlindSendConfig {
-        redundancy_factor: 2.0, fec_data_shards: 16, packet_size: 1400,
+        redundancy_factor: 2.0,
+        fec_data_shards: 16,
+        packet_size: 1400,
         ..Default::default()
     };
     let fec = cfg.to_fec_config();
@@ -95,8 +117,10 @@ async fn test_driver_send_chunk_returns_synthetic_ack() {
     let mut driver = BlindSendDriver::new(BlindSendConfig::default());
     driver.init(BlindSendConfig::default()).await.expect("Init");
 
-    let ack = driver.send_chunk("file-001", 0, Bytes::from_static(b"test"))
-        .await.expect("send_chunk");
+    let ack = driver
+        .send_chunk("file-001", 0, Bytes::from_static(b"test"))
+        .await
+        .expect("send_chunk");
 
     assert_eq!(ack.file_id, "file-001");
     assert_eq!(ack.chunk_index, 0);
@@ -167,7 +191,9 @@ async fn test_full_cycle_with_corrupted_packets_filtered() {
     if !corrupted_packets.is_empty() {
         let corrupt_data = {
             let mut d = corrupted_packets[0].data.to_vec();
-            if !d.is_empty() { d[0] ^= 0xFF; }
+            if !d.is_empty() {
+                d[0] ^= 0xFF;
+            }
             Bytes::from(d)
         };
         corrupted_packets[0].data = corrupt_data;

@@ -253,10 +253,9 @@ impl JtdConversionPipeline {
     ///
     /// Expects a TOML table matching the `[jtd_converter]` schema.
     pub fn from_toml(toml_value: &Value) -> Result<Self> {
-        let config: JtdPipelineConfig = toml_value
-            .clone()
-            .try_into()
-            .map_err(|e| MisogiError::Configuration(format!("invalid jtd_converter config: {e}")))?;
+        let config: JtdPipelineConfig = toml_value.clone().try_into().map_err(|e| {
+            MisogiError::Configuration(format!("invalid jtd_converter config: {e}"))
+        })?;
 
         Ok(Self::new(config))
     }
@@ -265,11 +264,7 @@ impl JtdConversionPipeline {
     ///
     /// This is the primary entry point invoked by the CDR engine for each
     /// JTD file encountered during transfer processing.
-    pub async fn process_file(
-        &self,
-        input_path: &Path,
-        temp_dir: &Path,
-    ) -> Result<PipelineOutput> {
+    pub async fn process_file(&self, input_path: &Path, temp_dir: &Path) -> Result<PipelineOutput> {
         let mut warnings = Vec::new();
 
         // Step 1: Check if pipeline is enabled
@@ -320,10 +315,7 @@ impl JtdConversionPipeline {
         );
 
         // Step 3: Determine output path and execute conversion
-        let stem = input_path
-            .file_stem()
-            .unwrap_or_default()
-            .to_string_lossy();
+        let stem = input_path.file_stem().unwrap_or_default().to_string_lossy();
         let output_path = temp_dir.join(format!("{stem}.pdf"));
 
         match converter.convert_to_pdf(input_path, &output_path).await {
@@ -446,10 +438,8 @@ mod tests {
     use super::*;
 
     fn setup_temp_dir() -> PathBuf {
-        let dir = std::env::temp_dir().join(format!(
-            "misogi_pipeline_test_{}",
-            uuid::Uuid::new_v4()
-        ));
+        let dir =
+            std::env::temp_dir().join(format!("misogi_pipeline_test_{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).expect("temp dir creation must succeed");
         dir
     }
@@ -525,7 +515,10 @@ mod tests {
         let pipeline = JtdConversionPipeline::from_toml(&toml_val).unwrap();
 
         assert!(pipeline.config().enabled);
-        assert_eq!(pipeline.config().converter_type, JtdConverterType::LibreOffice);
+        assert_eq!(
+            pipeline.config().converter_type,
+            JtdConverterType::LibreOffice
+        );
         assert_eq!(pipeline.config().timeout_secs, 180);
         assert_eq!(pipeline.config().on_failure, JtdFailurePolicy::Block);
     }
@@ -558,7 +551,8 @@ mod tests {
             enabled = true
             type = "nonexistent_converter"
             on_failure = "warn"
-        "#.parse()
+        "#
+        .parse()
         .unwrap();
 
         assert!(JtdConversionPipeline::from_toml(&toml_val).is_err());
@@ -570,7 +564,9 @@ mod tests {
             enabled = true
             type = { dummy = { action = "placeholder_pdf" } }
             on_failure = "warn"
-        "#.parse().unwrap();
+        "#
+        .parse()
+        .unwrap();
 
         let pipeline = JtdConversionPipeline::from_toml(&toml_val).unwrap();
         assert!(matches!(
@@ -624,8 +620,7 @@ mod tests {
         let input_path = temp_dir.join("disabled_test.jtd");
         create_input_file(&input_path, 100);
 
-        let pipeline =
-            JtdConversionPipeline::new(JtdPipelineConfig::default());
+        let pipeline = JtdConversionPipeline::new(JtdPipelineConfig::default());
         let output = pipeline.process_file(&input_path, &temp_dir).await.unwrap();
 
         assert!(!output.was_converted);
@@ -788,7 +783,10 @@ mod tests {
         let pipeline = JtdConversionPipeline::new(config);
         let result = pipeline.process_file(&input_path, &temp_dir).await;
 
-        assert!(result.is_ok(), "Empty input should succeed with dummy converter");
+        assert!(
+            result.is_ok(),
+            "Empty input should succeed with dummy converter"
+        );
 
         let _ = std::fs::remove_dir_all(&temp_dir);
     }

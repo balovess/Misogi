@@ -57,7 +57,9 @@ pub enum ConfigError {
     /// Type mismatch between expected and actual value.
     ///
     /// Occurs when TOML value cannot be deserialized into the target Rust type.
-    #[error("type mismatch for field '{field}' in section [{section}]: expected {expected}, found {actual}")]
+    #[error(
+        "type mismatch for field '{field}' in section [{section}]: expected {expected}, found {actual}"
+    )]
     TypeMismatch {
         /// Section containing the mismatched field.
         section: String,

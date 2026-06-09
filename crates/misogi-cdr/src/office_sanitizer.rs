@@ -141,9 +141,7 @@ impl FileSanitizer for OfficeSanitizer {
             loop {
                 match entry_reader.read(&mut buffer) {
                     Ok(0) => break,
-                    Ok(n) => writer
-                        .write_all(&buffer[..n])
-                        .map_err(|e| MisogiError::Io(e))?,
+                    Ok(n) => writer.write_all(&buffer[..n]).map_err(MisogiError::Io)?,
                     Err(ref e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
                     Err(e) => return Err(MisogiError::Io(e)),
                 }

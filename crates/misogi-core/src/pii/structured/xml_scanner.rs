@@ -14,9 +14,7 @@
 use std::time::Instant;
 
 use super::field_classifier::FieldClassifier;
-use super::types::{
-    FieldAction, FieldScanResult, StructuredFormat, StructuredScanResult,
-};
+use super::types::{FieldAction, FieldScanResult, StructuredFormat, StructuredScanResult};
 
 /// Configuration for XML scanning behavior.
 #[derive(Debug, Clone)]
@@ -94,8 +92,7 @@ impl XmlPiiScanner {
                             let full_path = format!("{}/{}", path, attr_path);
                             let attr_value = attr.unescape_value().unwrap_or_default();
 
-                            let classification =
-                                self.classifier.classify(&attr_name);
+                            let classification = self.classifier.classify(&attr_name);
                             if classification.matched
                                 && !attr_value.is_empty()
                                 && classification.confidence >= 0.3
@@ -125,8 +122,7 @@ impl XmlPiiScanner {
                     if !path_stack.is_empty() {
                         let element_name = path_stack.last().unwrap().clone();
                         let full_path = path_stack.join("/");
-                        let classification =
-                            self.classifier.classify(&element_name);
+                        let classification = self.classifier.classify(&element_name);
 
                         if classification.matched
                             && !current_text.is_empty()
@@ -178,10 +174,7 @@ impl XmlPiiScanner {
         })
     }
 
-    fn element_name(
-        name: quick_xml::name::QName,
-        namespace_aware: bool,
-    ) -> String {
+    fn element_name(name: quick_xml::name::QName, namespace_aware: bool) -> String {
         if namespace_aware {
             String::from_utf8_lossy(name.as_ref()).to_string()
         } else {

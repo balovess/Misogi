@@ -27,8 +27,8 @@ use serde::{Deserialize, Serialize};
 use crate::error::{MisogiError, Result};
 
 use super::types::{
-    ClassificationRule, Condition, ControlRequirement, FallbackPolicy,
-    RuleResult, SecrecyClassificationResult, SecrecyLevelDef,
+    ClassificationRule, Condition, ControlRequirement, FallbackPolicy, RuleResult,
+    SecrecyClassificationResult, SecrecyLevelDef,
 };
 
 /// Top-level secrecy scheme configuration (YAML structure).
@@ -73,19 +73,12 @@ impl SecrecyClassifier {
     /// Load classifier configuration from YAML file.
     pub fn from_yaml_file(path: &str) -> Result<Self> {
         let content = std::fs::read_to_string(path).map_err(|e| {
-            MisogiError::Protocol(format!(
-                "Failed to read secrecy config '{}': {}",
-                path, e
-            ))
+            MisogiError::Protocol(format!("Failed to read secrecy config '{}': {}", path, e))
         })?;
 
-        let config: SecrecySchemeConfig =
-            serde_yaml::from_str(&content).map_err(|e| {
-                MisogiError::Protocol(format!(
-                    "Invalid YAML in secrecy config '{}': {}",
-                    path, e
-                ))
-            })?;
+        let config: SecrecySchemeConfig = serde_yaml::from_str(&content).map_err(|e| {
+            MisogiError::Protocol(format!("Invalid YAML in secrecy config '{}': {}", path, e))
+        })?;
 
         Self::from_config(config)
     }
@@ -109,13 +102,11 @@ impl SecrecyClassifier {
     ///
     /// # Returns
     /// Classification result with assigned level, controls, and reasoning.
-    pub fn classify(
-        &self,
-        pii_types: &[&str],
-    ) -> Result<SecrecyClassificationResult> {
-        let scheme = self.scheme.read().map_err(|e| {
-            MisogiError::Internal(format!("Scheme lock poisoned: {}", e))
-        })?;
+    pub fn classify(&self, pii_types: &[&str]) -> Result<SecrecyClassificationResult> {
+        let scheme = self
+            .scheme
+            .read()
+            .map_err(|e| MisogiError::Internal(format!("Scheme lock poisoned: {}", e)))?;
 
         let type_set: HashSet<&str> = pii_types.iter().copied().collect();
 
@@ -124,11 +115,7 @@ impl SecrecyClassifier {
         for rule in &scheme.classification_rules {
             if Self::evaluate_condition(&rule.condition, &type_set) {
                 if let Some(level_def) = scheme.levels.get(&rule.result.level) {
-                    matches.push((
-                        rule.id.clone(),
-                        level_def,
-                        rule.result.reason.clone(),
-                    ));
+                    matches.push((rule.id.clone(), level_def, rule.result.reason.clone()));
                 }
             }
         }
@@ -137,31 +124,26 @@ impl SecrecyClassifier {
             let fallback_level = scheme.fallback.unknown_default.clone();
             (
                 fallback_level.clone(),
-                format!(
-                    "No rules matched; using fallback level: {}",
-                    fallback_level
-                ),
+                format!("No rules matched; using fallback level: {}", fallback_level),
             )
         } else if matches.len() == 1 {
             let (rule_id, _, rule_reason) = &matches[0];
             (
-                scheme.levels.get(&matches[0].1.id).map(|l| l.id.clone()).unwrap_or_default(),
+                scheme
+                    .levels
+                    .get(&matches[0].1.id)
+                    .map(|l| l.id.clone())
+                    .unwrap_or_default(),
                 format!("Rule '{}' matched: {}", rule_id, rule_reason),
             )
         } else {
             match scheme.fallback.conflict_resolution.as_str() {
                 "highest" => {
-                    let best = matches
-                        .iter()
-                        .max_by_key(|(_, def, _)| def.rank)
-                        .unwrap();
+                    let best = matches.iter().max_by_key(|(_, def, _)| def.rank).unwrap();
                     (best.1.id.clone(), best.2.clone())
                 }
                 "lowest" => {
-                    let best = matches
-                        .iter()
-                        .min_by_key(|(_, def, _)| def.rank)
-                        .unwrap();
+                    let best = matches.iter().min_by_key(|(_, def, _)| def.rank).unwrap();
                     (best.1.id.clone(), best.2.clone())
                 }
                 _ => {
@@ -226,9 +208,10 @@ impl SecrecyClassifier {
     /// Hot-reload configuration from a YAML file.
     pub fn reload_scheme(&self, path: &str) -> Result<()> {
         let new_classifier = Self::from_yaml_file(path)?;
-        let mut scheme = self.scheme.write().map_err(|e| {
-            MisogiError::Internal(format!("Scheme write lock poisoned: {}", e))
-        })?;
+        let mut scheme = self
+            .scheme
+            .write()
+            .map_err(|e| MisogiError::Internal(format!("Scheme write lock poisoned: {}", e)))?;
         *scheme = new_classifier.scheme.read().unwrap().clone();
         Ok(())
     }

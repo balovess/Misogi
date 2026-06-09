@@ -71,8 +71,9 @@ pub fn validate_binary_entry(
 
     // Read and return the binary data
     let mut data = Vec::with_capacity(entry_reader.size() as usize);
-    entry_reader.read_to_end(&mut data)
-        .map_err(|e| MisogiError::Io(e))?;
+    entry_reader
+        .read_to_end(&mut data)
+        .map_err(MisogiError::Io)?;
 
     Ok(Some(data))
 }

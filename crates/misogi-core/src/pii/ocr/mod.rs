@@ -11,26 +11,12 @@
 // | [`ocr_provider`] | **OcrProvider trait** (standard OCR interface) + Mock |
 // | [`ocr_detector`] | OcrPiiDetector (OCR + RegexPIIDetector pipeline) |
 
-pub mod types;
-pub mod ocr_provider;
 pub mod ocr_detector;
+pub mod ocr_provider;
+pub mod types;
 
-pub use types::{
-    OcrBoundingBox,
-    OcrError,
-    OcrExtractionResult,
-    OcrImageMetadata,
-    OcrTextBlock,
-};
+pub use types::{OcrBoundingBox, OcrError, OcrExtractionResult, OcrImageMetadata, OcrTextBlock};
 
-pub use ocr_provider::{
-    OcrProvider,
-    MockOcrProvider,
-};
+pub use ocr_provider::{MockOcrProvider, OcrProvider};
 
-pub use ocr_detector::{
-    OcrDetectorConfig,
-    OcrPiiDetector,
-    OcrPiiMatch,
-    OcrPiiScanResult,
-};
+pub use ocr_detector::{OcrDetectorConfig, OcrPiiDetector, OcrPiiMatch, OcrPiiScanResult};

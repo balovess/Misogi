@@ -28,11 +28,16 @@
 //! 5. **PPAP detection**: Encrypted entries flagged before any extraction occurs
 
 use async_trait::async_trait;
+
+/// Type alias for in-memory sanitization result (data, actions, warnings).
+type SanitizeResult = (Vec<u8>, Vec<SanitizeAction>, Vec<String>);
 use bytes::Bytes;
 use std::fmt;
 use std::io::{Cursor, Write};
 
-use crate::parser_trait::{ContentParser, ParseError, SanitizeAction, SanitizePolicy, SanitizedOutput};
+use crate::parser_trait::{
+    ContentParser, ParseError, SanitizeAction, SanitizePolicy, SanitizedOutput,
+};
 
 // ===========================================================================
 // ZipStreamParser Configuration
@@ -82,7 +87,7 @@ impl Default for ZipStreamParserConfig {
             max_recursion_depth: 5,
             max_expansion_ratio: 10,
             max_entry_size_bytes: 100 * 1024 * 1024, // 100 MiB per entry
-            max_file_size_bytes: 500 * 1024 * 1024,   // 500 MiB total
+            max_file_size_bytes: 500 * 1024 * 1024,  // 500 MiB total
             allowed_inner_extensions: vec![
                 ".pdf".to_string(),
                 ".docx".to_string(),
@@ -170,7 +175,9 @@ impl ZipStreamParser {
     /// 2. ZIP/PK signature header (`PK\x03\x04`)
     /// 3. Minimum viable size (30 bytes for local file header)
     fn validate_input(&self, input: &[u8], policy: &SanitizePolicy) -> Result<(), ParseError> {
-        let effective_max = policy.max_file_size_bytes.unwrap_or(self.config.max_file_size_bytes);
+        let effective_max = policy
+            .max_file_size_bytes
+            .unwrap_or(self.config.max_file_size_bytes);
 
         if input.len() as u64 > effective_max {
             return Err(ParseError::FileTooLarge(input.len() as u64));
@@ -216,10 +223,8 @@ impl ZipStreamParser {
             }
 
             // Advance to next entry using sizes from header
-            let name_len =
-                u16::from_le_bytes([data[offset + 26], data[offset + 27]]) as usize;
-            let extra_len =
-                u16::from_le_bytes([data[offset + 28], data[offset + 29]]) as usize;
+            let name_len = u16::from_le_bytes([data[offset + 26], data[offset + 27]]) as usize;
+            let extra_len = u16::from_le_bytes([data[offset + 28], data[offset + 29]]) as usize;
 
             let compressed_size = u32::from_le_bytes([
                 data[offset + 18],
@@ -282,9 +287,7 @@ impl ZipStreamParser {
             )));
         }
 
-        if entry_name.contains("..")
-            || entry_name.starts_with('/')
-            || entry_name.starts_with('\\')
+        if entry_name.contains("..") || entry_name.starts_with('/') || entry_name.starts_with('\\')
         {
             return Err(ParseError::CorruptData(format!(
                 "Path traversal attempt detected in entry name: '{}'",
@@ -323,15 +326,13 @@ impl ZipStreamParser {
         data: &[u8],
         policy: &SanitizePolicy,
         current_depth: u32,
-    ) -> Result<(Vec<u8>, Vec<SanitizeAction>, Vec<String>), ParseError> {
+    ) -> Result<SanitizeResult, ParseError> {
         let mut actions: Vec<SanitizeAction> = Vec::new();
         let mut warnings: Vec<String> = Vec::new();
 
         // Open ZIP from memory buffer
-        let mut reader =
-            zip::ZipArchive::new(Cursor::new(data)).map_err(|e| {
-                ParseError::CorruptData(format!("Failed to parse ZIP archive: {}", e))
-            })?;
+        let mut reader = zip::ZipArchive::new(Cursor::new(data))
+            .map_err(|e| ParseError::CorruptData(format!("Failed to parse ZIP archive: {}", e)))?;
 
         // Phase 1: Security validation and size accounting
         let mut total_compressed: u64 = 0;
@@ -349,7 +350,7 @@ impl ZipStreamParser {
             // Validate security constraints
             self.validate_entry_security(&entry_name, uncompressed_size, current_depth)?;
 
-            total_compressed += entry.compressed_size() as u64;
+            total_compressed += entry.compressed_size();
             total_uncompressed += uncompressed_size;
 
             if entry.is_dir() {
@@ -373,7 +374,8 @@ impl ZipStreamParser {
         }
 
         // Phase 2: ZIP bomb detection
-        if total_compressed > 0 && total_uncompressed / total_compressed > self.config.max_expansion_ratio
+        if total_compressed > 0
+            && total_uncompressed / total_compressed > self.config.max_expansion_ratio
         {
             return Err(ParseError::CorruptData(format!(
                 "ZIP bomb detected: expansion ratio {} exceeds maximum {}",
@@ -386,8 +388,8 @@ impl ZipStreamParser {
         let mut output_buffer = Cursor::new(Vec::new());
         let mut writer = zip::ZipWriter::new(&mut output_buffer);
 
-        let options: zip::write::FileOptions<'_, ()> = zip::write::FileOptions::default()
-            .compression_method(zip::CompressionMethod::Stored);
+        let options: zip::write::FileOptions<'_, ()> =
+            zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Stored);
 
         for (entry_name, entry_data, ext) in &valid_entries {
             // Check for dangerous patterns (VBA macros in OOXML)
@@ -405,15 +407,12 @@ impl ZipStreamParser {
 
             if is_dangerous_vba && policy.remove_macros {
                 actions.push(SanitizeAction::MacroStripped);
-                warnings.push(format!(
-                    "VBA macro entry removed: {}",
-                    entry_name
-                ));
+                warnings.push(format!("VBA macro entry removed: {}", entry_name));
                 continue;
             }
 
             // Handle nested archives (recursive descent)
-            if Self::is_archive_extension(&ext) && current_depth < self.config.max_recursion_depth {
+            if Self::is_archive_extension(ext) && current_depth < self.config.max_recursion_depth {
                 let (nested_clean, nested_actions, nested_warnings) =
                     self.sanitize_zip_at_depth(entry_data, policy, current_depth + 1)?;
 
@@ -448,7 +447,7 @@ impl ZipStreamParser {
                     .config
                     .allowed_inner_extensions
                     .iter()
-                    .any(|a| a.eq_ignore_ascii_case(&ext));
+                    .any(|a| a.eq_ignore_ascii_case(ext));
 
             if !is_allowed && !ext.is_empty() {
                 warnings.push(format!(
@@ -596,11 +595,13 @@ mod tests {
         let mut buf = Cursor::new(Vec::new());
         let mut writer = zip::ZipWriter::new(&mut buf);
 
-        let options: zip::write::FileOptions<'_, ()> = zip::write::FileOptions::default()
-            .compression_method(zip::CompressionMethod::Stored);
+        let options: zip::write::FileOptions<'_, ()> =
+            zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Stored);
 
         writer.start_file("readme.txt", options).unwrap();
-        writer.write_all(b"This is a safe text file inside a ZIP.").unwrap();
+        writer
+            .write_all(b"This is a safe text file inside a ZIP.")
+            .unwrap();
 
         writer.start_file("data/config.xml", options).unwrap();
         writer
@@ -616,14 +617,20 @@ mod tests {
         let mut buf = Cursor::new(Vec::new());
         let mut writer = zip::ZipWriter::new(&mut buf);
 
-        let options: zip::write::FileOptions<'_, ()> = zip::write::FileOptions::default()
-            .compression_method(zip::CompressionMethod::Stored);
+        let options: zip::write::FileOptions<'_, ()> =
+            zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Stored);
 
-        writer.start_file("document.docx/word/vbaProject.bin", options).unwrap();
+        writer
+            .start_file("document.docx/word/vbaProject.bin", options)
+            .unwrap();
         writer.write_all(b"MALICIOUS_VBA_MACRO_PAYLOAD").unwrap();
 
-        writer.start_file("document.docx/word/document.xml", options).unwrap();
-        writer.write_all(b"<w:document><w:body>Safe content</w:body></w:document>").unwrap();
+        writer
+            .start_file("document.docx/word/document.xml", options)
+            .unwrap();
+        writer
+            .write_all(b"<w:document><w:body>Safe content</w:body></w:document>")
+            .unwrap();
 
         writer.finish().unwrap();
         buf.into_inner()
@@ -634,8 +641,8 @@ mod tests {
         // Inner ZIP
         let mut inner_buf = Cursor::new(Vec::new());
         let mut inner_writer = zip::ZipWriter::new(&mut inner_buf);
-        let options: zip::write::FileOptions<'_, ()> = zip::write::FileOptions::default()
-            .compression_method(zip::CompressionMethod::Stored);
+        let options: zip::write::FileOptions<'_, ()> =
+            zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Stored);
         inner_writer.start_file("inner.txt", options).unwrap();
         inner_writer.write_all(b"Inner file content").unwrap();
         inner_writer.finish().unwrap();
@@ -644,7 +651,9 @@ mod tests {
         // Outer ZIP containing inner ZIP
         let mut outer_buf = Cursor::new(Vec::new());
         let mut outer_writer = zip::ZipWriter::new(&mut outer_buf);
-        outer_writer.start_file("archive/nested.zip", options).unwrap();
+        outer_writer
+            .start_file("archive/nested.zip", options)
+            .unwrap();
         outer_writer.write_all(&inner_data).unwrap();
         outer_writer.start_file("readme.txt", options).unwrap();
         outer_writer.write_all(b"Outer readme").unwrap();
@@ -661,7 +670,10 @@ mod tests {
         let parser = ZipStreamParser::new();
         let types = parser.supported_types();
 
-        assert!(types.contains(&"application/zip"), "Must support application/zip");
+        assert!(
+            types.contains(&"application/zip"),
+            "Must support application/zip"
+        );
         assert!(types.contains(&".zip"), "Must support .zip");
         assert!(types.contains(&".jar"), "Must support .jar");
         assert!(types.contains(&".war"), "Must support .war");
@@ -699,8 +711,7 @@ mod tests {
             .actions_taken
             .iter()
             .filter(|a| {
-                **a != SanitizeAction::MetadataStripped
-                    && **a != SanitizeAction::CommentRemoved
+                **a != SanitizeAction::MetadataStripped && **a != SanitizeAction::CommentRemoved
             })
             .collect();
 
@@ -733,11 +744,16 @@ mod tests {
         let vba_input = Bytes::from(make_zip_with_vba());
         let result = parser.parse_and_sanitize(vba_input, &policy).await;
 
-        assert!(result.is_ok(), "ZIP with VBA entry should parse successfully");
+        assert!(
+            result.is_ok(),
+            "ZIP with VBA entry should parse successfully"
+        );
 
         let output = result.unwrap();
         assert!(
-            output.actions_taken.contains(&SanitizeAction::MacroStripped),
+            output
+                .actions_taken
+                .contains(&SanitizeAction::MacroStripped),
             "Should detect and record MacroStripped for VBA entries. Got: {:?}",
             output.actions_taken
         );
@@ -759,9 +775,10 @@ mod tests {
 
         let output = result.unwrap();
         // Should record nested archive sanitization
-        let has_nested_action = output.actions_taken.iter().any(|a| {
-            matches!(a, SanitizeAction::CustomAction(s) if s.contains("ZipNested"))
-        });
+        let has_nested_action = output
+            .actions_taken
+            .iter()
+            .any(|a| matches!(a, SanitizeAction::CustomAction(s) if s.contains("ZipNested")));
 
         assert!(
             has_nested_action,
@@ -953,8 +970,7 @@ mod tests {
         match result.unwrap_err() {
             ParseError::PolicyViolation(msg) => {
                 assert!(
-                    msg.to_lowercase().contains("ppap")
-                        || msg.to_lowercase().contains("encrypted"),
+                    msg.to_lowercase().contains("ppap") || msg.to_lowercase().contains("encrypted"),
                     "Error should mention PPAP or encryption: {}",
                     msg
                 );
@@ -983,7 +999,9 @@ mod tests {
 
         let output = result.unwrap();
         assert!(
-            output.actions_taken.contains(&SanitizeAction::MetadataStripped),
+            output
+                .actions_taken
+                .contains(&SanitizeAction::MetadataStripped),
             "With remove_metadata=true, should record MetadataStripped"
         );
     }

@@ -1,7 +1,7 @@
-use tonic::{Request, Response, Status};
-use tokio_stream::StreamExt;
 use crate::state::SharedState;
 use misogi_core::proto::sender_service_server::{SenderService, SenderServiceServer};
+use tokio_stream::StreamExt;
+use tonic::{Request, Response, Status};
 
 pub struct SenderGrpcService {
     state: SharedState,
@@ -35,7 +35,8 @@ impl SenderService for SenderGrpcService {
         let file_id = if !first_chunk.file_id.is_empty() {
             first_chunk.file_id.clone()
         } else {
-            let (id, _) = state.uploader
+            let (id, _) = state
+                .uploader
                 .create_session("grpc_upload".to_string(), &state)
                 .await
                 .map_err(|e| Status::internal(e.to_string()))?;
@@ -45,7 +46,8 @@ impl SenderService for SenderGrpcService {
         let mut chunk_index = 0u32;
 
         if !first_chunk.data.is_empty() {
-            state.uploader
+            state
+                .uploader
                 .write_chunk(&file_id, chunk_index, &first_chunk.data)
                 .await
                 .map_err(|e| Status::internal(e.to_string()))?;
@@ -56,7 +58,8 @@ impl SenderService for SenderGrpcService {
             let chunk = chunk.map_err(|e| Status::internal(e.to_string()))?;
 
             if !chunk.data.is_empty() {
-                state.uploader
+                state
+                    .uploader
                     .write_chunk(&file_id, chunk_index, &chunk.data)
                     .await
                     .map_err(|e| Status::internal(e.to_string()))?;
@@ -64,7 +67,8 @@ impl SenderService for SenderGrpcService {
             }
         }
 
-        state.uploader
+        state
+            .uploader
             .complete_upload(&file_id, &state)
             .await
             .map_err(|e| Status::internal(e.to_string()))?;
@@ -81,14 +85,15 @@ impl SenderService for SenderGrpcService {
     ) -> Result<Response<misogi_core::proto::FileStatusResponse>, Status> {
         let file_id = request.into_inner().file_id;
 
-        let info = self.state.uploader
+        let info = self
+            .state
+            .uploader
             .get_file_info(&file_id)
             .await
             .map_err(|e| Status::not_found(e.to_string()))?;
 
         let completed_chunks = if info.status == misogi_core::FileStatus::Uploading {
-            let manifest_dir = self.state.uploader.storage_dir()
-                .join(&file_id);
+            let manifest_dir = self.state.uploader.storage_dir().join(&file_id);
             let mut count = 0u32;
             if manifest_dir.exists() {
                 for i in 0..info.chunk_count {
@@ -118,7 +123,9 @@ impl SenderService for SenderGrpcService {
         &self,
         _request: Request<misogi_core::proto::ListFilesRequest>,
     ) -> Result<Response<misogi_core::proto::ListFilesResponse>, Status> {
-        let all_files = self.state.uploader
+        let all_files = self
+            .state
+            .uploader
             .list_files()
             .await
             .map_err(|e| Status::internal(e.to_string()))?;
@@ -150,9 +157,11 @@ impl SenderService for SenderGrpcService {
     ) -> Result<Response<misogi_core::proto::TransferResponse>, Status> {
         let file_id = request.into_inner().file_id;
 
-        let exists = self.state.get_file(&file_id).await.ok_or_else(|| {
-            Status::not_found(format!("File not found: {}", file_id))
-        })?;
+        let exists = self
+            .state
+            .get_file(&file_id)
+            .await
+            .ok_or_else(|| Status::not_found(format!("File not found: {}", file_id)))?;
 
         if exists.status != misogi_core::FileStatus::Ready {
             return Err(Status::failed_precondition(format!(

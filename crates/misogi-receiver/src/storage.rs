@@ -1,5 +1,5 @@
+use misogi_core::{FileInfo, FileManifest, FileStatus, MisogiError, Result, hash};
 use std::path::PathBuf;
-use misogi_core::{hash, MisogiError, Result, FileManifest, FileInfo, FileStatus};
 
 pub struct ChunkStorage {
     storage_dir: PathBuf,
@@ -56,10 +56,11 @@ impl ChunkStorage {
         let mut entries = tokio::fs::read_dir(&file_dir).await?;
         while let Some(entry) = entries.next_entry().await? {
             let name = entry.file_name();
-            if let Some(name_str) = name.to_str() {
-                if name_str.starts_with("chunk_") && name_str.ends_with(".bin") {
-                    existing_chunks += 1;
-                }
+            if let Some(name_str) = name.to_str()
+                && name_str.starts_with("chunk_")
+                && name_str.ends_with(".bin")
+            {
+                existing_chunks += 1;
             }
         }
 
@@ -77,7 +78,10 @@ impl ChunkStorage {
         let manifest: FileManifest = serde_json::from_str(&manifest_content)?;
 
         for i in 0..manifest.chunk_count {
-            let chunk_path = self.storage_dir.join(file_id).join(format!("chunk_{}.bin", i));
+            let chunk_path = self
+                .storage_dir
+                .join(file_id)
+                .join(format!("chunk_{}.bin", i));
             if !chunk_path.exists() {
                 return Err(MisogiError::ChunkMissing {
                     file_id: file_id.to_string(),
@@ -93,7 +97,10 @@ impl ChunkStorage {
         let mut output_file = tokio::fs::File::create(&output_path).await?;
 
         for i in 0..manifest.chunk_count {
-            let chunk_path = self.storage_dir.join(file_id).join(format!("chunk_{}.bin", i));
+            let chunk_path = self
+                .storage_dir
+                .join(file_id)
+                .join(format!("chunk_{}.bin", i));
             let chunk_data = tokio::fs::read(&chunk_path).await?;
             tokio::io::AsyncWriteExt::write_all(&mut output_file, &chunk_data).await?;
         }
@@ -128,23 +135,23 @@ impl ChunkStorage {
         let mut entries = tokio::fs::read_dir(&self.download_dir).await?;
         while let Some(entry) = entries.next_entry().await? {
             let path = entry.path();
-            if path.is_dir() {
-                if let Some(file_id) = path.file_name().and_then(|n| n.to_str()) {
-                    let manifest_path = self.storage_dir.join(file_id).join("manifest.json");
-                    if manifest_path.exists() {
-                        let content = tokio::fs::read_to_string(&manifest_path).await?;
-                        if let Ok(manifest) = serde_json::from_str::<FileManifest>(&content) {
-                            files.push(FileInfo {
-                                file_id: manifest.file_id.clone(),
-                                filename: manifest.filename.clone(),
-                                total_size: manifest.total_size,
-                                chunk_count: manifest.chunk_count,
-                                file_md5: manifest.file_md5.clone(),
-                                status: FileStatus::Ready,
-                                created_at: manifest.created_at.clone(),
-                            });
-                        }
-                    }
+            if path.is_dir()
+                && let Some(file_id) = path.file_name().and_then(|n| n.to_str())
+            {
+                let manifest_path = self.storage_dir.join(file_id).join("manifest.json");
+                if manifest_path.exists()
+                    && let Ok(content) = tokio::fs::read_to_string(&manifest_path).await
+                    && let Ok(manifest) = serde_json::from_str::<FileManifest>(&content)
+                {
+                    files.push(FileInfo {
+                        file_id: manifest.file_id.clone(),
+                        filename: manifest.filename.clone(),
+                        total_size: manifest.total_size,
+                        chunk_count: manifest.chunk_count,
+                        file_md5: manifest.file_md5.clone(),
+                        status: FileStatus::Ready,
+                        created_at: manifest.created_at.clone(),
+                    });
                 }
             }
         }
@@ -187,7 +194,10 @@ impl ChunkStorage {
 
     #[allow(dead_code)]
     pub async fn read_chunk(&self, file_id: &str, chunk_index: u32) -> Result<Vec<u8>> {
-        let chunk_path = self.storage_dir.join(file_id).join(format!("chunk_{}.bin", chunk_index));
+        let chunk_path = self
+            .storage_dir
+            .join(file_id)
+            .join(format!("chunk_{}.bin", chunk_index));
 
         if !chunk_path.exists() {
             return Err(MisogiError::ChunkMissing {
@@ -242,7 +252,12 @@ impl ChunkStorage {
     pub async fn update_manifest_status(&self, file_id: &str, status: FileStatus) -> Result<()> {
         let manifest = match self.get_manifest(file_id).await? {
             Some(m) => m,
-            None => return Err(MisogiError::NotFound(format!("Manifest not found: {}", file_id))),
+            None => {
+                return Err(MisogiError::NotFound(format!(
+                    "Manifest not found: {}",
+                    file_id
+                )));
+            }
         };
 
         let mut updated = manifest;

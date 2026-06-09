@@ -4,7 +4,7 @@
 //! for OAuth 2.0 / OpenID Connect Authorization Code flow with PKCE support.
 
 use async_trait::async_trait;
-use base64::{engine::general_purpose, Engine as _};
+use base64::{Engine as _, engine::general_purpose};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -106,7 +106,12 @@ impl OidcProviderConfig {
             client_id: client_id.into(),
             client_secret: client_secret.into(),
             redirect_uri: String::new(),
-            scopes: vec!["openid".into(), "profile".into(), "email".into(), "offline_access".into()],
+            scopes: vec![
+                "openid".into(),
+                "profile".into(),
+                "email".into(),
+                "offline_access".into(),
+            ],
             userinfo_endpoint: None,
             token_endpoint: None,
             authorization_endpoint: None,
@@ -115,14 +120,24 @@ impl OidcProviderConfig {
     }
 
     /// Create configuration for Keycloak Identity Provider.
-    pub fn keycloak_config(server_url: &str, realm: &str, client_id: &str, client_secret: &str) -> Self {
+    pub fn keycloak_config(
+        server_url: &str,
+        realm: &str,
+        client_id: &str,
+        client_secret: &str,
+    ) -> Self {
         let base = server_url.trim_end_matches('/');
         Self {
             issuer_url: format!("{base}/realms/{realm}"),
             client_id: client_id.into(),
             client_secret: client_secret.into(),
             redirect_uri: String::new(),
-            scopes: vec!["openid".into(), "profile".into(), "email".into(), "roles".into()],
+            scopes: vec![
+                "openid".into(),
+                "profile".into(),
+                "email".into(),
+                "roles".into(),
+            ],
             userinfo_endpoint: None,
             token_endpoint: None,
             authorization_endpoint: None,
@@ -181,13 +196,19 @@ impl OidcIdentityProvider {
     /// No network calls at construction. Call [`discover`](Self::discover) first.
     pub fn new(config: OidcProviderConfig) -> Result<Self, IdentityError> {
         if config.issuer_url.is_empty() {
-            return Err(IdentityError::ConfigurationError("issuer_url is required".into()));
+            return Err(IdentityError::ConfigurationError(
+                "issuer_url is required".into(),
+            ));
         }
         if config.client_id.is_empty() {
-            return Err(IdentityError::ConfigurationError("client_id is required".into()));
+            return Err(IdentityError::ConfigurationError(
+                "client_id is required".into(),
+            ));
         }
         if config.client_secret.is_empty() {
-            return Err(IdentityError::ConfigurationError("client_secret is required".into()));
+            return Err(IdentityError::ConfigurationError(
+                "client_secret is required".into(),
+            ));
         }
 
         let provider_id = Self::build_provider_id(&config.issuer_url, &config.client_id);
@@ -196,7 +217,12 @@ impl OidcIdentityProvider {
 
         info!(provider_id = %provider_id, issuer = %config.issuer_url, pkce = config.pkce, "OidcIdentityProvider created");
 
-        Ok(Self { config, core, provider_id, provider_name })
+        Ok(Self {
+            config,
+            core,
+            provider_id,
+            provider_name,
+        })
     }
 
     /// Perform OpenID Connect Discovery against the configured issuer.
@@ -262,19 +288,31 @@ impl OidcIdentityProvider {
         let display_name = if !userinfo.name.is_empty() {
             Some(userinfo.name.clone())
         } else {
-            userinfo.preferred_username.clone().or_else(|| userinfo.email.clone())
+            userinfo
+                .preferred_username
+                .clone()
+                .or_else(|| userinfo.email.clone())
         };
 
         let mut extra: HashMap<String, serde_json::Value> = HashMap::new();
-        extra.insert("sub".into(), serde_json::Value::String(userinfo.sub.clone()));
+        extra.insert(
+            "sub".into(),
+            serde_json::Value::String(userinfo.sub.clone()),
+        );
         if let Some(ref e) = userinfo.email {
             extra.insert("email".into(), serde_json::Value::String(e.clone()));
         }
         if let Some(ref u) = userinfo.preferred_username {
-            extra.insert("preferred_username".into(), serde_json::Value::String(u.clone()));
+            extra.insert(
+                "preferred_username".into(),
+                serde_json::Value::String(u.clone()),
+            );
         }
         if !userinfo.name.is_empty() {
-            extra.insert("name".into(), serde_json::Value::String(userinfo.name.clone()));
+            extra.insert(
+                "name".into(),
+                serde_json::Value::String(userinfo.name.clone()),
+            );
         }
 
         MisogiIdentity {
@@ -322,7 +360,12 @@ impl IdentityProvider for OidcIdentityProvider {
 
     async fn authenticate(&self, input: AuthRequest) -> Result<MisogiIdentity, IdentityError> {
         // Only AuthorizationCode flow is supported for OIDC
-        let AuthRequest::AuthorizationCode { code, redirect_uri, code_verifier } = input else {
+        let AuthRequest::AuthorizationCode {
+            code,
+            redirect_uri,
+            code_verifier,
+        } = input
+        else {
             return Err(IdentityError::AuthenticationFailed(
                 "OIDC only supports AuthorizationCode flow".into(),
             ));
@@ -365,7 +408,10 @@ impl IdentityProvider for OidcIdentityProvider {
         // Step 2: Validate ID token if present
         if let Some(ref idt) = tokens.id_token {
             debug!("Validating ID token");
-            self.core.validate_id_token(idt).await.map_err(Self::map_oidc_error)?;
+            self.core
+                .validate_id_token(idt)
+                .await
+                .map_err(Self::map_oidc_error)?;
             debug!("ID token validated successfully");
         } else {
             warn!("No ID token in response — proceeding with access token only");
@@ -373,7 +419,11 @@ impl IdentityProvider for OidcIdentityProvider {
 
         // Step 3: Fetch UserInfo using access token
         debug!("Fetching UserInfo from IdP");
-        let ui = self.core.get_userinfo(&tokens.access_token).await.map_err(Self::map_oidc_error)?;
+        let ui = self
+            .core
+            .get_userinfo(&tokens.access_token)
+            .await
+            .map_err(Self::map_oidc_error)?;
         info!(sub = %ui.sub, "UserInfo retrieved");
 
         // Step 4: Map to MisogiIdentity
@@ -385,10 +435,14 @@ impl IdentityProvider for OidcIdentityProvider {
 
         // Verify provider configuration is valid
         if self.config.issuer_url.is_empty() {
-            return Err(IdentityError::ConfigurationError("issuer_url is empty".into()));
+            return Err(IdentityError::ConfigurationError(
+                "issuer_url is empty".into(),
+            ));
         }
         if self.config.client_id.is_empty() {
-            return Err(IdentityError::ConfigurationError("client_id is empty".into()));
+            return Err(IdentityError::ConfigurationError(
+                "client_id is empty".into(),
+            ));
         }
 
         // Attempt discovery to verify connectivity (idempotent if already discovered)
@@ -564,7 +618,9 @@ mod tests {
             preferred_username: Some("pu".into()),
         };
         assert_eq!(
-            OidcIdentityProvider::map_to_identity(&ui).display_name.as_deref(),
+            OidcIdentityProvider::map_to_identity(&ui)
+                .display_name
+                .as_deref(),
             Some("pu")
         );
     }
@@ -578,7 +634,9 @@ mod tests {
             preferred_username: None,
         };
         assert_eq!(
-            OidcIdentityProvider::map_to_identity(&ui).display_name.as_deref(),
+            OidcIdentityProvider::map_to_identity(&ui)
+                .display_name
+                .as_deref(),
             Some("em")
         );
     }
@@ -591,7 +649,11 @@ mod tests {
             email: None,
             preferred_username: None,
         };
-        assert!(OidcIdentityProvider::map_to_identity(&ui).display_name.is_none());
+        assert!(
+            OidcIdentityProvider::map_to_identity(&ui)
+                .display_name
+                .is_none()
+        );
     }
 
     // ===================================================================
@@ -629,13 +691,14 @@ mod tests {
     #[tokio::test]
     async fn test_reject_credentials_flow() {
         let p = OidcIdentityProvider::new(test_cfg()).unwrap();
-        assert!(p
-            .authenticate(AuthRequest::Credentials {
+        assert!(
+            p.authenticate(AuthRequest::Credentials {
                 username: "u".into(),
                 password: "p".into(),
             })
             .await
-            .is_err());
+            .is_err()
+        );
     }
 
     // ===================================================================
@@ -647,14 +710,15 @@ mod tests {
         let mut c = test_cfg();
         c.pkce = true;
         let p = OidcIdentityProvider::new(c).unwrap();
-        assert!(p
-            .authenticate(AuthRequest::AuthorizationCode {
+        assert!(
+            p.authenticate(AuthRequest::AuthorizationCode {
                 code: "c".into(),
                 redirect_uri: "r".into(),
                 code_verifier: None,
             })
             .await
-            .is_err());
+            .is_err()
+        );
     }
 
     // ===================================================================
@@ -683,14 +747,15 @@ mod tests {
         c.redirect_uri = "https://good/cb".into();
         c.pkce = false;
         let p = OidcIdentityProvider::new(c).unwrap();
-        assert!(p
-            .authenticate(AuthRequest::AuthorizationCode {
+        assert!(
+            p.authenticate(AuthRequest::AuthorizationCode {
                 code: "c".into(),
                 redirect_uri: "https://bad/cb".into(),
                 code_verifier: Some("v".into()),
             })
             .await
-            .is_err());
+            .is_err()
+        );
     }
 
     /// Helper: create a valid test config with minimal required fields.

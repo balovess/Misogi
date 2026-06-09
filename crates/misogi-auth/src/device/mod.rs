@@ -32,12 +32,5 @@ pub mod collector;
 pub mod fingerprint;
 pub mod validator;
 
-pub use fingerprint::{
-    DeviceFingerprint,
-    FingerprintSignal,
-    ScreenResolution,
-};
-pub use validator::{
-    FingerprintBindError,
-    FingerprintValidator,
-};
+pub use fingerprint::{DeviceFingerprint, FingerprintSignal, ScreenResolution};
+pub use validator::{FingerprintBindError, FingerprintValidator};

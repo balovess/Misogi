@@ -37,17 +37,11 @@ pub enum FingerprintBindError {
 
     /// Computed device ID does not match the bound value in JWT claims.
     #[error("device_id mismatch: computed={computed}, expected={expected}")]
-    DeviceIdMismatch {
-        computed: String,
-        expected: String,
-    },
+    DeviceIdMismatch { computed: String, expected: String },
 
     /// Fingerprint similarity below acceptable threshold.
     #[error("fingerprint drift detected: similarity={similarity}, threshold={threshold}")]
-    FingerprintDrift {
-        similarity: f64,
-        threshold: f64,
-    },
+    FingerprintDrift { similarity: f64, threshold: f64 },
 
     /// Fingerprint appears to be a replay of a previously-seen value.
     #[error("potential replay attack: fingerprint seen recently")]
@@ -266,10 +260,7 @@ impl FingerprintValidator {
     }
 
     /// Check if this fingerprint was recently seen (replay detection).
-    fn check_replay(
-        &self,
-        fingerprint: &DeviceFingerprint,
-    ) -> Result<(), FingerprintBindError> {
+    fn check_replay(&self, fingerprint: &DeviceFingerprint) -> Result<(), FingerprintBindError> {
         let fp_hash = self.make_cache_key(fingerprint);
 
         let cache = self.replay_cache.read().map_err(|e| {
@@ -360,10 +351,7 @@ impl FingerprintValidator {
 
     /// Return current replay cache size (for monitoring).
     pub fn cache_size(&self) -> usize {
-        self.replay_cache
-            .read()
-            .map(|c| c.len())
-            .unwrap_or(0)
+        self.replay_cache.read().map(|c| c.len()).unwrap_or(0)
     }
 }
 

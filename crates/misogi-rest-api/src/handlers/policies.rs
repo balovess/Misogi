@@ -14,18 +14,16 @@
 //! | DELETE   | `/api/v1/policies/{id}`   | [`delete_policy`]  | Remove a policy          |
 
 use axum::{
+    Json,
     extract::{Path, State},
     http::StatusCode,
-    Json,
 };
 use chrono::Utc;
 use tracing::{debug, info, instrument};
 use uuid::Uuid;
 
 use crate::error::ApiError;
-use crate::models::{
-    CreatePolicyRequest, PolicyInfo, UpdatePolicyRequest,
-};
+use crate::models::{CreatePolicyRequest, PolicyInfo, UpdatePolicyRequest};
 use crate::router::AppState;
 
 // ---------------------------------------------------------------------------
@@ -183,14 +181,14 @@ pub async fn update_policy(
     // TODO: Persist and return updated policy
 
     // Validation: if name provided, ensure non-empty
-    if let Some(ref name) = req.name {
-        if name.trim().is_empty() {
-            return Err(ApiError::bad_request(
-                ApiError::INVALID_POLICY,
-                "Policy name must not be empty",
-                Some(serde_json::json!({"field": "name"})),
-            ));
-        }
+    if let Some(ref name) = req.name
+        && name.trim().is_empty()
+    {
+        return Err(ApiError::bad_request(
+            ApiError::INVALID_POLICY,
+            "Policy name must not be empty",
+            Some(serde_json::json!({"field": "name"})),
+        ));
     }
 
     Err(ApiError::not_found(

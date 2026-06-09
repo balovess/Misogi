@@ -464,7 +464,10 @@ mod tests {
     #[test]
     fn document_format_display_shows_extension() {
         assert_eq!(format!("{}", DocumentFormat::Pptx), "pptx");
-        assert_eq!(format!("{}", DocumentFormat::Unknown("custom".into())), "unknown(custom)");
+        assert_eq!(
+            format!("{}", DocumentFormat::Unknown("custom".into())),
+            "unknown(custom)"
+        );
     }
 
     // -----------------------------------------------------------------
@@ -540,10 +543,7 @@ mod tests {
     #[test]
     fn cdr_error_parse_error_display() {
         let err = CdrError::ParseError("corrupt PDF header".into());
-        assert_eq!(
-            format!("{err}"),
-            "parse error: corrupt PDF header"
-        );
+        assert_eq!(format!("{err}"), "parse error: corrupt PDF header");
     }
 
     #[test]

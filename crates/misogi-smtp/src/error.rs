@@ -19,7 +19,6 @@ use std::path::PathBuf;
 #[derive(Debug, thiserror::Error)]
 pub enum SmtpError {
     // ── Protocol Errors ──────────────────────────────────────────────
-
     /// SMTP command was malformed or unrecognized.
     #[error("SMTP protocol error: {message}")]
     SmtpProtocol { message: String },
@@ -33,7 +32,6 @@ pub enum SmtpError {
     ConnectionAborted { peer_addr: String },
 
     // ── MIME Parsing Errors ──────────────────────────────────────────
-
     /// Raw email data could not be parsed as valid RFC 5322/MIME format.
     #[error("MIME parse error: {reason}")]
     MimeParseError { reason: String },
@@ -55,7 +53,6 @@ pub enum SmtpError {
     AttachmentExtractError { part_index: usize, reason: String },
 
     // ── Sanitization Errors ──────────────────────────────────────────
-
     /// CDR pipeline returned a failure for a specific attachment.
     #[error("Sanitization failed for attachment '{filename}': {reason}")]
     SanitizationFailed { filename: String, reason: String },
@@ -77,7 +74,6 @@ pub enum SmtpError {
     AttachmentBlocked { filename: String, reason: String },
 
     // ── Delivery Errors ──────────────────────────────────────────────
-
     /// SMTP relay connection or authentication failure.
     #[error("SMTP relay error: {reason}")]
     RelayError { reason: String },
@@ -95,7 +91,6 @@ pub enum SmtpError {
     RetriesExhausted { recipient: String, attempts: u32 },
 
     // ── Configuration Errors ────────────────────────────────────────
-
     /// A required configuration value is missing or invalid.
     #[error("Configuration error: {field} — {reason}")]
     Configuration { field: String, reason: String },
@@ -109,7 +104,6 @@ pub enum SmtpError {
     InvalidZonePolicy { reason: String },
 
     // ── I/O Errors ───────────────────────────────────────────────────
-
     /// File system or network I/O operation failed.
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
@@ -119,7 +113,6 @@ pub enum SmtpError {
     Serialization(#[from] serde_json::Error),
 
     // ── Shutdown Errors ──────────────────────────────────────────────
-
     /// Server shutdown signal handling error.
     #[error("Shutdown error: {0}")]
     Shutdown(String),

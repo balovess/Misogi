@@ -18,15 +18,15 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use async_trait::async_trait;
 use base64::Engine; // For modern base64 encoding API
 use chrono::Utc;
+#[cfg(feature = "jwt")]
+use misogi_auth::jwt::JwtConfig;
 use misogi_auth::{
+    MisogiClaims,
     engine::{AuthEngine, AuthError, ServiceAccount},
     provider::{AuthRequest, IdentityError, IdentityProvider, MisogiIdentity},
     registry::IdentityRegistry,
     role::UserRole,
-    MisogiClaims,
 };
-#[cfg(feature = "jwt")]
-use misogi_auth::jwt::JwtConfig;
 use tempfile::TempDir;
 
 // ===========================================================================
@@ -77,10 +77,7 @@ impl IdentityProvider for MockLdapProvider {
         &self.name
     }
 
-    async fn authenticate(
-        &self,
-        input: AuthRequest,
-    ) -> Result<MisogiIdentity, IdentityError> {
+    async fn authenticate(&self, input: AuthRequest) -> Result<MisogiIdentity, IdentityError> {
         if self.unavailable {
             return Err(IdentityError::ProviderUnavailable(
                 "Mock LDAP server is down".to_string(),
@@ -135,7 +132,7 @@ impl MockOidcProvider {
     }
 
     /// Create a mock provider that always fails authentication
-    #[allow(dead_code)]  // Reserved for negative test cases
+    #[allow(dead_code)] // Reserved for negative test cases
     fn failing(id: &str, name: &str) -> Self {
         Self {
             id: id.to_string(),
@@ -155,10 +152,7 @@ impl IdentityProvider for MockOidcProvider {
         &self.name
     }
 
-    async fn authenticate(
-        &self,
-        input: AuthRequest,
-    ) -> Result<MisogiIdentity, IdentityError> {
+    async fn authenticate(&self, input: AuthRequest) -> Result<MisogiIdentity, IdentityError> {
         if self.should_fail {
             return Err(IdentityError::TokenExchangeFailed(
                 "OIDC token exchange failed".to_string(),
@@ -168,14 +162,19 @@ impl IdentityProvider for MockOidcProvider {
         match input {
             AuthRequest::AuthorizationCode { code, .. } => {
                 if code.is_empty() {
-                    return Err(IdentityError::AuthenticationFailed("Empty authorization code".to_string()));
+                    return Err(IdentityError::AuthenticationFailed(
+                        "Empty authorization code".to_string(),
+                    ));
                 }
 
                 Ok(MisogiIdentity::new("oidc-user-001", "mock-oidc")
                     .with_display_name("OIDC Test User".to_string())
                     .with_roles(vec!["staff".to_string(), "oidc-user".to_string()])
                     .with_original_subject("sub-abc-123-def".to_string())
-                    .with_extra("email", serde_json::Value::String("test@example.com".to_string())))
+                    .with_extra(
+                        "email",
+                        serde_json::Value::String("test@example.com".to_string()),
+                    ))
             }
             _ => Err(IdentityError::AuthenticationFailed(
                 "Mock OIDC only supports AuthorizationCode".to_string(),
@@ -185,7 +184,9 @@ impl IdentityProvider for MockOidcProvider {
 
     async fn health_check(&self) -> Result<(), IdentityError> {
         if self.should_fail {
-            Err(IdentityError::ProviderUnavailable("OIDC IdP unreachable".to_string()))
+            Err(IdentityError::ProviderUnavailable(
+                "OIDC IdP unreachable".to_string(),
+            ))
         } else {
             Ok(())
         }
@@ -201,7 +202,10 @@ struct MockSamlProvider {
 
 impl MockSamlProvider {
     fn new(id: &str, name: &str) -> Self {
-        Self { id: id.to_string(), name: name.to_string() }
+        Self {
+            id: id.to_string(),
+            name: name.to_string(),
+        }
     }
 }
 
@@ -215,14 +219,13 @@ impl IdentityProvider for MockSamlProvider {
         &self.name
     }
 
-    async fn authenticate(
-        &self,
-        input: AuthRequest,
-    ) -> Result<MisogiIdentity, IdentityError> {
+    async fn authenticate(&self, input: AuthRequest) -> Result<MisogiIdentity, IdentityError> {
         match input {
             AuthRequest::SamlResponse { response } => {
                 if response.is_empty() {
-                    return Err(IdentityError::AuthenticationFailed("Empty SAML response".to_string()));
+                    return Err(IdentityError::AuthenticationFailed(
+                        "Empty SAML response".to_string(),
+                    ));
                 }
 
                 Ok(MisogiIdentity::new("saml-user-001", "mock-saml")
@@ -278,8 +281,7 @@ fn create_test_jwt_config() -> (JwtConfig, TempDir) {
 
     // Generate RSA-2048 keypair using rsa crate
     let mut rng = rand::thread_rng();
-    let private_key =
-        RsaPrivateKey::new(&mut rng, 2048).expect("RSA key generation failed");
+    let private_key = RsaPrivateKey::new(&mut rng, 2048).expect("RSA key generation failed");
 
     // Write private key in PKCS#1 PEM format
     let private_der = private_key
@@ -287,8 +289,7 @@ fn create_test_jwt_config() -> (JwtConfig, TempDir) {
         .expect("private key DER encoding failed");
     let priv_pem = misogi_auth::jwt::pem_encode("RSA PRIVATE KEY", private_der.as_bytes());
     let priv_path = dir_path.join("private.pem");
-    std::fs::write(&priv_path, priv_pem.as_bytes())
-        .expect("failed to write private key");
+    std::fs::write(&priv_path, priv_pem.as_bytes()).expect("failed to write private key");
 
     // Extract and write public key in PKCS#1 PEM format
     let public_key = private_key.to_public_key();
@@ -297,8 +298,7 @@ fn create_test_jwt_config() -> (JwtConfig, TempDir) {
         .expect("public key DER encoding failed");
     let pub_pem = misogi_auth::jwt::pem_encode("RSA PUBLIC KEY", public_der.as_bytes());
     let pub_path = dir_path.join("public.pem");
-    std::fs::write(&pub_path, pub_pem.as_bytes())
-        .expect("failed to write public key");
+    std::fs::write(&pub_path, pub_pem.as_bytes()).expect("failed to write public key");
 
     let config = JwtConfig {
         issuer: "misogi-test".to_string(),
@@ -326,9 +326,15 @@ fn make_engine_with_providers() -> (AuthEngine, IdentityRegistry) {
     let mut engine = make_minimal_engine();
     let registry = IdentityRegistry::new();
 
-    registry.register(Arc::new(MockLdapProvider::new("ldap-1", "Mock LDAP"))).unwrap();
-    registry.register(Arc::new(MockOidcProvider::new("oidc-1", "Mock OIDC"))).unwrap();
-    registry.register(Arc::new(MockSamlProvider::new("saml-1", "Mock SAML"))).unwrap();
+    registry
+        .register(Arc::new(MockLdapProvider::new("ldap-1", "Mock LDAP")))
+        .unwrap();
+    registry
+        .register(Arc::new(MockOidcProvider::new("oidc-1", "Mock OIDC")))
+        .unwrap();
+    registry
+        .register(Arc::new(MockSamlProvider::new("saml-1", "Mock SAML")))
+        .unwrap();
 
     engine = engine.with_identity_registry(registry);
     (engine, IdentityRegistry::new())
@@ -342,7 +348,6 @@ fn make_engine_with_providers() -> (AuthEngine, IdentityRegistry) {
 mod jwt_lifecycle {
     use super::*;
     use misogi_auth::jwt::{JwtIssuer, JwtValidator};
-    
 
     #[tokio::test]
     async fn test_complete_jwt_issue_validate_extract() {
@@ -366,7 +371,10 @@ mod jwt_lifecycle {
         // Step 3: Extract and verify claims
         // JwtValidator::validate() returns MisogiClaims directly
         assert_eq!(validated.applicant_id, "user-integration-001");
-        assert_eq!(validated.display_name, Some("Integration Test User".to_string()));
+        assert_eq!(
+            validated.display_name,
+            Some("Integration Test User".to_string())
+        );
         assert_eq!(validated.roles.len(), 2);
         assert!(validated.has_role("staff"));
         assert!(validated.has_role("tester"));
@@ -384,10 +392,12 @@ mod jwt_lifecycle {
         let expired_claims = MisogiClaims::new(
             "expired-user".to_string(),
             now.saturating_sub(7200), // iat: 2 hours ago
-            now.saturating_sub(1),     // exp: 1 second ago
+            now.saturating_sub(1),    // exp: 1 second ago
         );
         // Use issue_raw to preserve the exact exp timestamp
-        let token = issuer.issue_raw(&expired_claims).expect("issuance should succeed");
+        let token = issuer
+            .issue_raw(&expired_claims)
+            .expect("issuance should succeed");
 
         let validator = JwtValidator::new(config).expect("validator creation failed");
         let result = validator.validate(&token);
@@ -436,8 +446,14 @@ async fn test_api_key_register_validate_reject() {
     assert!(result.is_ok(), "valid API key should be accepted");
     let validated = result.unwrap();
     assert_eq!(validated.key_id, "sk-test-integration-001");
-    assert_eq!(validated.name, "Test Service Account (sk-test-integration-001)");
-    assert!(!validated.is_expired(), "non-expired key should not show as expired");
+    assert_eq!(
+        validated.name,
+        "Test Service Account (sk-test-integration-001)"
+    );
+    assert!(
+        !validated.is_expired(),
+        "non-expired key should not show as expired"
+    );
 
     // Reject wrong key
     let wrong_result = engine.validate_api_key("sk-wrong-key-999");
@@ -452,7 +468,10 @@ async fn test_api_key_register_validate_reject() {
     assert!(empty_result.is_err());
     match empty_result.unwrap_err() {
         AuthError::MissingCredentials => {} // Expected
-        other => panic!("expected MissingCredentials for empty key, got: {:?}", other),
+        other => panic!(
+            "expected MissingCredentials for empty key, got: {:?}",
+            other
+        ),
     }
 }
 
@@ -522,7 +541,10 @@ async fn test_plugin_delegation_ldap_authenticate_issue_identity() {
     let claims: MisogiClaims = identity.into();
     assert_eq!(claims.applicant_id, "tanaka.taro");
     assert!(!claims.roles.is_empty());
-    assert!(claims.exp > claims.iat, "claims should have positive lifetime");
+    assert!(
+        claims.exp > claims.iat,
+        "claims should have positive lifetime"
+    );
 }
 
 #[tokio::test]
@@ -531,7 +553,10 @@ async fn test_plugin_delegation_oidc_flow() {
     let registry = IdentityRegistry::new();
 
     registry
-        .register(Arc::new(MockOidcProvider::new("oidc-keycloak", "Keycloak OIDC")))
+        .register(Arc::new(MockOidcProvider::new(
+            "oidc-keycloak",
+            "Keycloak OIDC",
+        )))
         .unwrap();
     engine = engine.with_identity_registry(registry);
 
@@ -557,12 +582,16 @@ async fn test_plugin_delegation_saml_flow() {
     let registry = IdentityRegistry::new();
 
     registry
-        .register(Arc::new(MockSamlProvider::new("saml-gcloud", "G-Cloud SAML")))
+        .register(Arc::new(MockSamlProvider::new(
+            "saml-gcloud",
+            "G-Cloud SAML",
+        )))
         .unwrap();
     engine = engine.with_identity_registry(registry);
 
     let request = AuthRequest::SamlResponse {
-        response: base64::engine::general_purpose::STANDARD.encode("<saml:Response>fake-saml-response</saml:Response>"),
+        response: base64::engine::general_purpose::STANDARD
+            .encode("<saml:Response>fake-saml-response</saml:Response>"),
     };
 
     let identity = engine
@@ -749,8 +778,14 @@ fn test_claims_roundtrip_all_fields_preserved() {
             "custom-role".to_string(),
         ])
         .with_original_subject("original-subject-xyz".to_string())
-        .with_extra("email", serde_json::Value::String("roundtrip@test.com".to_string()))
-        .with_extra("department", serde_json::Value::String("Engineering".to_string()));
+        .with_extra(
+            "email",
+            serde_json::Value::String("roundtrip@test.com".to_string()),
+        )
+        .with_extra(
+            "department",
+            serde_json::Value::String("Engineering".to_string()),
+        );
 
     // Convert: MisogiIdentity → MisogiClaims
     let claims: MisogiClaims = original_identity.clone().into();
@@ -763,7 +798,10 @@ fn test_claims_roundtrip_all_fields_preserved() {
     assert!(claims.has_role("auditor"));
     assert!(claims.has_role("custom-role"));
     assert_eq!(claims.idp_source, "test-idp");
-    assert_eq!(claims.original_subject, Some("original-subject-xyz".to_string()));
+    assert_eq!(
+        claims.original_subject,
+        Some("original-subject-xyz".to_string())
+    );
 
     // Verify extra fields are preserved
     assert_eq!(
@@ -778,12 +816,22 @@ fn test_claims_roundtrip_all_fields_preserved() {
     // Verify temporal fields set correctly
     assert!(claims.iat >= now, "iat should be >= current time");
     assert!(claims.exp > claims.iat, "exp must be greater than iat");
-    assert_eq!(claims.lifetime_seconds(), 3600, "default lifetime should be 1 hour");
+    assert_eq!(
+        claims.lifetime_seconds(),
+        3600,
+        "default lifetime should be 1 hour"
+    );
 
     // Serialize to JSON (simulating JWS payload encoding)
     let json = serde_json::to_string(&claims).expect("serialization should succeed");
-    assert!(json.contains("applicant_id"), "JSON should contain applicant_id");
-    assert!(json.contains("roundtrip@test.com"), "JSON should contain extra email");
+    assert!(
+        json.contains("applicant_id"),
+        "JSON should contain applicant_id"
+    );
+    assert!(
+        json.contains("roundtrip@test.com"),
+        "JSON should contain extra email"
+    );
 
     // Deserialize from JSON (simulating JWS payload decoding)
     let deserialized: MisogiClaims =
@@ -806,7 +854,10 @@ fn test_claims_temporal_validation() {
 
     // Valid claims
     let valid = MisogiClaims::new("user".to_string(), now, now + 3600);
-    assert!(valid.validate_temporal().is_ok(), "valid claims should pass temporal check");
+    assert!(
+        valid.validate_temporal().is_ok(),
+        "valid claims should pass temporal check"
+    );
 
     // exp <= iat (invalid)
     let invalid_lifetime = MisogiClaims::new("user".to_string(), now + 3600, now);
@@ -856,9 +907,7 @@ async fn test_concurrent_auth_100_simultaneous_validates() {
     // Collect results — no panics expected
     let mut success_count = 0;
     for handle in handles {
-        let (idx, success, detail) = handle
-            .await
-            .expect("task should not panic");
+        let (idx, success, detail) = handle.await.expect("task should not panic");
         if success {
             success_count += 1;
             assert!(
@@ -877,7 +926,10 @@ async fn test_concurrent_provider_auth_no_panics() {
     let registry = IdentityRegistry::new();
 
     registry
-        .register(Arc::new(MockLdapProvider::new("ldap-conc", "Concurrent LDAP")))
+        .register(Arc::new(MockLdapProvider::new(
+            "ldap-conc",
+            "Concurrent LDAP",
+        )))
         .unwrap();
     engine = engine.with_identity_registry(registry);
     let engine = Arc::new(engine);
@@ -935,7 +987,10 @@ async fn test_registry_hot_swap_provider_a_to_b() {
 
     // Phase 1: Register provider A
     registry
-        .register(Arc::new(MockLdapProvider::new("provider-a", "Provider A (LDAP)")))
+        .register(Arc::new(MockLdapProvider::new(
+            "provider-a",
+            "Provider A (LDAP)",
+        )))
         .unwrap();
     engine = engine.with_identity_registry(registry);
     assert!(engine.has_identity_registry());
@@ -958,7 +1013,10 @@ async fn test_registry_hot_swap_provider_a_to_b() {
     // that the routing mechanism works correctly when providers change.
     let new_registry = IdentityRegistry::new();
     new_registry
-        .register(Arc::new(MockOidcProvider::new("provider-b", "Provider B (OIDC)")))
+        .register(Arc::new(MockOidcProvider::new(
+            "provider-b",
+            "Provider B (OIDC)",
+        )))
         .unwrap();
 
     // Replace engine's registry
@@ -1079,9 +1137,11 @@ mod jwt_edge_cases {
         let near_expiry_claims = MisogiClaims::new(
             "clock-skew-user".to_string(),
             now.saturating_sub(10), // issued 10 seconds ago
-            now.saturating_add(5),   // expires in 5 seconds
+            now.saturating_add(5),  // expires in 5 seconds
         );
-        let token = issuer.issue(&near_expiry_claims).expect("issuance succeeded");
+        let token = issuer
+            .issue(&near_expiry_claims)
+            .expect("issuance succeeded");
 
         let validator = JwtValidator::new(config).expect("validator creation failed");
 
@@ -1105,19 +1165,33 @@ async fn test_audit_log_recording_and_query() {
     engine.register_api_key(make_service_account("sk-audit-test"));
 
     let events = engine.get_audit_events(None, None);
-    assert!(!events.is_empty(), "audit log should have events after registration");
+    assert!(
+        !events.is_empty(),
+        "audit log should have events after registration"
+    );
 
     // Find ConfigChange event
     let config_events: Vec<_> = events
         .iter()
-        .filter(|e| matches!(e.event_type, misogi_auth::engine::AuditEventType::ConfigChange))
+        .filter(|e| {
+            matches!(
+                e.event_type,
+                misogi_auth::engine::AuditEventType::ConfigChange
+            )
+        })
         .collect();
-    assert!(!config_events.is_empty(), "should have at least one ConfigChange event");
+    assert!(
+        !config_events.is_empty(),
+        "should have at least one ConfigChange event"
+    );
 
     // Clear and verify
     engine.clear_audit_log();
     let after_clear = engine.get_audit_events(None, None);
-    assert!(after_clear.is_empty(), "audit log should be empty after clear");
+    assert!(
+        after_clear.is_empty(),
+        "audit log should be empty after clear"
+    );
 }
 
 #[tokio::test]
@@ -1134,7 +1208,10 @@ async fn test_auth_strategy_enum_values() {
     for strategy in &strategies {
         // Display formatting should not panic
         let display = format!("{strategy}");
-        assert!(!display.is_empty(), "{strategy:?} display should not be empty");
+        assert!(
+            !display.is_empty(),
+            "{strategy:?} display should not be empty"
+        );
     }
 
     // Default should be FirstMatch
@@ -1178,7 +1255,10 @@ async fn test_registry_remove_and_health_check() {
         .register(Arc::new(MockLdapProvider::new("healthy", "Healthy LDAP")))
         .unwrap();
     registry
-        .register(Arc::new(MockLdapProvider::unavailable("unhealthy", "Unhealthy LDAP")))
+        .register(Arc::new(MockLdapProvider::unavailable(
+            "unhealthy",
+            "Unhealthy LDAP",
+        )))
         .unwrap();
 
     assert_eq!(registry.len(), 2);

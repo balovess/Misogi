@@ -152,10 +152,11 @@ pub struct FileDetail {
 }
 
 /// Processing lifecycle status for a file within the Misogi pipeline.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum FileStatus {
     /// File has been uploaded but not yet queued for scanning.
+    #[default]
     Uploaded,
     /// File is currently being analyzed by the scanner engine.
     Scanning,
@@ -167,12 +168,6 @@ pub enum FileStatus {
     Deleted,
     /// An internal error prevented processing.
     Error,
-}
-
-impl Default for FileStatus {
-    fn default() -> Self {
-        Self::Uploaded
-    }
 }
 
 // ===========================================================================
@@ -255,10 +250,11 @@ pub struct PolicyInfo {
 }
 
 /// Action to perform when a file matches a policy rule.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum PolicyAction {
     /// Sanitize the file (CDR) and return a clean copy.
+    #[default]
     Sanitize,
     /// Block/reject the file entirely.
     Reject,
@@ -266,12 +262,6 @@ pub enum PolicyAction {
     Quarantine,
     /// Allow the file through without modification.
     Allow,
-}
-
-impl Default for PolicyAction {
-    fn default() -> Self {
-        Self::Sanitize
-    }
 }
 
 // ===========================================================================

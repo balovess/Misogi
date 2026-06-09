@@ -1,11 +1,6 @@
 //! XML filtering and name_stack balanced tag tests.
 
-use super::super::{
-    config::*,
-    report::*,
-    types::*,
-    xml_filter::*,
-};
+use super::super::{config::*, report::*, types::*, xml_filter::*};
 
 #[test]
 fn test_content_type_filtering() {
@@ -56,36 +51,66 @@ fn test_name_stack_balanced_tags() {
     let has_open_tag = |name: &str| -> bool {
         output.contains(&format!("<{}>", name))
             || output.contains(&format!("<{}:", name))
-            || output.split_whitespace().any(|tok| tok.starts_with('<') && !tok.starts_with("</") && tok[1..].contains(name))
+            || output.split_whitespace().any(|tok| {
+                tok.starts_with('<') && !tok.starts_with("</") && tok[1..].contains(name)
+            })
     };
     let has_close_tag = |name: &str| -> bool {
         output.contains(&format!("</{}>", name))
             || output.contains(&format!("</{}:", name))
             || (output.contains("</") && {
-                output.split('>').any(|part| part.contains('/') && part.contains(name))
+                output
+                    .split('>')
+                    .any(|part| part.contains('/') && part.contains(name))
             })
     };
 
-    assert!(has_open_tag("document") || output.contains("document"), "Missing opening document tag");
-    assert!(output.contains("</") && has_close_tag("document"),
-        "Missing closing document tag — name_stack fix required");
-    assert!(has_open_tag("body") || output.contains("<body"),
-        "Missing opening body tag");
-    assert!(has_close_tag("body"),
-        "Missing closing body tag — name_stack fix required");
-    assert!(has_open_tag("p") || output.contains("<p"),
-        "Missing opening p tag");
-    assert!(has_close_tag("p"),
-        "Missing closing p tag — name_stack fix required");
-    assert!(has_open_tag("t") || output.contains("<t"),
-        "Missing opening t tag");
-    assert!(has_close_tag("t"),
-        "Missing closing t tag — name_stack fix required");
+    assert!(
+        has_open_tag("document") || output.contains("document"),
+        "Missing opening document tag"
+    );
+    assert!(
+        output.contains("</") && has_close_tag("document"),
+        "Missing closing document tag — name_stack fix required"
+    );
+    assert!(
+        has_open_tag("body") || output.contains("<body"),
+        "Missing opening body tag"
+    );
+    assert!(
+        has_close_tag("body"),
+        "Missing closing body tag — name_stack fix required"
+    );
+    assert!(
+        has_open_tag("p") || output.contains("<p"),
+        "Missing opening p tag"
+    );
+    assert!(
+        has_close_tag("p"),
+        "Missing closing p tag — name_stack fix required"
+    );
+    assert!(
+        has_open_tag("t") || output.contains("<t"),
+        "Missing opening t tag"
+    );
+    assert!(
+        has_close_tag("t"),
+        "Missing closing t tag — name_stack fix required"
+    );
 
     assert!(output.contains("Hello"), "Text content should be preserved");
-    assert!(output.contains('<'), "Output should contain XML opening brackets");
-    assert!(output.contains('>'), "Output should contain XML closing brackets");
-    assert!(output.contains("</"), "Output should contain closing tag markers");
+    assert!(
+        output.contains('<'),
+        "Output should contain XML opening brackets"
+    );
+    assert!(
+        output.contains('>'),
+        "Output should contain XML closing brackets"
+    );
+    assert!(
+        output.contains("</"),
+        "Output should contain closing tag markers"
+    );
 }
 
 #[test]
@@ -107,9 +132,18 @@ fn test_name_stack_self_closing_elements() {
     let result = filter_document_xml(xml, OoxmlDocumentType::Word, &config, &mut report).unwrap();
     let output = String::from_utf8_lossy(&result.filtered_bytes);
 
-    assert!(output.contains("<w:p/>") || output.contains("<w:p />"), "Self-closing w:p should be preserved as empty element");
-    assert!(output.contains("</w:body>"), "Closing w:body should be present after self-closing children");
-    assert!(output.contains("</w:document>"), "Closing w:document should be present");
+    assert!(
+        output.contains("<w:p/>") || output.contains("<w:p />"),
+        "Self-closing w:p should be preserved as empty element"
+    );
+    assert!(
+        output.contains("</w:body>"),
+        "Closing w:body should be present after self-closing children"
+    );
+    assert!(
+        output.contains("</w:document>"),
+        "Closing w:document should be present"
+    );
 }
 
 #[test]
@@ -130,9 +164,24 @@ fn test_name_stack_dropped_elements_no_spurious_closing() {
     let result = filter_document_xml(xml, OoxmlDocumentType::Word, &config, &mut report).unwrap();
     let output = String::from_utf8_lossy(&result.filtered_bytes);
 
-    assert!(!output.contains("w:mc"), "Non-whitelisted w:mc should not appear in output");
-    assert!(!output.contains("w:sdt"), "Non-whitelisted w:sdt should not appear in output");
-    assert!(!output.contains("Malicious"), "Content of dropped element should not leak");
-    assert!(output.contains("</w:p>"), "Safe w:p should have proper closing tag");
-    assert!(output.contains("Safe text"), "Safe text content should be preserved");
+    assert!(
+        !output.contains("w:mc"),
+        "Non-whitelisted w:mc should not appear in output"
+    );
+    assert!(
+        !output.contains("w:sdt"),
+        "Non-whitelisted w:sdt should not appear in output"
+    );
+    assert!(
+        !output.contains("Malicious"),
+        "Content of dropped element should not leak"
+    );
+    assert!(
+        output.contains("</w:p>"),
+        "Safe w:p should have proper closing tag"
+    );
+    assert!(
+        output.contains("Safe text"),
+        "Safe text content should be preserved"
+    );
 }

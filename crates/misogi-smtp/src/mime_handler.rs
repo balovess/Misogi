@@ -254,12 +254,7 @@ impl MimeHandler {
         let mut body_html: Option<String> = None;
         let mut attachments: Vec<EmailAttachment> = Vec::new();
 
-        self.extract_parts_iterative(
-            &parsed,
-            &mut body_text,
-            &mut body_html,
-            &mut attachments,
-        )?;
+        self.extract_parts_iterative(&parsed, &mut body_text, &mut body_html, &mut attachments)?;
 
         debug!(
             body_text = body_text.is_some(),
@@ -308,7 +303,8 @@ impl MimeHandler {
             return ZoneClassification::ExternalToExternal;
         }
 
-        let sender_internal = Self::is_internal_domain(&email.headers.from_address, &zone_config.internal_domains);
+        let sender_internal =
+            Self::is_internal_domain(&email.headers.from_address, &zone_config.internal_domains);
 
         // Collect all recipient addresses
         let all_recipients: Vec<&String> = email
@@ -327,7 +323,11 @@ impl MimeHandler {
             .iter()
             .any(|r| Self::is_internal_domain(r, &zone_config.internal_domains));
 
-        match (sender_internal, has_external_recipient, has_internal_recipient) {
+        match (
+            sender_internal,
+            has_external_recipient,
+            has_internal_recipient,
+        ) {
             (true, false, _) => ZoneClassification::InternalToInternal,
             (true, true, _) => ZoneClassification::InternalToExternal,
             (false, _, true) => ZoneClassification::ExternalToInternal,
@@ -372,11 +372,7 @@ impl MimeHandler {
 
         let message_id = {
             let mid = get_header("message-id");
-            if mid.is_empty() {
-                None
-            } else {
-                Some(mid)
-            }
+            if mid.is_empty() { None } else { Some(mid) }
         };
 
         let date = {
@@ -411,11 +407,7 @@ impl MimeHandler {
 
         let mime_version = {
             let mv = get_header("mime-version");
-            if mv.is_empty() {
-                None
-            } else {
-                Some(mv)
-            }
+            if mv.is_empty() { None } else { Some(mv) }
         };
 
         Ok(EmailHeaders {
@@ -489,11 +481,10 @@ impl MimeHandler {
                         .unwrap_or_else(|| "inline".to_string());
 
                     // Determine if this is an attachment or body part
-                    let is_attachment =
-                        content_disposition == "attachment"
-                            || (content_disposition == "inline"
-                                && !ctype.starts_with("text/")
-                                && !data.is_empty());
+                    let is_attachment = content_disposition == "attachment"
+                        || (content_disposition == "inline"
+                            && !ctype.starts_with("text/")
+                            && !data.is_empty());
 
                     // Check for explicit filename from Content-Disposition or Content-Type header
                     let filename = part
@@ -540,14 +531,17 @@ impl MimeHandler {
                         .filter(|s| !s.is_empty());
 
                     // Get raw bytes for binary attachments (get_body does charset decoding which corrupts binary)
-                    let (raw_data, data_for_body) = if is_attachment || (!ctype.starts_with("text/") && !data.is_empty()) {
-                        let raw = part.get_body_raw().unwrap_or_else(|_| data.clone().into_bytes());
-                        (raw, None)
-                    } else {
-                        // Keep a copy for body assignment since into_bytes consumes
-                        let data_copy = data.clone();
-                        (data_copy.into_bytes(), Some(data))
-                    };
+                    let (raw_data, data_for_body) =
+                        if is_attachment || (!ctype.starts_with("text/") && !data.is_empty()) {
+                            let raw = part
+                                .get_body_raw()
+                                .unwrap_or_else(|_| data.clone().into_bytes());
+                            (raw, None)
+                        } else {
+                            // Keep a copy for body assignment since into_bytes consumes
+                            let data_copy = data.clone();
+                            (data_copy.into_bytes(), Some(data))
+                        };
 
                     if is_attachment {
                         // Determine effective MIME type
@@ -595,38 +589,31 @@ impl MimeHandler {
     fn detect_encryption(&self, parsed: &ParsedMail) -> bool {
         self.check_content_type_iterative(parsed, |ctype| {
             ctype == "application/pkcs7-mime"
-                && parsed
-                    .headers
-                    .iter()
-                    .any(|h| {
-                        h.get_key().to_lowercase() == "content-type"
-                            && h.get_value().contains("enveloped-data")
-                    })
+                && parsed.headers.iter().any(|h| {
+                    h.get_key().to_lowercase() == "content-type"
+                        && h.get_value().contains("enveloped-data")
+                })
         })
     }
 
     /// Detect digital signature presence (DKIM or S/MIME).
     fn detect_signature(&self, parsed: &ParsedMail) -> bool {
         // Check for DKIM-Signature header
-        let has_dkim = parsed.headers.iter().any(|h| {
-            h.get_key().to_lowercase() == "dkim-signature"
-        });
+        let has_dkim = parsed
+            .headers
+            .iter()
+            .any(|h| h.get_key().to_lowercase() == "dkim-signature");
 
         // Check for multipart/signed
-        let has_smime_sig = self.check_content_type_iterative(parsed, |ctype| {
-            ctype == "multipart/signed"
-        });
+        let has_smime_sig =
+            self.check_content_type_iterative(parsed, |ctype| ctype == "multipart/signed");
 
         has_dkim || has_smime_sig
     }
 
     /// Extract MIME boundary string from the top-level Content-Type header.
     fn extract_boundary(&self, parsed: &ParsedMail) -> Option<String> {
-        parsed
-            .ctype
-            .params
-            .get("boundary")
-            .cloned()
+        parsed.ctype.params.get("boundary").cloned()
     }
 
     /// Iteratively check if any MIME part matches the given content type predicate.
@@ -678,18 +665,14 @@ impl MimeHandler {
         let trimmed = header_value.trim();
 
         // Try angle-bracket extraction first
-        if let Some(start) = trimmed.find('<') {
-            if let Some(end) = trimmed.find('>') {
-                return trimmed[start + 1..end].trim().to_string();
-            }
+        if let Some(start) = trimmed.find('<')
+            && let Some(end) = trimmed.find('>')
+        {
+            return trimmed[start + 1..end].trim().to_string();
         }
 
-        // Fallback: use as-is if it looks like an email
-        if trimmed.contains('@') {
-            trimmed.to_string()
-        } else {
-            trimmed.to_string()
-        }
+        // Fallback: use as-is
+        trimmed.to_string()
     }
 
     /// Split a header value containing possibly multiple addresses into individual addresses.
@@ -705,7 +688,7 @@ impl MimeHandler {
         // would require a proper parser; this handles common cases)
         header_value
             .split(',')
-            .map(|s| Self::extract_address_only(s))
+            .map(Self::extract_address_only)
             .filter(|s| !s.is_empty() && s.contains('@'))
             .collect()
     }
@@ -740,13 +723,15 @@ impl MimeHandler {
             }
             Some("quoted-printable") | Some("Quoted-Printable") => {
                 // Convert &[u8] to &str for the QP decoder
-                let data_str = std::str::from_utf8(data).map_err(|_| SmtpError::TransferEncodingFailed {
-                    encoding: "quoted-printable".to_string(),
-                })?;
-                let decoded = quoted_printable::decode(data_str, quoted_printable::ParseMode::Robust)
-                    .map_err(|_| SmtpError::TransferEncodingFailed {
+                let data_str =
+                    std::str::from_utf8(data).map_err(|_| SmtpError::TransferEncodingFailed {
                         encoding: "quoted-printable".to_string(),
                     })?;
+                let decoded =
+                    quoted_printable::decode(data_str, quoted_printable::ParseMode::Robust)
+                        .map_err(|_| SmtpError::TransferEncodingFailed {
+                            encoding: "quoted-printable".to_string(),
+                        })?;
                 Ok(decoded)
             }
             // 7bit, 8bit, binary, or unknown: pass through unchanged

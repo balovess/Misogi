@@ -21,11 +21,11 @@ pub async fn run_daemon(config: SenderConfig, state: SharedState) {
         }
     };
 
-    if !watch_dir.exists() {
-        if let Err(e) = tokio::fs::create_dir_all(&watch_dir).await {
-            error!(path = %watch_dir.display(), error = %e, "Failed to create watch directory");
-            return;
-        }
+    if !watch_dir.exists()
+        && let Err(e) = tokio::fs::create_dir_all(&watch_dir).await
+    {
+        error!(path = %watch_dir.display(), error = %e, "Failed to create watch directory");
+        return;
     }
 
     info!(
@@ -198,12 +198,7 @@ async fn process_file(file_path: &Path, state: &SharedState, chunk_size: usize) 
     }
 }
 
-async fn upload_file_data(
-    filename: String,
-    data: Vec<u8>,
-    state: &SharedState,
-    chunk_size: usize,
-) {
+async fn upload_file_data(filename: String, data: Vec<u8>, state: &SharedState, chunk_size: usize) {
     let (file_id, _) = match state.uploader.create_session(filename.clone(), state).await {
         Ok(result) => result,
         Err(e) => {

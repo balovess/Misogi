@@ -24,9 +24,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::{MisogiError, Result};
 use crate::hash::compute_file_md5;
-use crate::traits::{
-    CDRStrategy, SanitizeContext, SanitizationReport, StrategyDecision,
-};
+use crate::traits::{CDRStrategy, SanitizationReport, SanitizeContext, StrategyDecision};
 
 // =============================================================================
 // Types
@@ -125,10 +123,10 @@ impl VbaWhitelistStrategy {
                 let mut content = Vec::new();
                 use std::io::Read;
                 file.read_to_end(&mut content).map_err(|e| {
-                    MisogiError::Io(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        format!("Failed to read VBA content: {}", e),
-                    ))
+                    MisogiError::Io(std::io::Error::other(format!(
+                        "Failed to read VBA content: {}",
+                        e
+                    )))
                 })?;
                 return Ok(Some(content));
             }
@@ -215,8 +213,8 @@ impl CDRStrategy for VbaWhitelistStrategy {
 
         let mut writer_zip = zip::ZipWriter::new(writer);
 
-        let options =
-            zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+        let options = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Stored);
 
         for i in 0..archive.len() {
             let mut file_entry = archive.by_index(i).map_err(|e| {
@@ -232,65 +230,66 @@ impl CDRStrategy for VbaWhitelistStrategy {
                 let mut content = Vec::new();
                 use std::io::Read;
                 file_entry.read_to_end(&mut content).map_err(|e| {
-                    MisogiError::Io(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        format!("Failed to read VBA entry: {}", e),
-                    ))
+                    MisogiError::Io(std::io::Error::other(format!(
+                        "Failed to read VBA entry: {}",
+                        e
+                    )))
                 })?;
 
                 let hash = Self::compute_vba_hash(&content);
 
                 if self.whitelist_hashes.contains(&hash) {
                     writer_zip.start_file(name.clone(), options).map_err(|e| {
-                        MisogiError::Io(std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            format!("Failed to write ZIP entry {}: {}", name, e),
-                        ))
+                        MisogiError::Io(std::io::Error::other(format!(
+                            "Failed to write ZIP entry {}: {}",
+                            name, e
+                        )))
                     })?;
                     use std::io::Write;
                     writer_zip.write_all(&content).map_err(|e| {
-                        MisogiError::Io(std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            format!("Failed to write VBA content: {}", e),
-                        ))
+                        MisogiError::Io(std::io::Error::other(format!(
+                            "Failed to write VBA content: {}",
+                            e
+                        )))
                     })?;
                 } else {
                     actions_performed += 1;
                     details_vec.push(format!(
                         "VBA macro removed: {} (hash: {})",
-                        name, &hash[..16]
+                        name,
+                        &hash[..16]
                     ));
                 }
             } else {
                 writer_zip.start_file(name.clone(), options).map_err(|e| {
-                    MisogiError::Io(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        format!("Failed to write ZIP entry {}: {}", name, e),
-                    ))
+                    MisogiError::Io(std::io::Error::other(format!(
+                        "Failed to write ZIP entry {}: {}",
+                        name, e
+                    )))
                 })?;
                 use std::io::Read;
                 use std::io::Write;
                 let mut buf = Vec::new();
                 file_entry.read_to_end(&mut buf).map_err(|e| {
-                    MisogiError::Io(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        format!("Failed to read ZIP entry {}: {}", name, e),
-                    ))
+                    MisogiError::Io(std::io::Error::other(format!(
+                        "Failed to read ZIP entry {}: {}",
+                        name, e
+                    )))
                 })?;
                 writer_zip.write_all(&buf).map_err(|e| {
-                    MisogiError::Io(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        format!("Failed to write ZIP content for {}: {}", name, e),
-                    ))
+                    MisogiError::Io(std::io::Error::other(format!(
+                        "Failed to write ZIP content for {}: {}",
+                        name, e
+                    )))
                 })?;
             }
         }
 
         writer_zip.finish().map_err(|e| {
-            MisogiError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Failed to finalize output ZIP: {}", e),
-            ))
+            MisogiError::Io(std::io::Error::other(format!(
+                "Failed to finalize output ZIP: {}",
+                e
+            )))
         })?;
 
         let sanitized_hash = compute_file_md5(&context.output_path).await?;
@@ -388,8 +387,11 @@ mod tests {
             let file = std::fs::File::create(&xlsm_path).unwrap();
             let writer = std::io::BufWriter::new(file);
             let mut zip = zip::ZipWriter::new(writer);
-            zip.start_file("[Content_Types].xml", zip::write::SimpleFileOptions::default())
-                .unwrap();
+            zip.start_file(
+                "[Content_Types].xml",
+                zip::write::SimpleFileOptions::default(),
+            )
+            .unwrap();
             zip.write_all(b"<?xml version=\"1.0\"?><Types />").unwrap();
             zip.finish().unwrap();
         }

@@ -109,13 +109,14 @@ use misogi_core::error::{MisogiError, Result};
 ///
 /// Defines how the system detects external approval/rejection events for
 /// transfer requests pending authorization.
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum ApprovalTriggerType {
     /// HTTP callback trigger — waits for POST/PUT to a webhook endpoint.
     ///
     /// Used when an external approval system (e.g., workflow engine, ERP)
     /// sends HTTP notifications upon approval decision.
+    #[default]
     HttpCallback,
 
     /// gRPC call trigger — invokes a remote gRPC service for status polling.
@@ -129,12 +130,6 @@ pub enum ApprovalTriggerType {
     /// Common in legacy government systems where approvals are signaled
     /// by creating `.approved` or `.rejected` files in a shared filesystem.
     FilePolling,
-}
-
-impl Default for ApprovalTriggerType {
-    fn default() -> Self {
-        Self::HttpCallback
-    }
 }
 
 /// Single trigger definition within the approval flow system.
@@ -152,7 +147,7 @@ impl Default for ApprovalTriggerType {
 /// auth_header = "X-Approval-Token"
 /// shared_secret = ""
 /// ```
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct ApprovalTriggerConfig {
     /// Type of trigger mechanism (http_callback, grpc_call, file_polling).
     #[serde(default)]
@@ -186,18 +181,6 @@ pub struct ApprovalTriggerConfig {
     pub shared_secret: String,
 }
 
-impl Default for ApprovalTriggerConfig {
-    fn default() -> Self {
-        Self {
-            r#type: ApprovalTriggerType::default(),
-            path: String::new(),
-            require_payload_status: None,
-            auth_header: None,
-            shared_secret: String::new(),
-        }
-    }
-}
-
 /// State transition rule within the approval finite state machine.
 ///
 /// Defines valid edges in the approval workflow graph:
@@ -206,7 +189,7 @@ impl Default for ApprovalTriggerConfig {
 /// PENDING_APPROVAL --[external_approve]--> APPROVED --[auto]--> TRANSFERRING
 /// PENDING_APPROVAL --[external_reject]--> REJECTED
 /// ```
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct ApprovalTransitionConfig {
     /// Source state name for this transition (e.g., "PENDING_APPROVAL").
     #[serde(default)]
@@ -219,16 +202,6 @@ pub struct ApprovalTransitionConfig {
     /// Trigger identifier that fires this transition (must match a trigger name).
     #[serde(default)]
     pub trigger: String,
-}
-
-impl Default for ApprovalTransitionConfig {
-    fn default() -> Self {
-        Self {
-            from: String::new(),
-            to: String::new(),
-            trigger: String::new(),
-        }
-    }
 }
 
 /// Complete approval flow configuration section.
@@ -292,13 +265,14 @@ impl Default for ApprovalFlowConfig {
 ///
 /// Determines the underlying transport mechanism used for sending files
 /// to the receiver node across network boundaries.
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum TransferDriverType {
     /// Direct TCP connection — sender opens TCP socket to receiver.
     ///
     /// Simplest mode: requires direct network reachability between
     /// sender and receiver (same LAN, VPN, or allowed firewall rule).
+    #[default]
     DirectTcp,
 
     /// Storage-based relay — files deposited to shared storage, picked up by receiver.
@@ -312,12 +286,6 @@ pub enum TransferDriverType {
     /// For integrations with existing secure transfer solutions (e.g.,
     /// government-mandated gateways, proprietary protocols).
     ExternalCommand,
-}
-
-impl Default for TransferDriverType {
-    fn default() -> Self {
-        Self::DirectTcp
-    }
 }
 
 impl TransferDriverType {
@@ -359,7 +327,6 @@ pub struct TransferDriverConfig {
     pub r#type: TransferDriverType,
 
     // ---- Storage Relay Specific ----
-
     /// Output directory for files awaiting relay pickup (sender → relay).
     #[serde(default)]
     pub output_dir: Option<String>,
@@ -381,7 +348,6 @@ pub struct TransferDriverConfig {
     pub cleanup_after_pickup: bool,
 
     // ---- External Command Specific ----
-
     /// Command template for initiating a send operation.
     ///
     /// Supports `%s` (source file path) and `%d` (destination specifier)
@@ -482,7 +448,7 @@ impl Default for VbaWhitelistConfig {
 ///
 /// Defines rules for converting complex document formats to safer flattened
 /// equivalents (e.g., .xlsx → .csv, .docx → .pdf).
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct FormatDowngradeConfig {
     /// Whether the format downgrade strategy is active.
     #[serde(default)]
@@ -494,7 +460,7 @@ pub struct FormatDowngradeConfig {
 }
 
 /// Single format downgrade rule mapping source format to target format.
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct FormatDowngradeRule {
     /// Source file extension to match (e.g., ".xlsx", ".docx").
     #[serde(default)]
@@ -507,25 +473,6 @@ pub struct FormatDowngradeRule {
     /// Whether this rule should be applied automatically.
     #[serde(default)]
     pub auto_apply: bool,
-}
-
-impl Default for FormatDowngradeRule {
-    fn default() -> Self {
-        Self {
-            source_ext: String::new(),
-            target_ext: String::new(),
-            auto_apply: false,
-        }
-    }
-}
-
-impl Default for FormatDowngradeConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            rules: Vec::new(),
-        }
-    }
 }
 
 /// ClamAV antivirus integration configuration.
@@ -599,7 +546,7 @@ impl Default for ClamAvIntegrationConfig {
 ///
 /// Groups all Content Disarm & Reconstruction policy configurations
 /// into a single `[cdr_strategies]` TOML section.
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct CdrStrategiesConfig {
     /// VBA macro whitelist strategy.
     #[serde(default)]
@@ -614,16 +561,6 @@ pub struct CdrStrategiesConfig {
     pub clamav_integration: ClamAvIntegrationConfig,
 }
 
-impl Default for CdrStrategiesConfig {
-    fn default() -> Self {
-        Self {
-            vba_whitelist: VbaWhitelistConfig::default(),
-            format_downgrade: FormatDowngradeConfig::default(),
-            clamav_integration: ClamAvIntegrationConfig::default(),
-        }
-    }
-}
-
 // =============================================================================
 // Section 4: File Types Configuration
 // =============================================================================
@@ -632,7 +569,7 @@ impl Default for CdrStrategiesConfig {
 ///
 /// Maps a file extension to its expected magic bytes and assigned sanitizer,
 /// enabling deep content validation beyond simple extension checking.
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct FileTypeRegistryEntry {
     /// File extension including leading dot (e.g., ".pdf", ".jtd", ".xlsx").
     #[serde(default)]
@@ -659,22 +596,11 @@ pub struct FileTypeRegistryEntry {
     pub sanitizer: String,
 }
 
-impl Default for FileTypeRegistryEntry {
-    fn default() -> Self {
-        Self {
-            extension: String::new(),
-            magic_hex: String::new(),
-            required_magic: false,
-            sanitizer: String::new(),
-        }
-    }
-}
-
 /// Blocked file extension rule.
 ///
 /// Defines extensions that are explicitly forbidden from upload regardless
 /// of content. Provides a first-line defense before deeper inspection.
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct BlockedExtensionEntry {
     /// File extension to block (including leading dot, e.g., ".exe", ".scr").
     #[serde(default)]
@@ -683,15 +609,6 @@ pub struct BlockedExtensionEntry {
     /// Human-readable reason for the block (shown in error messages and audit logs).
     #[serde(default)]
     pub reason: String,
-}
-
-impl Default for BlockedExtensionEntry {
-    fn default() -> Self {
-        Self {
-            extension: String::new(),
-            reason: String::new(),
-        }
-    }
 }
 
 /// Complete file types configuration section.
@@ -732,7 +649,7 @@ impl Default for FileTypesConfig {
 // =============================================================================
 
 /// Action to take when PII (Personal Identifiable Information) is detected.
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum PiiAction {
     /// Block the file transfer entirely.
@@ -742,13 +659,8 @@ pub enum PiiAction {
     Mask,
 
     /// Log an alert but allow the transfer to proceed.
+    #[default]
     AlertOnly,
-}
-
-impl Default for PiiAction {
-    fn default() -> Self {
-        Self::AlertOnly // Safest default: don't break workflows unexpectedly
-    }
 }
 
 /// Single PII detection rule definition.
@@ -783,7 +695,7 @@ impl Default for PiiAction {
 /// |-------------------------------|-------------------------|
 /// | `\b4[0-9]{12}(?:[0-9]{3})?\b` | Visa/Mastercard (Luhn)  |
 /// | `\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b` | Email address   |
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct PiiRuleConfig {
     /// Unique human-readable name for this rule (used in audit logs).
     #[serde(default)]
@@ -800,17 +712,6 @@ pub struct PiiRuleConfig {
     /// Human-readable description of what this rule detects (for documentation).
     #[serde(default)]
     pub description: String,
-}
-
-impl Default for PiiRuleConfig {
-    fn default() -> Self {
-        Self {
-            name: String::new(),
-            pattern: String::new(),
-            action: PiiAction::default(),
-            description: String::new(),
-        }
-    }
 }
 
 /// Complete PII detector configuration section.
@@ -857,10 +758,11 @@ impl Default for PiiDetectorConfig {
 // =============================================================================
 
 /// Audit log formatter type selection.
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum LogFormatType {
     /// JSON Lines format — one JSON object per line (default, backward compatible).
+    #[default]
     Json,
 
     /// Syslog-compatible text format with structured metadata.
@@ -871,12 +773,6 @@ pub enum LogFormatType {
 
     /// User-customizable Tera template format.
     Custom,
-}
-
-impl Default for LogFormatType {
-    fn default() -> Self {
-        Self::Json
-    }
 }
 
 impl LogFormatType {
@@ -954,7 +850,7 @@ impl Default for LogConfig {
 /// Single vendor account definition for the isolation manager.
 ///
 /// Maps directly to [`misogi_core::contrib::jp::vendor::VendorAccount`].
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct VendorAccountConfig {
     /// Unique vendor user identifier (primary key).
     #[serde(default)]
@@ -985,25 +881,11 @@ pub struct VendorAccountConfig {
     pub max_file_size_mb: u64,
 }
 
-impl Default for VendorAccountConfig {
-    fn default() -> Self {
-        Self {
-            user_id: String::new(),
-            display_name: String::new(),
-            ip_whitelist: Vec::new(),
-            force_max_cdr_policy: None,
-            require_dual_approval: false,
-            upload_rate_limit_per_hour: 0,
-            max_file_size_mb: 0,
-        }
-    }
-}
-
 /// Complete vendor isolation configuration section.
 ///
 /// Enables multi-tenant access control for external vendor (取引先) accounts,
 /// providing IP whitelisting, rate limiting, and per-vendor CDR policy enforcement.
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct VendorIsolationConfig {
     /// Master switch for the entire vendor isolation system.
     #[serde(default)]
@@ -1012,15 +894,6 @@ pub struct VendorIsolationConfig {
     /// Registered vendor accounts with their security profiles.
     #[serde(default)]
     pub accounts: Vec<VendorAccountConfig>,
-}
-
-impl Default for VendorIsolationConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            accounts: Vec::new(),
-        }
-    }
 }
 
 // =============================================================================
@@ -1077,10 +950,11 @@ impl Default for CalendarConfig {
 // =============================================================================
 
 /// Action for handling unknown/untrusted fonts in reconstructed PDF documents.
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum UnknownFontAction {
     /// Keep unknown font references unchanged (safest for compatibility).
+    #[default]
     Preserve,
 
     /// Remove unknown font references entirely (safest for security).
@@ -1088,12 +962,6 @@ pub enum UnknownFontAction {
 
     /// Replace unknown fonts with fallback fonts from the configured list.
     Replace,
-}
-
-impl Default for UnknownFontAction {
-    fn default() -> Self {
-        Self::Preserve
-    }
 }
 
 impl UnknownFontAction {
@@ -1147,10 +1015,7 @@ fn default_encoding() -> String {
 }
 
 fn default_fallback_fonts() -> Vec<String> {
-    vec![
-        String::from("IPAexMincho"),
-        String::from("IPAGothic"),
-    ]
+    vec![String::from("IPAexMincho"), String::from("IPAGothic")]
 }
 
 impl Default for EncodingConfig {
@@ -1168,37 +1033,27 @@ impl Default for EncodingConfig {
 // =============================================================================
 
 /// Success action for external sanitizer completion.
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum ExternalSuccessAction {
     /// Trust the output without additional verification.
+    #[default]
     TrustOutput,
 
     /// Verify output differs from input (confirming modification occurred).
     VerifyHash,
 }
 
-impl Default for ExternalSuccessAction {
-    fn default() -> Self {
-        Self::TrustOutput
-    }
-}
-
 /// Failure action for external sanitizer errors.
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum ExternalFailureAction {
     /// Block the transfer and log the failure.
+    #[default]
     BlockAndLog,
 
     /// Allow transfer but emit warning log.
     WarnAndPass,
-}
-
-impl Default for ExternalFailureAction {
-    fn default() -> Self {
-        Self::BlockAndLog
-    }
 }
 
 /// Single external sanitizer adapter configuration.
@@ -1253,19 +1108,11 @@ impl Default for ExternalSanitizerAdapterConfig {
 ///
 /// Registry of third-party tool adapters for file formats that cannot be
 /// safely sanitized using pure Rust libraries.
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct ExternalSanitizersConfig {
     /// Registered external sanitizer adapters keyed by file extension.
     #[serde(default, rename = "adapter")]
     pub adapters: Vec<ExternalSanitizerAdapterConfig>,
-}
-
-impl Default for ExternalSanitizersConfig {
-    fn default() -> Self {
-        Self {
-            adapters: Vec::new(),
-        }
-    }
 }
 
 // =============================================================================
@@ -1497,7 +1344,6 @@ fn default_daemon_enabled() -> bool {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct TomlConfig {
     // ---- Core Sections (Required for Basic Operation) ----
-
     /// HTTP/gRPC server listener settings.
     #[serde(default)]
     pub server: ServerConfig,
@@ -1507,7 +1353,6 @@ pub struct TomlConfig {
     pub storage: StorageConfig,
 
     // ---- Optional Core Sections ----
-
     /// Reverse tunnel to receiver node.
     #[serde(default)]
     pub tunnel: Option<TunnelConfig>,
@@ -1517,7 +1362,6 @@ pub struct TomlConfig {
     pub daemon: Option<DaemonConfig>,
 
     // ---- Phase 5 Extended Sections (All Optional) ----
-
     /// Transfer approval workflow configuration.
     #[serde(default)]
     pub approval_flow: Option<ApprovalFlowConfig>,
@@ -1598,12 +1442,10 @@ pub struct TomlConfig {
 #[allow(dead_code)]
 pub struct SenderConfig {
     // ---- Core Network Settings ----
-
     /// Bind address for the HTTP API server.
     pub server_addr: String,
 
     // ---- Storage Paths ----
-
     /// Directory for uploaded files awaiting processing.
     pub upload_dir: PathBuf,
 
@@ -1611,7 +1453,6 @@ pub struct SenderConfig {
     pub staging_dir: PathBuf,
 
     // ---- Tunnel Settings ----
-
     /// Remote tunnel server address (if configured).
     pub tunnel_remote_addr: Option<String>,
 
@@ -1622,7 +1463,6 @@ pub struct SenderConfig {
     pub tunnel_local_port: u16,
 
     // ---- Daemon Settings ----
-
     /// Whether to run as background daemon.
     pub daemon_enabled: bool,
 
@@ -1633,7 +1473,6 @@ pub struct SenderConfig {
     pub daemon_log_file: Option<String>,
 
     // ---- Phase 5: Approval Flow ----
-
     /// Whether transfer approval is required before execution.
     pub approval_require_approval: bool,
 
@@ -1647,7 +1486,6 @@ pub struct SenderConfig {
     pub approval_transitions: Vec<ApprovalTransitionConfig>,
 
     // ---- Phase 5: Transfer Driver ----
-
     /// Selected transfer driver type (direct_tcp, storage_relay, external_command).
     pub transfer_driver_type: String,
 
@@ -1670,7 +1508,6 @@ pub struct SenderConfig {
     pub transfer_timeout_secs: u64,
 
     // ---- Phase 5: CDR Strategies ----
-
     /// Whether VBA whitelist strategy is enabled.
     pub cdr_vba_whitelist_enabled: bool,
 
@@ -1684,12 +1521,10 @@ pub struct SenderConfig {
     pub cdr_clamav_socket_path: String,
 
     // ---- Phase 5: File Types ----
-
     /// Default action for unrecognized file extensions.
     pub file_types_default_action: String,
 
     // ---- Phase 5: PII Detector ----
-
     /// Whether PII scanning is enabled.
     pub pii_enabled: bool,
 
@@ -1697,7 +1532,6 @@ pub struct SenderConfig {
     pub pii_mask_char: String,
 
     // ---- Phase 5: Log Configuration ----
-
     /// Audit log output format (json, syslog, cef, custom).
     pub log_format: String,
 
@@ -1711,12 +1545,10 @@ pub struct SenderConfig {
     pub log_retention_days: u32,
 
     // ---- Phase 5: Vendor Isolation ----
-
     /// Whether vendor isolation system is enabled.
     pub vendor_isolation_enabled: bool,
 
     // ---- Phase 5: Calendar ----
-
     /// Whether Japanese calendar integration is enabled.
     pub calendar_enabled: bool,
 
@@ -1730,7 +1562,6 @@ pub struct SenderConfig {
     pub calendar_wareki_detection: bool,
 
     // ---- Phase 5: Encoding ----
-
     /// Fallback encoding name for undetectable inputs.
     pub encoding_default_encoding: String,
 
@@ -1741,12 +1572,10 @@ pub struct SenderConfig {
     pub encoding_fallback_fonts: Vec<String>,
 
     // ---- Phase 5: External Sanitizers ----
-
     /// Registered external sanitizer adapter count.
     pub external_sanitizer_count: usize,
 
     // ---- Legacy Fields (Required by existing code) ----
-
     /// Storage directory path for file chunks (alias for upload_dir, used by FileUploader).
     ///
     /// This field provides backward compatibility with the existing [`FileUploader`]
@@ -1790,7 +1619,6 @@ pub struct SenderConfig {
     pub log_level: String,
 
     // ---- Phase 6: PPAP Handling ----
-
     /// PPAP (Password Protected Attachment Protocol) detection and handling configuration.
     ///
     /// PPAP is Japan's infamous insecure file transfer practice where documents are
@@ -1800,7 +1628,6 @@ pub struct SenderConfig {
     pub ppap_config: Option<PpapConfig>,
 
     // ---- Phase 7: UDP Blast (Air-Gap Data Diode) ----
-
     /// UDP Blast configuration for unidirectional data diode transfer.
     ///
     /// When enabled, files can be transmitted through physical one-way data
@@ -1816,7 +1643,6 @@ pub struct SenderConfig {
     pub versioning: Option<VersioningConfig>,
 
     // ---- Multi-Version API Management (Resolved Runtime Fields) ----
-
     /// Default active API version for this deployment ("v1" or "v2").
     pub versioning_default_version: String,
 
@@ -1827,7 +1653,6 @@ pub struct SenderConfig {
     pub versioning_deprecation_headers: bool,
 
     // ---- Phase 8: JTD (Ichitaro) Conversion ----
-
     /// Whether automatic JTD-to-PDF conversion is enabled.
     ///
     /// When true and a .jtd file is detected as input, it will be converted
@@ -1977,10 +1802,18 @@ pub struct BlastConfig {
     pub session_timeout_secs: u64,
 }
 
-fn default_blast_data_shards() -> usize { 16 }
-fn default_blast_parity_shards() -> usize { 4 }
-fn default_session_timeout_secs() -> u64 { 300 }
-fn default_repeat_count() -> u32 { 3 }
+fn default_blast_data_shards() -> usize {
+    16
+}
+fn default_blast_parity_shards() -> usize {
+    4
+}
+fn default_session_timeout_secs() -> u64 {
+    300
+}
+fn default_repeat_count() -> u32 {
+    3
+}
 
 impl Default for BlastConfig {
     fn default() -> Self {
@@ -2167,15 +2000,13 @@ impl SenderConfig {
         let mut config = if let Some(ref path) = cli.config {
             // Blocking I/O is acceptable here during startup
             match std::fs::read_to_string(path) {
-                Ok(content) => {
-                    match toml::from_str::<TomlConfig>(&content) {
-                        Ok(toml_config) => Self::from_toml_unchecked(&toml_config),
-                        Err(e) => {
-                            tracing::error!(error = %e, path = %path.display(), "Failed to parse TOML config, using defaults");
-                            Self::default()
-                        }
+                Ok(content) => match toml::from_str::<TomlConfig>(&content) {
+                    Ok(toml_config) => Self::from_toml_unchecked(&toml_config),
+                    Err(e) => {
+                        tracing::error!(error = %e, path = %path.display(), "Failed to parse TOML config, using defaults");
+                        Self::default()
                     }
-                }
+                },
                 Err(e) => {
                     tracing::error!(error = %e, path = ?path, "Failed to read config file, using defaults");
                     Self::default()
@@ -2231,22 +2062,26 @@ impl SenderConfig {
             };
 
         // ---- Map Phase 5: Approval Flow Section ----
-        let (approval_require_approval, approval_initial_state, approval_triggers, approval_transitions) =
-            if let Some(ref af) = toml.approval_flow {
-                (
-                    af.require_approval,
-                    af.initial_state.clone(),
-                    af.triggers.clone(),
-                    af.transitions.clone(),
-                )
-            } else {
-                (
-                    default_approval_required(),
-                    default_initial_state(),
-                    Vec::new(),
-                    Vec::new(),
-                )
-            };
+        let (
+            approval_require_approval,
+            approval_initial_state,
+            approval_triggers,
+            approval_transitions,
+        ) = if let Some(ref af) = toml.approval_flow {
+            (
+                af.require_approval,
+                af.initial_state.clone(),
+                af.triggers.clone(),
+                af.transitions.clone(),
+            )
+        } else {
+            (
+                default_approval_required(),
+                default_initial_state(),
+                Vec::new(),
+                Vec::new(),
+            )
+        };
 
         // ---- Map Phase 5: Transfer Driver Section ----
         let (
@@ -2281,35 +2116,35 @@ impl SenderConfig {
         };
 
         // ---- Map Phase 5: CDR Strategies Section ----
-        let (cdr_vba_whitelist_enabled, cdr_format_downgrade_enabled, cdr_clamav_enabled, cdr_clamav_socket_path) =
-            if let Some(ref cdr) = toml.cdr_strategies {
-                (
-                    cdr.vba_whitelist.enabled,
-                    cdr.format_downgrade.enabled,
-                    cdr.clamav_integration.enabled,
-                    cdr.clamav_integration.socket_path.clone(),
-                )
-            } else {
-                (false, false, false, default_clamd_socket())
-            };
+        let (
+            cdr_vba_whitelist_enabled,
+            cdr_format_downgrade_enabled,
+            cdr_clamav_enabled,
+            cdr_clamav_socket_path,
+        ) = if let Some(ref cdr) = toml.cdr_strategies {
+            (
+                cdr.vba_whitelist.enabled,
+                cdr.format_downgrade.enabled,
+                cdr.clamav_integration.enabled,
+                cdr.clamav_integration.socket_path.clone(),
+            )
+        } else {
+            (false, false, false, default_clamd_socket())
+        };
 
         // ---- Map Phase 5: File Types Section ----
-        let file_types_default_action =
-            toml.file_types
-                .as_ref()
-                .map(|ft| ft.default_action.clone())
-                .unwrap_or_else(default_file_action);
+        let file_types_default_action = toml
+            .file_types
+            .as_ref()
+            .map(|ft| ft.default_action.clone())
+            .unwrap_or_else(default_file_action);
 
         // ---- Map Phase 5: PII Detector Section ----
-        let (pii_enabled, pii_mask_char) =
-            if let Some(ref pii) = toml.pii_detector {
-                (
-                    pii.enabled,
-                    pii.mask_char.clone(),
-                )
-            } else {
-                (false, default_mask_char())
-            };
+        let (pii_enabled, pii_mask_char) = if let Some(ref pii) = toml.pii_detector {
+            (pii.enabled, pii.mask_char.clone())
+        } else {
+            (false, default_mask_char())
+        };
 
         // ---- Map Phase 5: Log Section ----
         let (log_format, log_template_path, log_max_memory_entries, log_retention_days) =
@@ -2322,28 +2157,37 @@ impl SenderConfig {
                     lg.retention_days,
                 )
             } else {
-                ("json".to_string(), None, default_max_memory_entries(), default_retention_days())
+                (
+                    "json".to_string(),
+                    None,
+                    default_max_memory_entries(),
+                    default_retention_days(),
+                )
             };
 
         // ---- Map Phase 5: Vendor Isolation Section ----
-        let vendor_isolation_enabled =
-            toml.vendor_isolation
-                .as_ref()
-                .map(|vi| vi.enabled)
-                .unwrap_or(false);
+        let vendor_isolation_enabled = toml
+            .vendor_isolation
+            .as_ref()
+            .map(|vi| vi.enabled)
+            .unwrap_or(false);
 
         // ---- Map Phase 5: Calendar Section ----
-        let (calendar_enabled, calendar_file, calendar_auto_defense_mode, calendar_wareki_detection) =
-            if let Some(ref cal) = toml.calendar {
-                (
-                    cal.enabled,
-                    cal.calendar_file.clone(),
-                    cal.auto_defense_mode,
-                    cal.wareki_filename_detection,
-                )
-            } else {
-                (false, String::new(), false, default_wareki_detection())
-            };
+        let (
+            calendar_enabled,
+            calendar_file,
+            calendar_auto_defense_mode,
+            calendar_wareki_detection,
+        ) = if let Some(ref cal) = toml.calendar {
+            (
+                cal.enabled,
+                cal.calendar_file.clone(),
+                cal.auto_defense_mode,
+                cal.wareki_filename_detection,
+            )
+        } else {
+            (false, String::new(), false, default_wareki_detection())
+        };
 
         // ---- Map Phase 5: Encoding Section ----
         let (encoding_default_encoding, encoding_unknown_font_action, encoding_fallback_fonts) =
@@ -2355,15 +2199,19 @@ impl SenderConfig {
                     enc.fallback_fonts.clone(),
                 )
             } else {
-                (default_encoding(), "preserve".to_string(), default_fallback_fonts())
+                (
+                    default_encoding(),
+                    "preserve".to_string(),
+                    default_fallback_fonts(),
+                )
             };
 
         // ---- Map Phase 5: External Sanitizers Section ----
-        let external_sanitizer_count =
-            toml.external_sanitizers
-                .as_ref()
-                .map(|es| es.adapters.len())
-                .unwrap_or(0);
+        let external_sanitizer_count = toml
+            .external_sanitizers
+            .as_ref()
+            .map(|es| es.adapters.len())
+            .unwrap_or(0);
 
         // ---- Map Versioning Section (Multi-Version API Management) ----
         // Note: Versioning config is not yet available in TomlConfig; using defaults
@@ -2375,8 +2223,8 @@ impl SenderConfig {
             server_addr,
             upload_dir: upload_dir.clone(),
             staging_dir,
-            storage_dir: storage_dir, // Legacy alias (String for FileUploader compatibility)
-            chunk_size: 8 * 1024 * 1024,     // 8 MB default
+            storage_dir, // Legacy alias (String for FileUploader compatibility)
+            chunk_size: 8 * 1024 * 1024, // 8 MB default
             receiver_addr: None,
             auto_sanitize: false,
             watch_dir: None,
@@ -2513,9 +2361,7 @@ impl SenderConfig {
     pub fn from_toml(path: &Path) -> Result<Self> {
         info!(config_path = %path.display(), "Loading configuration from TOML file");
 
-        let content = std::fs::read_to_string(path).map_err(|e| {
-            MisogiError::Io(e)
-        })?;
+        let content = std::fs::read_to_string(path).map_err(MisogiError::Io)?;
 
         let toml_config: TomlConfig = toml::from_str(&content).map_err(|e| {
             MisogiError::Protocol(format!(
@@ -2578,7 +2424,10 @@ impl SenderConfig {
 
         if let Ok(vi_val) = env::var("MISOGI_VENDOR_ISOLATION_ENABLED") {
             let enabled = parse_env_bool(&vi_val, false);
-            info!(enabled = enabled, "Overriding vendor_isolation_enabled from environment");
+            info!(
+                enabled = enabled,
+                "Overriding vendor_isolation_enabled from environment"
+            );
             self.vendor_isolation_enabled = enabled;
         }
     }
@@ -2616,20 +2465,19 @@ impl SenderConfig {
         }
 
         // Validate transfer driver configuration consistency
-        if self.transfer_driver_type == "storage_relay" {
-            if self.transfer_output_dir.is_none() && self.transfer_input_dir.is_none() {
-                warn!(
-                    driver = %self.transfer_driver_type,
-                    "Storage relay driver selected but no output_dir/input_dir configured"
-                );
-            }
+        if self.transfer_driver_type == "storage_relay"
+            && self.transfer_output_dir.is_none()
+            && self.transfer_input_dir.is_none()
+        {
+            warn!(
+                driver = %self.transfer_driver_type,
+                "Storage relay driver selected but no output_dir/input_dir configured"
+            );
         }
 
         // Validate ClamAV configuration
-        if self.cdr_clamav_enabled {
-            if self.cdr_clamav_socket_path.is_empty() {
-                warn!("ClamAV integration enabled but socket_path is empty");
-            }
+        if self.cdr_clamav_enabled && self.cdr_clamav_socket_path.is_empty() {
+            warn!("ClamAV integration enabled but socket_path is empty");
         }
 
         // Validate PII configuration
@@ -2674,7 +2522,9 @@ impl SenderConfig {
     /// or ClamAV scanning) is currently enabled.
     #[allow(dead_code)]
     pub fn is_cdr_active(&self) -> bool {
-        self.cdr_vba_whitelist_enabled || self.cdr_format_downgrade_enabled || self.cdr_clamav_enabled
+        self.cdr_vba_whitelist_enabled
+            || self.cdr_format_downgrade_enabled
+            || self.cdr_clamav_enabled
     }
 
     /// Create an Arc-wrapped clone of this configuration for sharing.
@@ -2780,7 +2630,7 @@ staging_dir = "/tmp/test_staging"
         assert_eq!(config.staging_dir, PathBuf::from("/tmp/test_staging"));
 
         // Phase 5 defaults should be applied
-        assert_eq!(config.approval_require_approval, true); // Secure default
+        assert!(config.approval_require_approval); // Secure default
         assert_eq!(config.transfer_driver_type, "direct_tcp");
         assert!(!config.pii_enabled);
         assert_eq!(config.log_format, "json");
@@ -2817,7 +2667,9 @@ trigger = "admin_approve"
 "#;
         let config: TomlConfig = toml::from_str(toml_content).unwrap();
 
-        let af = config.approval_flow.expect("approval_flow should be present");
+        let af = config
+            .approval_flow
+            .expect("approval_flow should be present");
         assert!(af.require_approval);
         assert_eq!(af.initial_state, "PENDING_REVIEW");
         assert_eq!(af.triggers.len(), 1);
@@ -2846,7 +2698,9 @@ cleanup_after_pickup = true
 "#;
         let config: TomlConfig = toml::from_str(toml_content).unwrap();
 
-        let td = config.transfer_driver.expect("transfer_driver should be present");
+        let td = config
+            .transfer_driver
+            .expect("transfer_driver should be present");
         assert!(matches!(td.r#type, TransferDriverType::StorageRelay));
         assert_eq!(td.output_dir.as_deref().unwrap(), "./relay/outbound/");
         assert_eq!(td.poll_interval_secs, 15);
@@ -2907,7 +2761,9 @@ action_on_virus = "block"
 "#;
         let config: TomlConfig = toml::from_str(toml_content).unwrap();
 
-        let cdr = config.cdr_strategies.expect("cdr_strategies should be present");
+        let cdr = config
+            .cdr_strategies
+            .expect("cdr_strategies should be present");
         assert!(cdr.vba_whitelist.enabled);
         assert!(cdr.clamav_integration.enabled);
         assert_eq!(cdr.clamav_integration.max_scan_size_mb, 200);
@@ -2961,7 +2817,9 @@ max_file_size_mb = 50
 "#;
         let config: TomlConfig = toml::from_str(toml_content).unwrap();
 
-        let vi = config.vendor_isolation.expect("vendor_isolation should be present");
+        let vi = config
+            .vendor_isolation
+            .expect("vendor_isolation should be present");
         assert!(vi.enabled);
         assert_eq!(vi.accounts.len(), 1);
         assert_eq!(vi.accounts[0].user_id, "vendor_a");
@@ -3014,7 +2872,10 @@ fallback_fonts = ["MS Mincho", "MS Gothic"]
 
         let enc = config.encoding.expect("encoding should be present");
         assert_eq!(enc.default_encoding, "Windows-31J");
-        assert!(matches!(enc.unknown_font_action, UnknownFontAction::Replace));
+        assert!(matches!(
+            enc.unknown_font_action,
+            UnknownFontAction::Replace
+        ));
         assert_eq!(enc.fallback_fonts.len(), 2);
     }
 
@@ -3038,12 +2899,20 @@ on_failure = "block_and_log"
 "#;
         let config: TomlConfig = toml::from_str(toml_content).unwrap();
 
-        let es = config.external_sanitizers.expect("external_sanitizers should be present");
+        let es = config
+            .external_sanitizers
+            .expect("external_sanitizers should be present");
         assert_eq!(es.adapters.len(), 1);
         assert_eq!(es.adapters[0].extension, ".jtd");
         assert_eq!(es.adapters[0].timeout_secs, 120);
-        assert!(matches!(es.adapters[0].on_success, ExternalSuccessAction::VerifyHash));
-        assert!(matches!(es.adapters[0].on_failure, ExternalFailureAction::BlockAndLog));
+        assert!(matches!(
+            es.adapters[0].on_success,
+            ExternalSuccessAction::VerifyHash
+        ));
+        assert!(matches!(
+            es.adapters[0].on_failure,
+            ExternalFailureAction::BlockAndLog
+        ));
     }
 
     #[test]
@@ -3176,14 +3045,27 @@ timeout_secs = 300
         let staging_dir = PathBuf::from(&toml.storage.staging_dir);
 
         let (approval_req, _, _, _) = if let Some(ref af) = toml.approval_flow {
-            (af.require_approval, af.initial_state.clone(), af.triggers.clone(), af.transitions.clone())
+            (
+                af.require_approval,
+                af.initial_state.clone(),
+                af.triggers.clone(),
+                af.transitions.clone(),
+            )
         } else {
             (true, String::new(), Vec::new(), Vec::new())
         };
 
         let (driver_type, _, _, _, _, _, _) = if let Some(ref td) = toml.transfer_driver {
             let ds = td.r#type.as_str().to_string();
-            (ds.to_string(), td.output_dir.clone(), td.input_dir.clone(), td.poll_interval_secs, td.send_command.clone(), td.status_command.clone(), td.timeout_secs)
+            (
+                ds.to_string(),
+                td.output_dir.clone(),
+                td.input_dir.clone(),
+                td.poll_interval_secs,
+                td.send_command.clone(),
+                td.status_command.clone(),
+                td.timeout_secs,
+            )
         } else {
             ("direct_tcp".to_string(), None, None, 10, None, None, 60)
         };
@@ -3196,26 +3078,52 @@ timeout_secs = 300
 
         let (lf, _, lme, lrd) = if let Some(ref lg) = toml.log {
             let fs = lg.format.as_str().to_string();
-            (fs.to_string(), lg.template_path.clone(), lg.max_memory_entries, lg.retention_days)
+            (
+                fs.to_string(),
+                lg.template_path.clone(),
+                lg.max_memory_entries,
+                lg.retention_days,
+            )
         } else {
             ("json".to_string(), None, 1000, 365)
         };
 
-        let vi_en = toml.vendor_isolation.as_ref().map(|v| v.enabled).unwrap_or(false);
+        let vi_en = toml
+            .vendor_isolation
+            .as_ref()
+            .map(|v| v.enabled)
+            .unwrap_or(false);
         let (cal_en, _, cal_adm, cal_wd) = if let Some(ref c) = toml.calendar {
-            (c.enabled, c.calendar_file.clone(), c.auto_defense_mode, c.wareki_filename_detection)
+            (
+                c.enabled,
+                c.calendar_file.clone(),
+                c.auto_defense_mode,
+                c.wareki_filename_detection,
+            )
         } else {
             (false, String::new(), false, true)
         };
 
         let (enc_de, enc_ufa, _) = if let Some(ref e) = toml.encoding {
             let ufas = e.unknown_font_action.as_str().to_string();
-            (e.default_encoding.clone(), ufas.to_string(), e.fallback_fonts.clone())
+            (
+                e.default_encoding.clone(),
+                ufas.to_string(),
+                e.fallback_fonts.clone(),
+            )
         } else {
-            ("utf-8".to_string(), "preserve".to_string(), vec![String::from("IPAexMincho"), String::from("IPAGothic")])
+            (
+                "utf-8".to_string(),
+                "preserve".to_string(),
+                vec![String::from("IPAexMincho"), String::from("IPAGothic")],
+            )
         };
 
-        let esc = toml.external_sanitizers.as_ref().map(|e| e.adapters.len()).unwrap_or(0);
+        let esc = toml
+            .external_sanitizers
+            .as_ref()
+            .map(|e| e.adapters.len())
+            .unwrap_or(0);
 
         SenderConfig {
             server_addr,
@@ -3316,8 +3224,8 @@ timeout_secs = 300
     #[test]
     fn test_parse_env_bool_unknown_returns_fallback() {
         assert!(!parse_env_bool("maybe", false)); // fallback = false
-        assert!(parse_env_bool("maybe", true));  // fallback = true
-        assert!(!parse_env_bool("", false));     // empty string
+        assert!(parse_env_bool("maybe", true)); // fallback = true
+        assert!(!parse_env_bool("", false)); // empty string
     }
 
     // =========================================================================
@@ -3332,15 +3240,19 @@ timeout_secs = 300
 
     #[test]
     fn test_validate_empty_server_addr_fails() {
-        let mut config = SenderConfig::default();
-        config.server_addr = String::new();
+        let config = SenderConfig {
+            server_addr: String::new(),
+            ..SenderConfig::default()
+        };
         assert!(config.validate().is_err());
     }
 
     #[test]
     fn test_validate_missing_port_fails() {
-        let mut config = SenderConfig::default();
-        config.server_addr = String::from("localhost"); // No port
+        let config = SenderConfig {
+            server_addr: String::from("localhost"), // No port
+            ..SenderConfig::default()
+        };
         assert!(config.validate().is_err());
     }
 
@@ -3359,8 +3271,10 @@ timeout_secs = 300
 
     #[test]
     fn test_get_normalized_driver_type() {
-        let mut config = SenderConfig::default();
-        config.transfer_driver_type = String::from("Direct-TCP");
+        let config = SenderConfig {
+            transfer_driver_type: String::from("Direct-TCP"),
+            ..SenderConfig::default()
+        };
         assert_eq!(config.get_normalized_driver_type(), "direct-tcp");
     }
 
@@ -3379,38 +3293,95 @@ timeout_secs = 300
 
     #[test]
     fn test_enum_defaults() {
-        assert!(matches!(ApprovalTriggerType::default(), ApprovalTriggerType::HttpCallback));
-        assert!(matches!(TransferDriverType::default(), TransferDriverType::DirectTcp));
+        assert!(matches!(
+            ApprovalTriggerType::default(),
+            ApprovalTriggerType::HttpCallback
+        ));
+        assert!(matches!(
+            TransferDriverType::default(),
+            TransferDriverType::DirectTcp
+        ));
         assert!(matches!(PiiAction::default(), PiiAction::AlertOnly));
         assert!(matches!(LogFormatType::default(), LogFormatType::Json));
-        assert!(matches!(UnknownFontAction::default(), UnknownFontAction::Preserve));
-        assert!(matches!(ExternalSuccessAction::default(), ExternalSuccessAction::TrustOutput));
-        assert!(matches!(ExternalFailureAction::default(), ExternalFailureAction::BlockAndLog));
+        assert!(matches!(
+            UnknownFontAction::default(),
+            UnknownFontAction::Preserve
+        ));
+        assert!(matches!(
+            ExternalSuccessAction::default(),
+            ExternalSuccessAction::TrustOutput
+        ));
+        assert!(matches!(
+            ExternalFailureAction::default(),
+            ExternalFailureAction::BlockAndLog
+        ));
     }
 
     #[test]
     fn test_transfer_driver_type_from_str_fallback() {
-        assert!(matches!(TransferDriverType::from_str_fallback("direct_tcp"), TransferDriverType::DirectTcp));
-        assert!(matches!(TransferDriverType::from_str_fallback("TCP"), TransferDriverType::DirectTcp));
-        assert!(matches!(TransferDriverType::from_str_fallback("storage_relay"), TransferDriverType::StorageRelay));
-        assert!(matches!(TransferDriverType::from_str_fallback("external"), TransferDriverType::ExternalCommand));
-        assert!(matches!(TransferDriverType::from_str_fallback("unknown"), TransferDriverType::DirectTcp)); // fallback
+        assert!(matches!(
+            TransferDriverType::from_str_fallback("direct_tcp"),
+            TransferDriverType::DirectTcp
+        ));
+        assert!(matches!(
+            TransferDriverType::from_str_fallback("TCP"),
+            TransferDriverType::DirectTcp
+        ));
+        assert!(matches!(
+            TransferDriverType::from_str_fallback("storage_relay"),
+            TransferDriverType::StorageRelay
+        ));
+        assert!(matches!(
+            TransferDriverType::from_str_fallback("external"),
+            TransferDriverType::ExternalCommand
+        ));
+        assert!(matches!(
+            TransferDriverType::from_str_fallback("unknown"),
+            TransferDriverType::DirectTcp
+        )); // fallback
     }
 
     #[test]
     fn test_log_format_type_from_str_fallback() {
-        assert!(matches!(LogFormatType::from_str_fallback("json"), LogFormatType::Json));
-        assert!(matches!(LogFormatType::from_str_fallback("syslog"), LogFormatType::Syslog));
-        assert!(matches!(LogFormatType::from_str_fallback("cef"), LogFormatType::Cef));
-        assert!(matches!(LogFormatType::from_str_fallback("custom"), LogFormatType::Custom));
-        assert!(matches!(LogFormatType::from_str_fallback("unknown"), LogFormatType::Json)); // fallback
+        assert!(matches!(
+            LogFormatType::from_str_fallback("json"),
+            LogFormatType::Json
+        ));
+        assert!(matches!(
+            LogFormatType::from_str_fallback("syslog"),
+            LogFormatType::Syslog
+        ));
+        assert!(matches!(
+            LogFormatType::from_str_fallback("cef"),
+            LogFormatType::Cef
+        ));
+        assert!(matches!(
+            LogFormatType::from_str_fallback("custom"),
+            LogFormatType::Custom
+        ));
+        assert!(matches!(
+            LogFormatType::from_str_fallback("unknown"),
+            LogFormatType::Json
+        )); // fallback
     }
 
     #[test]
     fn test_unknown_font_action_from_str_fallback() {
-        assert!(matches!(UnknownFontAction::from_str_fallback("preserve"), UnknownFontAction::Preserve));
-        assert!(matches!(UnknownFontAction::from_str_fallback("strip"), UnknownFontAction::Strip));
-        assert!(matches!(UnknownFontAction::from_str_fallback("replace"), UnknownFontAction::Replace));
-        assert!(matches!(UnknownFontAction::from_str_fallback("unknown"), UnknownFontAction::Preserve)); // fallback
+        assert!(matches!(
+            UnknownFontAction::from_str_fallback("preserve"),
+            UnknownFontAction::Preserve
+        ));
+        assert!(matches!(
+            UnknownFontAction::from_str_fallback("strip"),
+            UnknownFontAction::Strip
+        ));
+        assert!(matches!(
+            UnknownFontAction::from_str_fallback("replace"),
+            UnknownFontAction::Replace
+        ));
+        assert!(matches!(
+            UnknownFontAction::from_str_fallback("unknown"),
+            UnknownFontAction::Preserve
+        )); // fallback
     }
 }

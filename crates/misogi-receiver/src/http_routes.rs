@@ -1,15 +1,13 @@
+use crate::state::SharedState;
 use axum::{
-    extract::{Path, State},
-    http::{header, StatusCode},
-    response::IntoResponse,
     Json,
+    extract::{Path, State},
+    http::{StatusCode, header},
+    response::IntoResponse,
 };
 use serde_json::json;
-use crate::state::SharedState;
 
-pub async fn list_files(
-    State(state): State<SharedState>,
-) -> axum::response::Response {
+pub async fn list_files(State(state): State<SharedState>) -> axum::response::Response {
     match state.storage.list_ready_files().await {
         Ok(files) => Json(json!({
             "files": files,
@@ -31,24 +29,54 @@ pub async fn download_file(
 ) -> axum::response::Response {
     let file_info = match state.storage.get_file_info(&file_id).await {
         Ok(Some(info)) => info,
-        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "File not found"}))).into_response(),
-        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+        Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({"error": "File not found"})),
+            )
+                .into_response();
+        }
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": e.to_string()})),
+            )
+                .into_response();
+        }
     };
 
-    let download_path = state.storage.get_download_path(&file_id, &file_info.filename);
+    let download_path = state
+        .storage
+        .get_download_path(&file_id, &file_info.filename);
 
     if !download_path.exists() {
-        return (StatusCode::NOT_FOUND, Json(json!({"error": "File not ready for download"}))).into_response();
+        return (
+            StatusCode::NOT_FOUND,
+            Json(json!({"error": "File not ready for download"})),
+        )
+            .into_response();
     }
 
     let file = match tokio::fs::File::open(&download_path).await {
         Ok(f) => f,
-        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": e.to_string()})),
+            )
+                .into_response();
+        }
     };
 
     let metadata = match tokio::fs::metadata(&download_path).await {
         Ok(m) => m,
-        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": e.to_string()})),
+            )
+                .into_response();
+        }
     };
 
     let file_len = metadata.len();
@@ -69,24 +97,21 @@ pub async fn download_file(
             .unwrap(),
     );
 
-    if let Some(headers) = range_header {
-        if let Some(range) = headers.get("range") {
-            if let Ok(range_str) = range.to_str() {
-                if let Some((start, end)) = parse_range(range_str, file_len) {
-                    *response.status_mut() = StatusCode::PARTIAL_CONTENT;
-                    response.headers_mut().insert(
-                        header::CONTENT_RANGE,
-                        format!("bytes {}-{}/{}", start, end, file_len)
-                            .parse()
-                            .unwrap(),
-                    );
-                    response.headers_mut().insert(
-                        header::CONTENT_LENGTH,
-                        (end - start + 1).to_string().parse().unwrap(),
-                    );
-                }
-            }
-        }
+    if let Some(range) = range_header.as_ref().and_then(|h| h.get("range"))
+        && let Ok(range_str) = range.to_str()
+        && let Some((start, end)) = parse_range(range_str, file_len)
+    {
+        *response.status_mut() = StatusCode::PARTIAL_CONTENT;
+        response.headers_mut().insert(
+            header::CONTENT_RANGE,
+            format!("bytes {}-{}/{}", start, end, file_len)
+                .parse()
+                .unwrap(),
+        );
+        response.headers_mut().insert(
+            header::CONTENT_LENGTH,
+            (end - start + 1).to_string().parse().unwrap(),
+        );
     }
 
     response
@@ -129,8 +154,16 @@ pub async fn get_file_status(
 ) -> axum::response::Response {
     match state.storage.get_file_info(&file_id).await {
         Ok(Some(info)) => Json(info).into_response(),
-        Ok(None) => (StatusCode::NOT_FOUND, Json(json!({"error": "File not found"}))).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+        Ok(None) => (
+            StatusCode::NOT_FOUND,
+            Json(json!({"error": "File not found"})),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response(),
     }
 }
 
@@ -147,13 +180,35 @@ pub async fn reassemble(
 ) -> axum::response::Response {
     let manifest = match state.storage.get_manifest(&file_id).await {
         Ok(Some(m)) => m,
-        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": format!("Manifest not found for file: {}", file_id)}))).into_response(),
-        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+        Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({"error": format!("Manifest not found for file: {}", file_id)})),
+            )
+                .into_response();
+        }
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": e.to_string()})),
+            )
+                .into_response();
+        }
     };
 
-    let is_complete = match state.storage.check_complete(&file_id, manifest.chunk_count).await {
+    let is_complete = match state
+        .storage
+        .check_complete(&file_id, manifest.chunk_count)
+        .await
+    {
         Ok(c) => c,
-        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": e.to_string()})),
+            )
+                .into_response();
+        }
     };
 
     if !is_complete {
@@ -168,12 +223,17 @@ pub async fn reassemble(
             .into_response();
     }
 
-    match state.storage
+    match state
+        .storage
         .reassemble_file(&file_id, &manifest.filename, &manifest.file_md5)
         .await
     {
         Ok(output_path) => {
-            if let Err(e) = state.storage.update_manifest_status(&file_id, misogi_core::FileStatus::Ready).await {
+            if let Err(e) = state
+                .storage
+                .update_manifest_status(&file_id, misogi_core::FileStatus::Ready)
+                .await
+            {
                 tracing::error!(error = %e, file_id = %file_id, "Failed to update manifest status after reassembly");
             }
             (
@@ -188,7 +248,11 @@ pub async fn reassemble(
                 .into_response()
         }
         Err(e) => {
-            if let Err(status_err) = state.storage.update_manifest_status(&file_id, misogi_core::FileStatus::Failed).await {
+            if let Err(status_err) = state
+                .storage
+                .update_manifest_status(&file_id, misogi_core::FileStatus::Failed)
+                .await
+            {
                 tracing::error!(error = %status_err, file_id = %file_id, "Failed to update manifest status after reassembly failure");
             }
             (

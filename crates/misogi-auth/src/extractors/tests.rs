@@ -59,7 +59,10 @@ fn test_error_json_format_structure() {
     // Verify required fields exist
     assert!(body.get("error").is_some(), "Must have 'error' field");
     assert!(body.get("message").is_some(), "Must have 'message' field");
-    assert!(body.get("status_code").is_some(), "Must have 'status_code' field");
+    assert!(
+        body.get("status_code").is_some(),
+        "Must have 'status_code' field"
+    );
 
     // Verify values are correct types
     assert!(body["error"].is_string());
@@ -78,12 +81,17 @@ fn test_error_status_code_mapping() {
     // All auth-related errors should be 401
     assert_eq!(MissingAuthorization.status_code().as_u16(), 401);
     assert_eq!(InvalidBearerToken.status_code().as_u16(), 401);
-    assert_eq!(ValidationFailed("test".to_string()).status_code().as_u16(), 401);
+    assert_eq!(
+        ValidationFailed("test".to_string()).status_code().as_u16(),
+        401
+    );
     assert_eq!(TokenExpired.status_code().as_u16(), 401);
 
     // External identity token is also 401 (triggers plugin fallback)
     assert_eq!(
-        ExternalIdentityToken { issuer: None }.status_code().as_u16(),
+        ExternalIdentityToken { issuer: None }
+            .status_code()
+            .as_u16(),
         401
     );
 
@@ -91,7 +99,10 @@ fn test_error_status_code_mapping() {
     assert_eq!(MissingProviderContext.status_code().as_u16(), 400);
 
     // Internal errors should be 500
-    assert_eq!(InternalError("test".to_string()).status_code().as_u16(), 500);
+    assert_eq!(
+        InternalError("test".to_string()).status_code().as_u16(),
+        500
+    );
 }
 
 #[test]
@@ -110,8 +121,7 @@ fn test_error_code_uniqueness() {
     ];
 
     let codes: Vec<&str> = errors.iter().map(|e| e.error_code()).collect();
-    let unique_codes: std::collections::HashSet<&str> =
-        codes.iter().cloned().collect();
+    let unique_codes: std::collections::HashSet<&str> = codes.iter().cloned().collect();
 
     assert_eq!(
         codes.len(),
@@ -122,7 +132,10 @@ fn test_error_code_uniqueness() {
     // Verify expected code values
     assert_eq!(MissingAuthorization.error_code(), "missing_authorization");
     assert_eq!(TokenExpired.error_code(), "token_expired");
-    assert_eq!(ExternalIdentityToken { issuer: None }.error_code(), "external_identity_token");
+    assert_eq!(
+        ExternalIdentityToken { issuer: None }.error_code(),
+        "external_identity_token"
+    );
 }
 
 // ===========================================================================
@@ -142,8 +155,7 @@ mod jwt_extractor_tests {
 
         let mut parts = build_request_parts(request).await;
 
-        let result =
-            JwtAuthExtractor::from_request_parts(&mut parts, &()).await;
+        let result = JwtAuthExtractor::from_request_parts(&mut parts, &()).await;
 
         assert!(result.is_err());
         match result.unwrap_err() {
@@ -162,8 +174,7 @@ mod jwt_extractor_tests {
 
         let mut parts = build_request_parts(request).await;
 
-        let result =
-            JwtAuthExtractor::from_request_parts(&mut parts, &()).await;
+        let result = JwtAuthExtractor::from_request_parts(&mut parts, &()).await;
 
         assert!(result.is_err());
         match result.unwrap_err() {
@@ -184,8 +195,7 @@ mod jwt_extractor_tests {
 
         let mut parts = build_request_parts(request).await;
 
-        let result =
-            JwtAuthExtractor::from_request_parts(&mut parts, &()).await;
+        let result = JwtAuthExtractor::from_request_parts(&mut parts, &()).await;
 
         assert!(result.is_err());
         match result.unwrap_err() {
@@ -195,7 +205,10 @@ mod jwt_extractor_tests {
                     "Error message should mention JwtValidator: {msg}"
                 );
             }
-            other => panic!("Expected InternalError about JwtValidator, got: {:?}", other),
+            other => panic!(
+                "Expected InternalError about JwtValidator, got: {:?}",
+                other
+            ),
         }
     }
 
@@ -224,13 +237,15 @@ mod jwt_extractor_tests {
 
         let mut parts = build_request_parts(request).await;
 
-        let result =
-            JwtAuthExtractor::from_request_parts(&mut parts, &()).await;
+        let result = JwtAuthExtractor::from_request_parts(&mut parts, &()).await;
 
         assert!(result.is_err());
         match result.unwrap_err() {
             ExtractionError::InvalidBearerToken => (),
-            other => panic!("Expected InvalidBearerToken for Basic auth, got: {:?}", other),
+            other => panic!(
+                "Expected InvalidBearerToken for Basic auth, got: {:?}",
+                other
+            ),
         }
     }
 
@@ -246,8 +261,7 @@ mod jwt_extractor_tests {
         let mut parts = build_request_parts(request).await;
 
         // This will fail at validation stage (not a real token), not at parsing stage
-        let result =
-            JwtAuthExtractor::from_request_parts(&mut parts, &()).await;
+        let result = JwtAuthExtractor::from_request_parts(&mut parts, &()).await;
 
         assert!(result.is_err());
         // Should NOT be InvalidBearerToken (parsing succeeded)
@@ -279,8 +293,7 @@ mod identity_extractor_tests {
 
         let mut parts = build_request_parts(request).await;
 
-        let result =
-            IdentityAuthExtractor::from_request_parts(&mut parts, &()).await;
+        let result = IdentityAuthExtractor::from_request_parts(&mut parts, &()).await;
 
         assert!(result.is_ok());
         let extractor = result.unwrap();
@@ -300,8 +313,7 @@ mod identity_extractor_tests {
 
         let mut parts = build_request_parts(request).await;
 
-        let result =
-            IdentityAuthExtractor::from_request_parts(&mut parts, &()).await;
+        let result = IdentityAuthExtractor::from_request_parts(&mut parts, &()).await;
 
         assert!(result.is_ok());
         let extractor = result.unwrap();
@@ -322,8 +334,7 @@ mod identity_extractor_tests {
 
         let mut parts = build_request_parts(request).await;
 
-        let result =
-            IdentityAuthExtractor::from_request_parts(&mut parts, &()).await;
+        let result = IdentityAuthExtractor::from_request_parts(&mut parts, &()).await;
 
         assert!(result.is_ok());
         let extractor = result.unwrap();
@@ -341,8 +352,7 @@ mod identity_extractor_tests {
 
         let mut parts = build_request_parts(request).await;
 
-        let result =
-            IdentityAuthExtractor::from_request_parts(&mut parts, &()).await;
+        let result = IdentityAuthExtractor::from_request_parts(&mut parts, &()).await;
 
         assert!(result.is_err());
         match result.unwrap_err() {
@@ -361,13 +371,15 @@ mod identity_extractor_tests {
 
         let mut parts = build_request_parts(request).await;
 
-        let result =
-            IdentityAuthExtractor::from_request_parts(&mut parts, &()).await;
+        let result = IdentityAuthExtractor::from_request_parts(&mut parts, &()).await;
 
         assert!(result.is_err());
         match result.unwrap_err() {
             ExtractionError::MissingProviderContext => (),
-            other => panic!("Expected MissingProviderContext for empty header, got: {:?}", other),
+            other => panic!(
+                "Expected MissingProviderContext for empty header, got: {:?}",
+                other
+            ),
         }
     }
 
@@ -382,8 +394,7 @@ mod identity_extractor_tests {
 
         let mut parts = build_request_parts(request).await;
 
-        let result =
-            IdentityAuthExtractor::from_request_parts(&mut parts, &()).await;
+        let result = IdentityAuthExtractor::from_request_parts(&mut parts, &()).await;
 
         assert!(result.is_ok());
         let extractor = result.unwrap();

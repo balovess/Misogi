@@ -308,7 +308,9 @@ impl SvgSanitizer {
                 Ok(Event::Start(ref e)) => {
                     let local_name_bytes = e.local_name();
                     let name_ref = local_name_bytes.as_ref();
-                    let local_name = reader.decoder().decode(name_ref)
+                    let local_name = reader
+                        .decoder()
+                        .decode(name_ref)
                         .map_err(|e| MisogiError::Protocol(format!("SVG decode error: {}", e)))?;
                     let local_str = local_name.to_string();
 
@@ -346,13 +348,17 @@ impl SvgSanitizer {
                     if let Some(filtered_start) = filtered_attrs {
                         writer
                             .write_event(Event::Start(filtered_start))
-                            .map_err(|e| MisogiError::Protocol(format!("SVG XML write error: {}", e)))?;
+                            .map_err(|e| {
+                                MisogiError::Protocol(format!("SVG XML write error: {}", e))
+                            })?;
                     } else {
                         // All attributes were dangerous or element itself is conditional-skip
                         // Write original but without dangerous attrs (handled in filter_attributes)
                         writer
                             .write_event(Event::Start(e.to_owned()))
-                            .map_err(|e| MisogiError::Protocol(format!("SVG XML write error: {}", e)))?;
+                            .map_err(|e| {
+                                MisogiError::Protocol(format!("SVG XML write error: {}", e))
+                            })?;
                     }
                 }
                 Ok(Event::Empty(ref e)) => {
@@ -362,7 +368,9 @@ impl SvgSanitizer {
 
                     let local_name_bytes = e.local_name();
                     let name_ref = local_name_bytes.as_ref();
-                    let local_name = reader.decoder().decode(name_ref)
+                    let local_name = reader
+                        .decoder()
+                        .decode(name_ref)
                         .map_err(|e| MisogiError::Protocol(format!("SVG decode error: {}", e)))?;
                     let local_str = local_name.to_string();
 
@@ -389,13 +397,15 @@ impl SvgSanitizer {
                     let filtered_attrs =
                         self.filter_attributes(e, &local_str, &mut threats, &reader);
                     if let Some(filtered) = filtered_attrs {
-                        writer
-                            .write_event(Event::Empty(filtered))
-                            .map_err(|e| MisogiError::Protocol(format!("SVG XML write error: {}", e)))?;
+                        writer.write_event(Event::Empty(filtered)).map_err(|e| {
+                            MisogiError::Protocol(format!("SVG XML write error: {}", e))
+                        })?;
                     } else {
                         writer
                             .write_event(Event::Empty(e.to_owned()))
-                            .map_err(|e| MisogiError::Protocol(format!("SVG XML write error: {}", e)))?;
+                            .map_err(|e| {
+                                MisogiError::Protocol(format!("SVG XML write error: {}", e))
+                            })?;
                     }
                 }
                 Ok(Event::End(ref e)) => {
@@ -407,17 +417,17 @@ impl SvgSanitizer {
                         continue;
                     }
 
-                    writer
-                        .write_event(Event::End(e.to_owned()))
-                        .map_err(|e| MisogiError::Protocol(format!("SVG XML write error: {}", e)))?;
+                    writer.write_event(Event::End(e.to_owned())).map_err(|e| {
+                        MisogiError::Protocol(format!("SVG XML write error: {}", e))
+                    })?;
                 }
                 Ok(Event::Text(ref e)) => {
                     if skip_depth > 0 {
                         continue; // Skip text inside <script>, <foreignObject>
                     }
-                    writer
-                        .write_event(Event::Text(e.to_owned()))
-                        .map_err(|e| MisogiError::Protocol(format!("SVG XML write error: {}", e)))?;
+                    writer.write_event(Event::Text(e.to_owned())).map_err(|e| {
+                        MisogiError::Protocol(format!("SVG XML write error: {}", e))
+                    })?;
                 }
                 Ok(Event::CData(ref e)) => {
                     // CDATA sections inside skipped elements are dropped
@@ -425,7 +435,9 @@ impl SvgSanitizer {
                         // CDATA outside scripts is unusual but possible; preserve
                         writer
                             .write_event(Event::CData(e.to_owned()))
-                            .map_err(|e| MisogiError::Protocol(format!("SVG XML write error: {}", e)))?;
+                            .map_err(|e| {
+                                MisogiError::Protocol(format!("SVG XML write error: {}", e))
+                            })?;
                     }
                 }
                 Ok(Event::Comment(ref e)) => {
@@ -433,7 +445,9 @@ impl SvgSanitizer {
                     if skip_depth == 0 {
                         writer
                             .write_event(Event::Comment(e.to_owned()))
-                            .map_err(|e| MisogiError::Protocol(format!("SVG XML write error: {}", e)))?;
+                            .map_err(|e| {
+                                MisogiError::Protocol(format!("SVG XML write error: {}", e))
+                            })?;
                     }
                 }
                 Ok(Event::Eof) => break,
@@ -446,12 +460,12 @@ impl SvgSanitizer {
                 }
                 ref e => {
                     // Other events (PI, DocType, Decl): pass through when not skipping
-                    if let Ok(event) = e {
-                        if skip_depth == 0 {
-                            writer
-                                .write_event(event.clone())
-                                .map_err(|e| MisogiError::Protocol(format!("SVG XML write error: {}", e)))?;
-                        }
+                    if let Ok(event) = e
+                        && skip_depth == 0
+                    {
+                        writer.write_event(event.clone()).map_err(|e| {
+                            MisogiError::Protocol(format!("SVG XML write error: {}", e))
+                        })?;
                     }
                 }
             }
@@ -496,10 +510,16 @@ impl SvgSanitizer {
             match attr_result {
                 Ok(attr) => {
                     // Decode attribute key and value; use lossy conversion for robustness
-                    let key = reader.decoder().decode(attr.key.as_ref())
+                    let key = reader
+                        .decoder()
+                        .decode(attr.key.as_ref())
                         .map(|cow| cow.into_owned())
-                        .unwrap_or_else(|_| String::from_utf8_lossy(attr.key.as_ref()).into_owned());
-                    let value = reader.decoder().decode(&attr.value)
+                        .unwrap_or_else(|_| {
+                            String::from_utf8_lossy(attr.key.as_ref()).into_owned()
+                        });
+                    let value = reader
+                        .decoder()
+                        .decode(&attr.value)
                         .map(|cow| cow.into_owned())
                         .unwrap_or_else(|_| String::from_utf8_lossy(&attr.value).into_owned());
 
@@ -574,14 +594,13 @@ impl SvgSanitizer {
         }
 
         // Check for CSS expression() and -moz-binding in style attributes
-        if name_lower == "style" {
-            if value_lower.contains("expression(")
+        if name_lower == "style"
+            && (value_lower.contains("expression(")
                 || value_lower.contains("-moz-binding")
                 || value_lower.contains("url(javascript:")
-                || value_lower.contains("behavior(")
-            {
-                return true;
-            }
+                || value_lower.contains("behavior("))
+        {
+            return true;
         }
 
         false

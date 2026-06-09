@@ -1,8 +1,11 @@
+use crate::state::SharedState;
+use misogi_cdr::{
+    FileSanitizer, SanitizationPolicy, SanitizationReport, office_sanitizer::OfficeSanitizer,
+    pdf_sanitizer::PdfSanitizer, zip_scanner::ZipScanner,
+};
+use misogi_core::{ChunkMeta, FileInfo, FileManifest, FileStatus, MisogiError, Result};
 use std::path::{Path, PathBuf};
 use tokio::io::AsyncWriteExt;
-use crate::state::SharedState;
-use misogi_core::{ChunkMeta, FileManifest, FileInfo, FileStatus, MisogiError, Result};
-use misogi_cdr::{pdf_sanitizer::PdfSanitizer, office_sanitizer::OfficeSanitizer, zip_scanner::ZipScanner, SanitizationPolicy, SanitizationReport, FileSanitizer};
 
 pub struct FileUploader {
     storage_dir: PathBuf,
@@ -65,7 +68,8 @@ impl FileUploader {
     ) -> Result<ChunkMeta> {
         let chunk_md5 = misogi_core::hash::compute_md5(data);
 
-        let chunk_path = self.storage_dir
+        let chunk_path = self
+            .storage_dir
             .join(file_id)
             .join(format!("chunk_{}.bin", chunk_index));
 
@@ -146,7 +150,8 @@ impl FileUploader {
 
         let mut missing_chunks = Vec::new();
         for i in 0..manifest.chunk_count {
-            let chunk_path = self.storage_dir
+            let chunk_path = self
+                .storage_dir
                 .join(file_id)
                 .join(format!("chunk_{}.bin", i));
 
@@ -164,7 +169,8 @@ impl FileUploader {
         let _completed_chunks = if manifest.status == FileStatus::Uploading {
             let mut count = 0u32;
             for i in 0..manifest.chunk_count {
-                let chunk_path = self.storage_dir
+                let chunk_path = self
+                    .storage_dir
                     .join(file_id)
                     .join(format!("chunk_{}.bin", i));
                 if chunk_path.exists() {
@@ -197,14 +203,12 @@ impl FileUploader {
         let mut entries = tokio::fs::read_dir(&self.storage_dir).await?;
         while let Some(entry) = entries.next_entry().await? {
             let path = entry.path();
-            if path.is_dir() {
-                if let Some(file_id) = path.file_name()
-                    .and_then(|n| n.to_str())
-                {
-                    match self.get_file_info(file_id).await {
-                        Ok(info) => files.push(info),
-                        Err(_) => continue,
-                    }
+            if path.is_dir()
+                && let Some(file_id) = path.file_name().and_then(|n| n.to_str())
+            {
+                match self.get_file_info(file_id).await {
+                    Ok(info) => files.push(info),
+                    Err(_) => continue,
                 }
             }
         }
@@ -212,12 +216,9 @@ impl FileUploader {
         Ok(files)
     }
 
-    pub async fn read_chunk(
-        &self,
-        file_id: &str,
-        chunk_index: u32,
-    ) -> Result<Vec<u8>> {
-        let chunk_path = self.storage_dir
+    pub async fn read_chunk(&self, file_id: &str, chunk_index: u32) -> Result<Vec<u8>> {
+        let chunk_path = self
+            .storage_dir
             .join(file_id)
             .join(format!("chunk_{}.bin", chunk_index));
 
@@ -233,9 +234,7 @@ impl FileUploader {
     }
 
     async fn load_manifest(&self, file_id: &str) -> Result<FileManifest> {
-        let manifest_path = self.storage_dir
-            .join(file_id)
-            .join("manifest.json");
+        let manifest_path = self.storage_dir.join(file_id).join("manifest.json");
 
         if !manifest_path.exists() {
             return Err(MisogiError::NotFound(format!(
@@ -251,9 +250,7 @@ impl FileUploader {
     }
 
     async fn save_manifest(&self, file_id: &str, manifest: &FileManifest) -> Result<()> {
-        let manifest_path = self.storage_dir
-            .join(file_id)
-            .join("manifest.json");
+        let manifest_path = self.storage_dir.join(file_id).join("manifest.json");
 
         let content = serde_json::to_string_pretty(manifest)?;
         tokio::fs::write(&manifest_path, content).await?;
@@ -332,14 +329,22 @@ impl FileUploader {
 
         // Legacy sanitization logic (backward compatible, unchanged)
         let report = match ext.as_str() {
-            ".pdf" => pdf_sanitizer.sanitize(&input_path, &output_path, policy).await?,
-            ".docx" | ".xlsx" | ".pptx" | ".docm" | ".xlsm" | ".pptm" => {
-                office_sanitizer.sanitize(&input_path, &output_path, policy).await?
+            ".pdf" => {
+                pdf_sanitizer
+                    .sanitize(&input_path, &output_path, policy)
+                    .await?
             }
-            ".zip" | ".jar" => zip_scanner.sanitize(&input_path, &output_path, policy).await?,
-            _ => {
-                SanitizationReport::new(file_id.to_string(), manifest.filename.clone())
-            },
+            ".docx" | ".xlsx" | ".pptx" | ".docm" | ".xlsm" | ".pptm" => {
+                office_sanitizer
+                    .sanitize(&input_path, &output_path, policy)
+                    .await?
+            }
+            ".zip" | ".jar" => {
+                zip_scanner
+                    .sanitize(&input_path, &output_path, policy)
+                    .await?
+            }
+            _ => SanitizationReport::new(file_id.to_string(), manifest.filename.clone()),
         };
 
         Ok(report)
@@ -393,6 +398,7 @@ impl FileUploader {
             &state.pdf_sanitizer,
             &state.office_sanitizer,
             &state.zip_scanner,
-        ).await
+        )
+        .await
     }
 }

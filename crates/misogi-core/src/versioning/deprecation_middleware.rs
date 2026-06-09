@@ -166,7 +166,9 @@ pub async fn deprecation_warning_middleware(
 
     tracing::warn!(
         "[DEPRECATION] Client accessed deprecated API {} endpoint: {} {}",
-        version_str, method, path
+        version_str,
+        method,
+        path
     );
     if state.config.include_caller_info {
         tracing::warn!("[DEPRECATION]   ├─ Client IP: {}", client_ip);
@@ -180,8 +182,7 @@ pub async fn deprecation_warning_middleware(
     }
     tracing::warn!("[DEPRECATION]   └─ Current date: {}", now);
 
-    if let Some(next_ver) = ApiVersion::from_path_segment(&version_str)
-        .and_then(|v| v.successor())
+    if let Some(next_ver) = ApiVersion::from_path_segment(&version_str).and_then(|v| v.successor())
     {
         tracing::warn!(
             "[DEPRECATION] → Please migrate to {}{}",
@@ -196,28 +197,23 @@ pub async fn deprecation_warning_middleware(
         let headers = response.headers_mut();
 
         if let Some(policy) = policy_match {
-            if let Some(sunset_val) = policy.sunset_header_value() {
-                if let Ok(val) = sunset_val.parse::<HeaderValue>() {
-                    headers.insert(HeaderName::from_static("sunset"), val);
-                }
+            if let Some(sunset_val) = policy.sunset_header_value()
+                && let Ok(val) = sunset_val.parse::<HeaderValue>()
+            {
+                headers.insert(HeaderName::from_static("sunset"), val);
             }
-            if let Some(link_val) = policy.successor_link_header(&path) {
-                if let Ok(val) = link_val.parse::<HeaderValue>() {
-                    headers.insert(
-                        HeaderName::from_static("link"),
-                        val,
-                    );
-                }
+            if let Some(link_val) = policy.successor_link_header(&path)
+                && let Ok(val) = link_val.parse::<HeaderValue>()
+            {
+                headers.insert(HeaderName::from_static("link"), val);
             }
             if let Ok(val) = "true".parse::<HeaderValue>() {
                 headers.insert(HeaderName::from_static("deprecated"), val);
             }
-        } else if let Some(date) = sunset_date {
-            if let Ok(val) =
-                format!(r#"true, Sunset="{}""#, date).parse::<HeaderValue>()
-            {
-                headers.insert(HeaderName::from_static("deprecated"), val);
-            }
+        } else if let Some(date) = sunset_date
+            && let Ok(val) = format!(r#"true, Sunset="{}""#, date).parse::<HeaderValue>()
+        {
+            headers.insert(HeaderName::from_static("deprecated"), val);
         }
     }
 

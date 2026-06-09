@@ -47,9 +47,7 @@
 mod tests;
 
 use super::envelope::IntegrityError;
-use super::session::{
-    SessionHandle, SessionMetadata, TransportCapabilities, TransportState,
-};
+use super::session::{SessionHandle, SessionMetadata, TransportCapabilities, TransportState};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -146,6 +144,12 @@ pub struct SessionManager {
     /// When `None`, persistence is disabled and all operations are
     /// in-memory only (checkpoints are no-ops).
     persistence_dir: Option<PathBuf>,
+}
+
+impl Default for SessionManager {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl SessionManager {
@@ -370,9 +374,7 @@ impl SessionManager {
                 // Get pending indices and infer confirmed ones.
                 let pending = state.handle.pending_indices();
                 let total = state.handle.metadata().total_chunks;
-                (0..total)
-                    .filter(|i| !pending.contains(i))
-                    .collect()
+                (0..total).filter(|i| !pending.contains(i)).collect()
             },
             current_state: format!("{}", state.handle.state()),
             timestamp: current_timestamp_ms(),
@@ -391,10 +393,7 @@ impl SessionManager {
         let json =
             serde_json::to_string_pretty(&checkpoint).map_err(IntegrityError::Serialization)?;
         std::fs::write(&file_path, json).map_err(|e| {
-            IntegrityError::InvalidEnvelope(format!(
-                "Failed to write checkpoint file: {}",
-                e
-            ))
+            IntegrityError::InvalidEnvelope(format!("Failed to write checkpoint file: {}", e))
         })?;
 
         tracing::debug!(
@@ -428,7 +427,10 @@ impl SessionManager {
     /// The loaded session is NOT automatically registered in the in-memory
     /// registry. Callers must call [`create_session`](Self::create_session)
     /// or manually insert if they want the loaded session tracked.
-    pub fn load_checkpoint(&self, session_id: &str) -> Result<Option<SessionHandle>, IntegrityError> {
+    pub fn load_checkpoint(
+        &self,
+        session_id: &str,
+    ) -> Result<Option<SessionHandle>, IntegrityError> {
         let dir = match &self.persistence_dir {
             Some(d) => d.clone(),
             None => return Ok(None), // Persistence disabled: nothing to load.
@@ -443,10 +445,7 @@ impl SessionManager {
 
         // Read and deserialize checkpoint.
         let json = std::fs::read_to_string(&file_path).map_err(|e| {
-            IntegrityError::InvalidEnvelope(format!(
-                "Failed to read checkpoint file: {}",
-                e
-            ))
+            IntegrityError::InvalidEnvelope(format!("Failed to read checkpoint file: {}", e))
         })?;
 
         let checkpoint: SessionCheckpoint =
@@ -459,7 +458,7 @@ impl SessionManager {
         let metadata = SessionMetadata {
             session_id: checkpoint.session_id.clone(),
             total_chunks: checkpoint.total_chunks,
-            file_size_bytes: 0, // Not preserved in v1 checkpoint format.
+            file_size_bytes: 0,       // Not preserved in v1 checkpoint format.
             file_hash: String::new(), // Not preserved.
             created_at: checkpoint.timestamp,
             capabilities: TransportCapabilities::default(),
@@ -521,10 +520,7 @@ impl SessionManager {
                         session_id,
                         e
                     );
-                    IntegrityError::InvalidEnvelope(format!(
-                        "Checkpoint deletion failed: {}",
-                        e
-                    ))
+                    IntegrityError::InvalidEnvelope(format!("Checkpoint deletion failed: {}", e))
                 })?;
             }
         }
@@ -583,11 +579,7 @@ impl SessionManager {
         }
 
         if count > 0 {
-            tracing::info!(
-                "Cleaned up {} sessions older than {:?}",
-                count,
-                max_age
-            );
+            tracing::info!("Cleaned up {} sessions older than {:?}", count, max_age);
         }
 
         count

@@ -47,9 +47,7 @@ use async_trait::async_trait;
 use regex::Regex;
 
 use crate::error::{MisogiError, Result};
-use crate::traits::{
-    PIIMatch, PIIScanResult,
-};
+use crate::traits::{PIIMatch, PIIScanResult};
 
 // Re-export PIIAction and PIIDetector for WASM FFI layer and external consumers
 pub use crate::traits::{PIIAction, PIIDetector};
@@ -173,11 +171,7 @@ impl PIIRule {
     ) -> Result<Self> {
         let name_owned = name.into();
         let pattern = Regex::new(pattern_str).map_err(|e| {
-            MisogiError::Protocol(format!(
-                "Invalid PII regex pattern '{}': {}",
-                name_owned,
-                e
-            ))
+            MisogiError::Protocol(format!("Invalid PII regex pattern '{}': {}", name_owned, e))
         })?;
 
         Ok(Self {
@@ -236,11 +230,7 @@ impl RegexPIIDetector {
     /// * `rules` — Vector of PII detection rules to apply.
     /// * `default_action` — Action returned when no PII is found.
     /// * `encodings` — Encoding list for input normalization.
-    pub fn new(
-        rules: Vec<PIIRule>,
-        default_action: PIIAction,
-        encodings: Vec<String>,
-    ) -> Self {
+    pub fn new(rules: Vec<PIIRule>, default_action: PIIAction, encodings: Vec<String>) -> Self {
         Self {
             rules,
             default_action,
@@ -266,78 +256,72 @@ impl RegexPIIDetector {
     /// Japanese law. Organizations with additional requirements (medical records,
     /// financial account numbers, etc.) should extend via [`add_rule()`].
     pub fn with_jp_defaults() -> Self {
-        let mut rules: Vec<PIIRule> = Vec::new();
-
-        // --- My Number (12-digit personal identification number) ---
-        // Format: exactly 12 consecutive digits, word-bounded
-        // Note: Real validation requires checksum verification; this is a heuristic scan.
-        rules.push(PIIRule::new(
-            "my_number",
-            r"\b\d{12}\b",
-            PIIAction::Mask,
-            '*',
-            "12-digit My Number (Kojin Bangō) identification number",
-        ));
-
-        // --- Email Address (RFC 5322 simplified) ---
-        // Catches common email formats; intentionally permissive to reduce false negatives.
-        rules.push(PIIRule::new(
-            "email",
-            r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}",
-            PIIAction::AlertOnly,
-            '*',
-            "Email address (RFC 5322 simplified pattern)",
-        ));
-
-        // --- IPv4 Address ---
-        rules.push(PIIRule::new(
-            "ip_address_v4",
-            r"\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b",
-            PIIAction::AlertOnly,
-            'X',
-            "IPv4 address (dotted-decimal notation)",
-        ));
-
-        // --- Credit Card Numbers (16-digit, space/hyphen separated groups) ---
-        // Covers JCB (35xx), Visa (4xxx), Mastercard (51-55xx), Discover (6011, 65xx)
-        // Pattern: 4 groups of 4 digits with optional separators
-        rules.push(PIIRule::new(
-            "credit_card",
-            r"\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b",
-            PIIAction::Mask,
-            'X',
-            "Credit card number (JCB/Visa/Mastercard/Discover, 16 digits)",
-        ));
-
-        // --- Japanese Phone Number (loose pattern) ---
-        // Matches: 0X-XXXX-XXXX, 0XXXXXXXXXXX, +81-X-XXXX-XXXX
-        rules.push(PIIRule::new(
-            "phone_jp",
-            r"(?:(?:\+81\s*|0)\d{1,4}[\s-]?\d{1,4}[\s-]?\d{4})|(?:0\d{9,10})",
-            PIIAction::AlertOnly,
-            '*',
-            "Japanese telephone number (landline or mobile)",
-        ));
-
-        // --- Japanese Postal Code (NNN-NNNN) ---
-        rules.push(PIIRule::new(
-            "postal_code_jp",
-            r"\b\d{3}-\d{4}\b",
-            PIIAction::AlertOnly,
-            '*',
-            "Japanese postal code (7-digit, NNN-NNNN format)",
-        ));
-
-        // --- Driver's License Number (Japan) ---
-        // Format varies by prefecture; this catches common numeric patterns
-        // followed by license-specific indicators
-        rules.push(PIIRule::new(
-            "drivers_license",
-            r"\b\d{10,12}\b", // 10-12 digit license numbers (heuristic)
-            PIIAction::Mask,
-            '#',
-            "Japanese driver's license number (10-12 digit pattern)",
-        ));
+        let rules: Vec<PIIRule> = vec![
+            // --- My Number (12-digit personal identification number) ---
+            // Format: exactly 12 consecutive digits, word-bounded
+            // Note: Real validation requires checksum verification; this is a heuristic scan.
+            PIIRule::new(
+                "my_number",
+                r"\b\d{12}\b",
+                PIIAction::Mask,
+                '*',
+                "12-digit My Number (Kojin Bangō) identification number",
+            ),
+            // --- Email Address (RFC 5322 simplified) ---
+            // Catches common email formats; intentionally permissive to reduce false negatives.
+            PIIRule::new(
+                "email",
+                r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}",
+                PIIAction::AlertOnly,
+                '*',
+                "Email address (RFC 5322 simplified pattern)",
+            ),
+            // --- IPv4 Address ---
+            PIIRule::new(
+                "ip_address_v4",
+                r"\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b",
+                PIIAction::AlertOnly,
+                'X',
+                "IPv4 address (dotted-decimal notation)",
+            ),
+            // --- Credit Card Numbers (16-digit, space/hyphen separated groups) ---
+            // Covers JCB (35xx), Visa (4xxx), Mastercard (51-55xx), Discover (6011, 65xx)
+            // Pattern: 4 groups of 4 digits with optional separators
+            PIIRule::new(
+                "credit_card",
+                r"\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b",
+                PIIAction::Mask,
+                'X',
+                "Credit card number (JCB/Visa/Mastercard/Discover, 16 digits)",
+            ),
+            // --- Japanese Phone Number (loose pattern) ---
+            // Matches: 0X-XXXX-XXXX, 0XXXXXXXXXXX, +81-X-XXXX-XXXX
+            PIIRule::new(
+                "phone_jp",
+                r"(?:(?:\+81\s*|0)\d{1,4}[\s-]?\d{1,4}[\s-]?\d{4})|(?:0\d{9,10})",
+                PIIAction::AlertOnly,
+                '*',
+                "Japanese telephone number (landline or mobile)",
+            ),
+            // --- Japanese Postal Code (NNN-NNNN) ---
+            PIIRule::new(
+                "postal_code_jp",
+                r"\b\d{3}-\d{4}\b",
+                PIIAction::AlertOnly,
+                '*',
+                "Japanese postal code (7-digit, NNN-NNNN format)",
+            ),
+            // --- Driver's License Number (Japan) ---
+            // Format varies by prefecture; this catches common numeric patterns
+            // followed by license-specific indicators
+            PIIRule::new(
+                "drivers_license",
+                r"\b\d{10,12}\b", // 10-12 digit license numbers (heuristic)
+                PIIAction::Mask,
+                '#',
+                "Japanese driver's license number (10-12 digit pattern)",
+            ),
+        ];
 
         Self {
             rules,
@@ -393,7 +377,7 @@ impl RegexPIIDetector {
     fn mask_text(text: &str, mask_char: char) -> String {
         let chars: Vec<char> = text.chars().collect();
         if chars.len() <= 2 {
-            return std::iter::repeat(mask_char).take(chars.len()).collect();
+            return std::iter::repeat_n(mask_char, chars.len()).collect();
         }
 
         let mut result = String::with_capacity(chars.len());
@@ -435,12 +419,7 @@ impl PIIDetector for RegexPIIDetector {
     /// # Performance
     /// For typical document sizes (< 1 MB), scanning completes in < 50ms.
     /// Large files (> 100 MB) may benefit from chunked streaming approaches.
-    async fn scan(
-        &self,
-        content: &str,
-        file_id: &str,
-        filename: &str,
-    ) -> Result<PIIScanResult> {
+    async fn scan(&self, content: &str, file_id: &str, filename: &str) -> Result<PIIScanResult> {
         let start = Instant::now();
         let bytes_scanned = content.len() as u64;
         let mut all_matches: Vec<PIIMatch> = Vec::new();
@@ -555,7 +534,7 @@ pub fn apply_mask(text: &str, matches: &[PIIMatch], mask_char: char) -> String {
         // Use the match's own masked_text if available, otherwise generate fresh
         let replacement = if m.masked_text.is_empty() {
             // Generate fresh mask: replace entire match span with mask_char
-            std::iter::repeat(mask_char).take(m.length).collect()
+            std::iter::repeat_n(mask_char, m.length).collect()
         } else {
             m.masked_text.clone()
         };
@@ -587,12 +566,11 @@ pub fn summarize_scan_result(result: &PIIScanResult) -> String {
         );
     }
 
-    let pattern_counts: std::collections::HashMap<&str, usize> =
-        result
-            .matches
-            .iter()
-            .map(|m| (m.pattern_name.as_str(), 1))
-            .collect();
+    let pattern_counts: std::collections::HashMap<&str, usize> = result
+        .matches
+        .iter()
+        .map(|m| (m.pattern_name.as_str(), 1))
+        .collect();
 
     let pattern_summary: Vec<String> = pattern_counts
         .into_iter()
@@ -773,14 +751,14 @@ mod tests {
         let detector = RegexPIIDetector::with_jp_defaults();
         let content = "Contact: tanaka@example.go.jp for details.";
 
-        let result = detector.scan(content, "file-3", "email_test.txt").await.unwrap();
+        let result = detector
+            .scan(content, "file-3", "email_test.txt")
+            .await
+            .unwrap();
 
         assert!(result.found);
 
-        let email_match = result
-            .matches
-            .iter()
-            .find(|m| m.pattern_name == "email");
+        let email_match = result.matches.iter().find(|m| m.pattern_name == "email");
         assert!(email_match.is_some());
 
         let m = email_match.unwrap();
@@ -794,7 +772,10 @@ mod tests {
         let detector = RegexPIIDetector::with_jp_defaults();
         let content = "Email: user@domain.com";
 
-        let result = detector.scan(content, "file-4", "email_only.txt").await.unwrap();
+        let result = detector
+            .scan(content, "file-4", "email_only.txt")
+            .await
+            .unwrap();
 
         // Email-only match should yield AlertOnly (not Block or Mask)
         let email_matches: Vec<_> = result
@@ -818,7 +799,10 @@ mod tests {
         let detector = RegexPIIDetector::with_jp_defaults();
         let content = "Server at 192.168.1.100 is responding.";
 
-        let result = detector.scan(content, "file-5", "ip_test.txt").await.unwrap();
+        let result = detector
+            .scan(content, "file-5", "ip_test.txt")
+            .await
+            .unwrap();
 
         assert!(result.found);
 
@@ -835,7 +819,10 @@ mod tests {
         let detector = RegexPIIDetector::with_jp_defaults();
         let content = "Not an IP: 999.999.999.999 and also 256.1.2.3";
 
-        let result = detector.scan(content, "file-6", "bad_ip.txt").await.unwrap();
+        let result = detector
+            .scan(content, "file-6", "bad_ip.txt")
+            .await
+            .unwrap();
 
         // 999.x.x.x and 256.x.x.x are invalid IPv4 and shouldn't match our strict pattern
         let ip_matches: Vec<_> = result
@@ -855,7 +842,10 @@ mod tests {
         let detector = RegexPIIDetector::with_jp_defaults();
         let content = "Card: 4111 1111 1111 1111 expires 12/25";
 
-        let result = detector.scan(content, "file-7", "cc_test.txt").await.unwrap();
+        let result = detector
+            .scan(content, "file-7", "cc_test.txt")
+            .await
+            .unwrap();
 
         assert!(result.found);
 
@@ -876,7 +866,10 @@ mod tests {
         let detector = RegexPIIDetector::with_jp_defaults();
         let content = "JCB: 3566-0020-2036-0505";
 
-        let result = detector.scan(content, "file-8", "jcb_test.txt").await.unwrap();
+        let result = detector
+            .scan(content, "file-8", "jcb_test.txt")
+            .await
+            .unwrap();
 
         let cc_match = result
             .matches
@@ -963,7 +956,13 @@ mod tests {
     async fn test_resolve_block_wins_over_mask() {
         // Create a detector with both Block and Mask rules
         let rules = vec![
-            PIIRule::new("mask_rule", r"\bMASKME\b", PIIAction::Mask, '*', "Mask this"),
+            PIIRule::new(
+                "mask_rule",
+                r"\bMASKME\b",
+                PIIAction::Mask,
+                '*',
+                "Mask this",
+            ),
             PIIRule::new(
                 "block_rule",
                 r"\bBLOCKME\b",
@@ -972,10 +971,14 @@ mod tests {
                 "Block this",
             ),
         ];
-        let detector = RegexPIIDetector::new(rules, PIIAction::AlertOnly, vec!["utf-8".to_string()]);
+        let detector =
+            RegexPIIDetector::new(rules, PIIAction::AlertOnly, vec!["utf-8".to_string()]);
 
         let content = "MASKME and BLOCKME are here";
-        let result = detector.scan(content, "file-13", "mixed.txt").await.unwrap();
+        let result = detector
+            .scan(content, "file-13", "mixed.txt")
+            .await
+            .unwrap();
 
         // Block should win over Mask
         assert_eq!(result.action, PIIAction::Block);
@@ -986,10 +989,17 @@ mod tests {
         // Note: \bALERT\b won't match inside "ALERTME", \bMASK\b won't match inside "MASKME"
         // Use standalone words that will actually match
         let rules = vec![
-            PIIRule::new("alert_rule", r"\bALERT\b", PIIAction::AlertOnly, '*', "Alert"),
+            PIIRule::new(
+                "alert_rule",
+                r"\bALERT\b",
+                PIIAction::AlertOnly,
+                '*',
+                "Alert",
+            ),
             PIIRule::new("mask_rule", r"\bMASK\b", PIIAction::Mask, '*', "Mask"),
         ];
-        let detector = RegexPIIDetector::new(rules, PIIAction::AlertOnly, vec!["utf-8".to_string()]);
+        let detector =
+            RegexPIIDetector::new(rules, PIIAction::AlertOnly, vec!["utf-8".to_string()]);
 
         // Use standalone words (not substrings) so regex word boundaries work
         let content = "MASK and ALERT are here";
@@ -1061,10 +1071,7 @@ mod tests {
         assert_eq!(RegexPIIDetector::mask_text("ABC", '*'), "A*C");
         assert_eq!(RegexPIIDetector::mask_text("AB", '*'), "**"); // Too short
         assert_eq!(RegexPIIDetector::mask_text("A", '*'), "*"); // Single char
-        assert_eq!(
-            RegexPIIDetector::mask_text("田中太郎", '*'),
-            "田**郎"
-        ); // 4 CJK chars: first + 2 mask + last
+        assert_eq!(RegexPIIDetector::mask_text("田中太郎", '*'), "田**郎"); // 4 CJK chars: first + 2 mask + last
     }
 
     // =========================================================================
@@ -1173,8 +1180,11 @@ mod tests {
         assert!(result.matches.len() >= 4); // At least email, my_number, ip, cc
 
         // Verify different pattern types were detected
-        let pattern_names: Vec<&str> =
-            result.matches.iter().map(|m| m.pattern_name.as_str()).collect();
+        let pattern_names: Vec<&str> = result
+            .matches
+            .iter()
+            .map(|m| m.pattern_name.as_str())
+            .collect();
         assert!(pattern_names.contains(&"email"));
         assert!(pattern_names.contains(&"my_number"));
         assert!(pattern_names.contains(&"credit_card"));

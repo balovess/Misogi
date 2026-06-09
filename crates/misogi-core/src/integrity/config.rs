@@ -357,9 +357,10 @@ impl IntegrityConfig {
     /// - [`IntegrityConfigError::ParseError`] on invalid TOML syntax.
     /// - [`IntegrityConfigError::ValidationFailed`] on semantic violations.
     pub fn from_toml_str(toml_str: &str) -> Result<Self, IntegrityConfigError> {
-        let config: Self =
-            toml::from_str(toml_str).map_err(IntegrityConfigError::ParseError)?;
-        config.validate().map_err(IntegrityConfigError::ValidationFailed)?;
+        let config: Self = toml::from_str(toml_str).map_err(IntegrityConfigError::ParseError)?;
+        config
+            .validate()
+            .map_err(IntegrityConfigError::ValidationFailed)?;
         Ok(config)
     }
 
@@ -393,10 +394,7 @@ impl IntegrityConfig {
     ///    `resume_from_checkpoint` is enabled.
     pub fn validate(&self) -> Result<(), String> {
         // Normalize: lowercase + strip hyphens for tolerant matching.
-        let algo = self
-            .hash_algorithm
-            .to_lowercase()
-            .replace('-', "");
+        let algo = self.hash_algorithm.to_lowercase().replace('-', "");
         let valid_algos = ["sha256", "sha512", "blake3"];
         if !valid_algos.contains(&algo.as_str()) {
             return Err(format!(
@@ -407,24 +405,17 @@ impl IntegrityConfig {
         }
 
         if self.repair.auto_repair && self.repair.repair_timeout_secs == 0 {
-            return Err(
-                "repair_timeout_secs must be > 0 when auto_repair is enabled"
-                    .to_string(),
-            );
+            return Err("repair_timeout_secs must be > 0 when auto_repair is enabled".to_string());
         }
 
-        if self.resume.resume_from_checkpoint
-            && self.resume.checkpoint_interval_chunks == 0
-        {
+        if self.resume.resume_from_checkpoint && self.resume.checkpoint_interval_chunks == 0 {
             return Err(
                 "checkpoint_interval_chunks must be > 0 when resume_from_checkpoint is enabled"
                     .to_string(),
             );
         }
 
-        if self.resume.resume_from_checkpoint
-            && self.resume.session_persistence_path.is_empty()
-        {
+        if self.resume.resume_from_checkpoint && self.resume.session_persistence_path.is_empty() {
             return Err(
                 "session_persistence_path must be set when resume_from_checkpoint is enabled"
                     .to_string(),

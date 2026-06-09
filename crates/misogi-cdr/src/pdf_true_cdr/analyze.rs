@@ -21,10 +21,7 @@ use std::collections::HashMap;
 #[cfg(feature = "pdf-cdr")]
 use lopdf::Object;
 
-use super::constants::{
-    ALLOWED_COLOR_SPACES,
-    SUSPICIOUS_COLOR_SPACES,
-};
+use super::constants::{ALLOWED_COLOR_SPACES, SUSPICIOUS_COLOR_SPACES};
 use super::parse::PdfIntermediate;
 use super::types::{BlockedItemType, ThreatType};
 
@@ -78,7 +75,12 @@ pub(super) fn analyze_objects(
     analyze_catalog(intermediates, allow_forms, &mut classification);
 
     for &page_id in &intermediates.page_tree.page_ids {
-        analyze_page(intermediates, page_id, allow_annotations, &mut classification);
+        analyze_page(
+            intermediates,
+            page_id,
+            allow_annotations,
+            &mut classification,
+        );
     }
 
     classification
@@ -104,15 +106,15 @@ fn analyze_catalog(
         }
 
         if catalog.get(b"AA").is_ok() {
-            classification.insert(0, ObjectClassification::Remove(ThreatType::AdditionalActions));
+            classification.insert(
+                0,
+                ObjectClassification::Remove(ThreatType::AdditionalActions),
+            );
             tracing::warn!("Catalog contains /AA — removing");
         }
 
         if !allow_forms && catalog.get(b"AcroForm").is_ok() {
-            classification.insert(
-                0,
-                ObjectClassification::Remove(ThreatType::SubmitForm),
-            );
+            classification.insert(0, ObjectClassification::Remove(ThreatType::SubmitForm));
             tracing::debug!("Catalog contains /AcroForm — removing (forms disallowed)");
         }
 
@@ -157,11 +159,7 @@ fn analyze_page(
                     if let Ok(annots_array) = annots.as_array() {
                         for annot in annots_array {
                             if let Ok(annot_ref) = annot.as_reference() {
-                                analyze_annotation(
-                                    intermediates,
-                                    annot_ref.0,
-                                    classification,
-                                );
+                                analyze_annotation(intermediates, annot_ref.0, classification);
                             }
                         }
                     }
@@ -276,20 +274,18 @@ fn analyze_resources(
                                             "RichMedia" => {
                                                 classification.insert(
                                                     ref_num.0,
-                                                    ObjectClassification::Remove(ThreatType::RichMedia),
+                                                    ObjectClassification::Remove(
+                                                        ThreatType::RichMedia,
+                                                    ),
                                                 );
                                             }
                                             "Image" => {
-                                                classification.insert(
-                                                    ref_num.0,
-                                                    ObjectClassification::Keep,
-                                                );
+                                                classification
+                                                    .insert(ref_num.0, ObjectClassification::Keep);
                                             }
                                             _ => {
-                                                classification.insert(
-                                                    ref_num.0,
-                                                    ObjectClassification::Keep,
-                                                );
+                                                classification
+                                                    .insert(ref_num.0, ObjectClassification::Keep);
                                             }
                                         }
                                     }

@@ -1,8 +1,8 @@
 //! Unit tests for PostureChecker
 
 use super::*;
-use chrono::Utc;
 use crate::posture::types::*;
+use chrono::Utc;
 
 fn make_healthy_posture() -> DevicePosture {
     DevicePosture {
@@ -58,7 +58,11 @@ fn test_unsupported_os_blocked() {
 
     let result = checker.evaluate(posture);
     assert!(!result.allowed);
-    assert!(result.failed_critical_checks.contains(&"os_supported".to_string()));
+    assert!(
+        result
+            .failed_critical_checks
+            .contains(&"os_supported".to_string())
+    );
 }
 
 #[test]
@@ -71,7 +75,11 @@ fn test_av_disabled_critical_failure() {
 
     let result = checker.evaluate(posture);
     assert!(!result.allowed);
-    assert!(result.failed_critical_checks.contains(&"antivirus_enabled".to_string()));
+    assert!(
+        result
+            .failed_critical_checks
+            .contains(&"antivirus_enabled".to_string())
+    );
 }
 
 #[test]

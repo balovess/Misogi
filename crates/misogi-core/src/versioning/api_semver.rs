@@ -10,7 +10,6 @@
 /// | MAJOR | 0..=u32::MAX | Incompatible API changes |
 /// | MINOR | 0..=u32::MAX | Backward-compatible additions |
 /// | PATCH | 0..=u32::MAX | Backward-compatible bug fixes |
-
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::fmt;
@@ -55,14 +54,17 @@ impl ApiVersion {
     #[inline]
     #[must_use]
     pub const fn new(major: u32, minor: u32, patch: u32) -> Self {
-        Self { major, minor, patch }
+        Self {
+            major,
+            minor,
+            patch,
+        }
     }
 
     /// Parse a version string in `MAJOR.MINOR.PATCH` format.
     ///
     /// # Errors
     /// Returns [`ParseVersionError`] if the string does not conform to SemVer format.
-    #[must_use]
     pub fn parse(s: &str) -> Result<Self, ParseVersionError> {
         s.parse()
     }
@@ -166,7 +168,11 @@ impl fmt::Display for ParseVersionError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::InvalidFormat(s) => {
-                write!(f, "Invalid version format '{}': expected MAJOR.MINOR.PATCH", s)
+                write!(
+                    f,
+                    "Invalid version format '{}': expected MAJOR.MINOR.PATCH",
+                    s
+                )
             }
             Self::InvalidComponent(comp) => {
                 write!(f, "Invalid '{}' component: not a valid u32", comp)
@@ -195,7 +201,10 @@ mod tests {
     #[test]
     fn test_parsing_valid() {
         assert_eq!("0.0.0".parse::<ApiVersion>(), Ok(ApiVersion::new(0, 0, 0)));
-        assert_eq!("10.20.30".parse::<ApiVersion>(), Ok(ApiVersion::new(10, 20, 30)));
+        assert_eq!(
+            "10.20.30".parse::<ApiVersion>(),
+            Ok(ApiVersion::new(10, 20, 30))
+        );
     }
 
     #[test]

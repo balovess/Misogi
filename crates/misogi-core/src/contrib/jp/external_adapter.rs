@@ -518,11 +518,8 @@ impl ExternalSanitizerAdapter {
                     // Check if output file exists and compute its hash
                     if output_path.exists() {
                         let output_hash_val = hash::compute_file_sha256(output_path).await?;
-                        result.output_size = Some(
-                            std::fs::metadata(output_path)
-                                .map(|m| m.len())
-                                .unwrap_or(0),
-                        );
+                        result.output_size =
+                            Some(std::fs::metadata(output_path).map(|m| m.len()).unwrap_or(0));
                         result.output_hash = Some(output_hash_val.clone());
 
                         // Verify that output differs from input
@@ -625,11 +622,7 @@ impl ExternalSanitizerAdapter {
 /// assert_eq!(rendered[1], "/data/input.txt");
 /// assert_eq!(rendered[3], "/data/output.txt");
 /// ```
-pub fn render_args(
-    args: &[String],
-    input_path: &Path,
-    output_path: &Path,
-) -> Vec<String> {
+pub fn render_args(args: &[String], input_path: &Path, output_path: &Path) -> Vec<String> {
     let input_str = input_path.to_string_lossy().to_string();
     let output_str = output_path.to_string_lossy().to_string();
 
@@ -717,7 +710,12 @@ mod tests {
 
         let result = adapter.register(config);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("extension must not be empty"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("extension must not be empty")
+        );
     }
 
     #[test]
@@ -732,7 +730,12 @@ mod tests {
 
         let result = adapter.register(config);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("command must not be empty"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("command must not be empty")
+        );
     }
 
     // =========================================================================
@@ -764,10 +767,7 @@ mod tests {
 
     #[test]
     fn test_template_no_variables_unchanged() {
-        let args = vec![
-            "--help".to_string(),
-            "--version".to_string(),
-        ];
+        let args = vec!["--help".to_string(), "--version".to_string()];
 
         let input = PathBuf::from("/tmp/input.txt");
         let output = PathBuf::from("/tmp/output.txt");
@@ -811,7 +811,12 @@ mod tests {
         let result = adapter.sanitize(&input, &output, ".xyz").await;
 
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("No external sanitizer registered"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("No external sanitizer registered")
+        );
     }
 
     // =========================================================================
@@ -863,12 +868,18 @@ mod tests {
 
     #[test]
     fn test_default_success_action() {
-        assert_eq!(ExternalSuccessAction::default(), ExternalSuccessAction::TrustOutput);
+        assert_eq!(
+            ExternalSuccessAction::default(),
+            ExternalSuccessAction::TrustOutput
+        );
     }
 
     #[test]
     fn test_default_failure_action() {
-        assert_eq!(ExternalFailureAction::default(), ExternalFailureAction::BlockAndLog);
+        assert_eq!(
+            ExternalFailureAction::default(),
+            ExternalFailureAction::BlockAndLog
+        );
     }
 
     // =========================================================================
@@ -879,23 +890,29 @@ mod tests {
     fn test_multiple_extensions_registered() {
         let mut adapter = ExternalSanitizerAdapter::new(PathBuf::from("/tmp/test_work"));
 
-        adapter.register(ExternalSanitizerConfig {
-            extension: ".jtd".to_string(),
-            command: "jtd_tool".to_string(),
-            ..Default::default()
-        }).unwrap();
+        adapter
+            .register(ExternalSanitizerConfig {
+                extension: ".jtd".to_string(),
+                command: "jtd_tool".to_string(),
+                ..Default::default()
+            })
+            .unwrap();
 
-        adapter.register(ExternalSanitizerConfig {
-            extension: ".dwg".to_string(),
-            command: "dwg_tool".to_string(),
-            ..Default::default()
-        }).unwrap();
+        adapter
+            .register(ExternalSanitizerConfig {
+                extension: ".dwg".to_string(),
+                command: "dwg_tool".to_string(),
+                ..Default::default()
+            })
+            .unwrap();
 
-        adapter.register(ExternalSanitizerConfig {
-            extension: ".dxf".to_string(),
-            command: "dxf_tool".to_string(),
-            ..Default::default()
-        }).unwrap();
+        adapter
+            .register(ExternalSanitizerConfig {
+                extension: ".dxf".to_string(),
+                command: "dxf_tool".to_string(),
+                ..Default::default()
+            })
+            .unwrap();
 
         assert_eq!(adapter.config_count(), 3);
         assert!(adapter.find_adapter(".jtd").is_some());

@@ -25,7 +25,9 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use std::fmt;
 
-use crate::parser_trait::{ContentParser, ParseError, SanitizeAction, SanitizePolicy, SanitizedOutput};
+use crate::parser_trait::{
+    ContentParser, ParseError, SanitizeAction, SanitizePolicy, SanitizedOutput,
+};
 use crate::pdf_sanitizer::{PdfSanitizer, PdfThreat};
 use crate::report::SanitizationAction;
 
@@ -138,7 +140,9 @@ impl PdfStreamParser {
             }
             SanitizationAction::PdfSubmitFormRemoved => SanitizeAction::ExternalLinkRemoved,
             SanitizationAction::PdfUriRemoved { .. } => SanitizeAction::ExternalLinkRemoved,
-            SanitizationAction::PdfEmbeddedFileFlagged { .. } => SanitizeAction::EmbeddedFileRemoved,
+            SanitizationAction::PdfEmbeddedFileFlagged { .. } => {
+                SanitizeAction::EmbeddedFileRemoved
+            }
             SanitizationAction::PdfRichMediaRemoved => SanitizeAction::EmbeddedFileRemoved,
             _ => SanitizeAction::CustomAction(format!("{:?}", action)),
         }
@@ -161,7 +165,9 @@ impl PdfStreamParser {
     /// on validation failure.
     fn validate_input(&self, input: &[u8], policy: &SanitizePolicy) -> Result<(), ParseError> {
         // Check size limit from policy (takes precedence over config)
-        let effective_max = policy.max_file_size_bytes.unwrap_or(self.config.max_file_size_bytes);
+        let effective_max = policy
+            .max_file_size_bytes
+            .unwrap_or(self.config.max_file_size_bytes);
 
         if input.len() as u64 > effective_max {
             return Err(ParseError::FileTooLarge(input.len() as u64));
@@ -316,7 +322,12 @@ impl PdfStreamParser {
                     (b"( )".to_vec(), SanitizeAction::JavaScriptRemoved)
                 } else {
                     // Policy allows JS but still record that we detected it
-                    (Vec::new(), SanitizeAction::CustomAction("JavaScriptDetected-PolicyAllowed".to_string()))
+                    (
+                        Vec::new(),
+                        SanitizeAction::CustomAction(
+                            "JavaScriptDetected-PolicyAllowed".to_string(),
+                        ),
+                    )
                 }
             }
 
@@ -324,7 +335,10 @@ impl PdfStreamParser {
                 if policy.remove_javascript {
                     (b"{}".to_vec(), SanitizeAction::JavaScriptRemoved)
                 } else {
-                    (Vec::new(), SanitizeAction::CustomAction("AADetected-PolicyAllowed".to_string()))
+                    (
+                        Vec::new(),
+                        SanitizeAction::CustomAction("AADetected-PolicyAllowed".to_string()),
+                    )
                 }
             }
 
@@ -332,22 +346,30 @@ impl PdfStreamParser {
                 if policy.remove_javascript {
                     (vec![b' '; 11], SanitizeAction::JavaScriptRemoved)
                 } else {
-                    (Vec::new(), SanitizeAction::CustomAction("OpenActionDetected-PolicyAllowed".to_string()))
+                    (
+                        Vec::new(),
+                        SanitizeAction::CustomAction(
+                            "OpenActionDetected-PolicyAllowed".to_string(),
+                        ),
+                    )
                 }
             }
 
-            PdfThreat::AcroForm { .. } => {
-                (
-                    vec![],
-                    SanitizeAction::BinarySanitized("AcroForm flattened".to_string()),
-                )
-            }
+            PdfThreat::AcroForm { .. } => (
+                vec![],
+                SanitizeAction::BinarySanitized("AcroForm flattened".to_string()),
+            ),
 
             PdfThreat::SubmitForm { .. } => {
                 if policy.remove_external_links {
                     (vec![b' '; 12], SanitizeAction::ExternalLinkRemoved)
                 } else {
-                    (Vec::new(), SanitizeAction::CustomAction("SubmitFormDetected-PolicyAllowed".to_string()))
+                    (
+                        Vec::new(),
+                        SanitizeAction::CustomAction(
+                            "SubmitFormDetected-PolicyAllowed".to_string(),
+                        ),
+                    )
                 }
             }
 
@@ -355,20 +377,23 @@ impl PdfStreamParser {
                 if policy.remove_external_links {
                     (b"/URI ()".to_vec(), SanitizeAction::ExternalLinkRemoved)
                 } else {
-                    (Vec::new(), SanitizeAction::CustomAction("URIDetected-PolicyAllowed".to_string()))
+                    (
+                        Vec::new(),
+                        SanitizeAction::CustomAction("URIDetected-PolicyAllowed".to_string()),
+                    )
                 }
             }
 
             PdfThreat::EmbeddedFile { name, .. } => {
                 if policy.remove_embedded_files {
-                    (
-                        vec![],
-                        SanitizeAction::EmbeddedFileRemoved,
-                    )
+                    (vec![], SanitizeAction::EmbeddedFileRemoved)
                 } else {
                     (
                         Vec::new(),
-                        SanitizeAction::CustomAction(format!("EmbeddedFile({})-PolicyAllowed", name)),
+                        SanitizeAction::CustomAction(format!(
+                            "EmbeddedFile({})-PolicyAllowed",
+                            name
+                        )),
                     )
                 }
             }
@@ -377,7 +402,10 @@ impl PdfStreamParser {
                 if policy.remove_embedded_files {
                     (vec![b' '; 10], SanitizeAction::EmbeddedFileRemoved)
                 } else {
-                    (Vec::new(), SanitizeAction::CustomAction("RichMediaDetected-PolicyAllowed".to_string()))
+                    (
+                        Vec::new(),
+                        SanitizeAction::CustomAction("RichMediaDetected-PolicyAllowed".to_string()),
+                    )
                 }
             }
         }
@@ -392,7 +420,11 @@ impl Default for PdfStreamParser {
 
 impl fmt::Display for PdfStreamParser {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "PdfStreamParser[max={}MB]", self.config.max_file_size_bytes / (1024 * 1024))
+        write!(
+            f,
+            "PdfStreamParser[max={}MB]",
+            self.config.max_file_size_bytes / (1024 * 1024)
+        )
     }
 }
 
@@ -403,11 +435,7 @@ impl fmt::Display for PdfStreamParser {
 #[async_trait]
 impl ContentParser for PdfStreamParser {
     fn supported_types(&self) -> Vec<&'static str> {
-        vec![
-            "application/pdf",
-            "application/x-pdf",
-            ".pdf",
-        ]
+        vec!["application/pdf", "application/x-pdf", ".pdf"]
     }
 
     fn parser_name(&self) -> &str {
@@ -531,10 +559,7 @@ mod tests {
             types.contains(&"application/pdf"),
             "Must support application/pdf MIME type"
         );
-        assert!(
-            types.contains(&".pdf"),
-            "Must support .pdf extension"
-        );
+        assert!(types.contains(&".pdf"), "Must support .pdf extension");
         assert!(
             types.contains(&"application/x-pdf"),
             "Must support application/x-pdf alias"
@@ -567,9 +592,15 @@ mod tests {
         assert!(result.is_ok(), "Clean PDF should parse successfully");
 
         let output = result.unwrap();
-        assert_eq!(output.original_size, output.sanitized_size, "Clean PDF should maintain same size");
+        assert_eq!(
+            output.original_size, output.sanitized_size,
+            "Clean PDF should maintain same size"
+        );
         assert!(!output.has_actions(), "Clean PDF should have zero actions");
-        assert!(!output.has_warnings(), "Clean PDF should have zero warnings");
+        assert!(
+            !output.has_warnings(),
+            "Clean PDF should have zero warnings"
+        );
         assert_eq!(output.parser_name, "PdfStreamParser");
     }
 
@@ -588,7 +619,10 @@ mod tests {
         let js_input = Bytes::from(make_js_pdf());
         let result = parser.parse_and_sanitize(js_input, &policy).await;
 
-        assert!(result.is_ok(), "JS-containing PDF should parse successfully");
+        assert!(
+            result.is_ok(),
+            "JS-containing PDF should parse successfully"
+        );
 
         let output = result.unwrap();
         assert!(
@@ -598,7 +632,9 @@ mod tests {
 
         // Verify JS removal action is present
         assert!(
-            output.actions_taken.contains(&SanitizeAction::JavaScriptRemoved),
+            output
+                .actions_taken
+                .contains(&SanitizeAction::JavaScriptRemoved),
             "Actions should include JavaScriptRemoved"
         );
     }
@@ -618,14 +654,22 @@ mod tests {
         let embed_input = Bytes::from(make_embedded_file_pdf());
         let result = parser.parse_and_sanitize(embed_input, &policy).await;
 
-        assert!(result.is_ok(), "Embedded-file PDF should parse successfully");
+        assert!(
+            result.is_ok(),
+            "Embedded-file PDF should parse successfully"
+        );
 
         let output = result.unwrap();
         assert!(
-            output.actions_taken.contains(&SanitizeAction::EmbeddedFileRemoved),
+            output
+                .actions_taken
+                .contains(&SanitizeAction::EmbeddedFileRemoved),
             "Should detect and record embedded file removal"
         );
-        assert!(!output.warnings.is_empty(), "Should generate warning about embedded file");
+        assert!(
+            !output.warnings.is_empty(),
+            "Should generate warning about embedded file"
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -722,7 +766,11 @@ mod tests {
     #[test]
     fn test_default_config_values() {
         let cfg = PdfStreamParserConfig::default();
-        assert_eq!(cfg.max_file_size_bytes, 500 * 1024 * 1024, "Default should be 500 MiB");
+        assert_eq!(
+            cfg.max_file_size_bytes,
+            500 * 1024 * 1024,
+            "Default should be 500 MiB"
+        );
         assert!(!cfg.enable_true_cdr, "True CDR should be off by default");
     }
 

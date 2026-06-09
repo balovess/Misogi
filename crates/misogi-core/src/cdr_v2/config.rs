@@ -104,9 +104,7 @@ impl PdfConfig {
             return Err("max_embedded_file_size_bytes must be > 0".into());
         }
         if self.max_embedded_file_size_bytes > self.max_file_size_bytes {
-            return Err(
-                "max_embedded_file_size_bytes must not exceed max_file_size_bytes".into(),
-            );
+            return Err("max_embedded_file_size_bytes must not exceed max_file_size_bytes".into());
         }
         Ok(())
     }
@@ -251,8 +249,7 @@ impl ArchiveConfig {
         }
         if self.max_single_file_size_bytes > self.max_total_extracted_size_bytes {
             return Err(
-                "max_single_file_size_bytes must not exceed max_total_extracted_size_bytes"
-                    .into(),
+                "max_single_file_size_bytes must not exceed max_total_extracted_size_bytes".into(),
             );
         }
         Ok(())
@@ -395,7 +392,7 @@ impl WhitelistConfig {
 /// This is the root configuration structure loaded from config files
 /// (TOML preferred). It aggregates all format-specific and cross-cutting
 /// settings into a single serializable/deserializable unit.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct CdrV2Config {
     /// PDF-specific processing settings.
     #[serde(default)]
@@ -412,17 +409,6 @@ pub struct CdrV2Config {
     /// Whitelist / trust configuration.
     #[serde(default)]
     pub whitelist: WhitelistConfig,
-}
-
-impl Default for CdrV2Config {
-    fn default() -> Self {
-        Self {
-            pdf: PdfConfig::default(),
-            office: OfficeConfig::default(),
-            archive: ArchiveConfig::default(),
-            whitelist: WhitelistConfig::default(),
-        }
-    }
 }
 
 impl CdrV2Config {

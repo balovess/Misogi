@@ -38,10 +38,7 @@ pub enum EdrError {
 
     /// Provider-specific error with context.
     #[error("{provider} error: {message}")]
-    Provider {
-        provider: String,
-        message: String,
-    },
+    Provider { provider: String, message: String },
 
     /// Internal error (lock poisoned, unexpected state).
     #[error("EDR internal error: {0}")]

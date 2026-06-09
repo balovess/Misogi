@@ -68,10 +68,11 @@ use misogi_core::error::{MisogiError, Result};
 /// The receiver supports fewer driver types than the sender since it is the
 /// passive endpoint of file transfers. It primarily handles incoming files
 /// from direct TCP connections or storage relay pickup.
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum ReceiverTransferDriverType {
     /// Accept files via direct TCP connection from sender.
+    #[default]
     DirectTcp,
 
     /// Pick up files from storage relay input directory.
@@ -79,12 +80,6 @@ pub enum ReceiverTransferDriverType {
     /// Used for air-gapped networks where the sender deposits files to
     /// a shared filesystem and the receiver polls for new arrivals.
     StorageRelay,
-}
-
-impl Default for ReceiverTransferDriverType {
-    fn default() -> Self {
-        Self::DirectTcp
-    }
 }
 
 impl ReceiverTransferDriverType {
@@ -120,7 +115,6 @@ pub struct ReceiverTransferDriverConfig {
     pub r#type: ReceiverTransferDriverType,
 
     // ---- Storage Relay Specific (Receiver Side) ----
-
     /// Input directory for picking up files deposited by sender (relay mode).
     #[serde(default)]
     pub input_dir: Option<String>,
@@ -172,10 +166,11 @@ impl Default for ReceiverTransferDriverConfig {
 // =============================================================================
 
 /// Audit log formatter type selection (same as sender).
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum LogFormatType {
     /// JSON Lines format — one JSON object per line (default).
+    #[default]
     Json,
 
     /// Syslog-compatible text format with structured metadata.
@@ -186,12 +181,6 @@ pub enum LogFormatType {
 
     /// User-customizable Tera template format.
     Custom,
-}
-
-impl Default for LogFormatType {
-    fn default() -> Self {
-        Self::Json
-    }
 }
 
 /// Log configuration section for the receiver node.
@@ -242,10 +231,11 @@ impl Default for LogConfig {
 // =============================================================================
 
 /// Action for handling unknown/untrusted fonts in reconstructed PDF documents.
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum UnknownFontAction {
     /// Keep unknown font references unchanged.
+    #[default]
     Preserve,
 
     /// Remove unknown font references entirely.
@@ -253,12 +243,6 @@ pub enum UnknownFontAction {
 
     /// Replace unknown fonts with fallback fonts.
     Replace,
-}
-
-impl Default for UnknownFontAction {
-    fn default() -> Self {
-        Self::Preserve
-    }
 }
 
 /// Encoding configuration for the receiver node.
@@ -285,10 +269,7 @@ fn default_encoding() -> String {
 }
 
 fn default_fallback_fonts() -> Vec<String> {
-    vec![
-        String::from("IPAexMincho"),
-        String::from("IPAGothic"),
-    ]
+    vec![String::from("IPAexMincho"), String::from("IPAGothic")]
 }
 
 impl Default for EncodingConfig {
@@ -309,7 +290,7 @@ impl Default for EncodingConfig {
 ///
 /// Used for validating incoming files against expected magic bytes and
 /// assigning appropriate handlers for received content.
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct FileTypeRegistryEntry {
     /// File extension including leading dot (e.g., ".pdf", ".jtd", ".xlsx").
     #[serde(default)]
@@ -328,22 +309,11 @@ pub struct FileTypeRegistryEntry {
     pub handler: String,
 }
 
-impl Default for FileTypeRegistryEntry {
-    fn default() -> Self {
-        Self {
-            extension: String::new(),
-            magic_hex: String::new(),
-            required_magic: false,
-            handler: String::new(),
-        }
-    }
-}
-
 /// Blocked file extension rule for the receiver.
 ///
 /// Extensions listed here are rejected at the API boundary before any
 /// processing occurs, providing a first-line defense against malicious uploads.
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct BlockedExtensionEntry {
     /// File extension to block (including leading dot).
     #[serde(default)]
@@ -352,15 +322,6 @@ pub struct BlockedExtensionEntry {
     /// Human-readable reason for the block.
     #[serde(default)]
     pub reason: String,
-}
-
-impl Default for BlockedExtensionEntry {
-    fn default() -> Self {
-        Self {
-            extension: String::new(),
-            reason: String::new(),
-        }
-    }
 }
 
 /// File types configuration section for the receiver node.
@@ -635,7 +596,6 @@ impl Default for VersioningConfig {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct TomlConfig {
     // ---- Core Sections (Required for Basic Operation) ----
-
     /// HTTP/gRPC server listener settings.
     #[serde(default)]
     pub server: ServerConfig,
@@ -645,7 +605,6 @@ pub struct TomlConfig {
     pub storage: StorageConfig,
 
     // ---- Optional Core Sections ----
-
     /// Reverse tunnel to sender node.
     #[serde(default)]
     pub tunnel: Option<TunnelConfig>,
@@ -655,7 +614,6 @@ pub struct TomlConfig {
     pub daemon: Option<DaemonConfig>,
 
     // ---- Phase 5 Extended Sections (All Optional, Receiver Subset) ----
-
     /// Transfer driver backend selection (receiver side).
     #[serde(default)]
     pub transfer_driver: Option<ReceiverTransferDriverConfig>,
@@ -716,12 +674,10 @@ pub struct TomlConfig {
 #[allow(dead_code)]
 pub struct ReceiverConfig {
     // ---- Core Network Settings ----
-
     /// Bind address for the HTTP API server.
     pub server_addr: String,
 
     // ---- Storage Paths ----
-
     /// Directory for storing received chunks during upload.
     pub chunk_dir: PathBuf,
 
@@ -729,7 +685,6 @@ pub struct ReceiverConfig {
     pub download_dir: PathBuf,
 
     // ---- Tunnel Settings ----
-
     /// Remote tunnel server address (if configured).
     pub tunnel_remote_addr: Option<String>,
 
@@ -740,7 +695,6 @@ pub struct ReceiverConfig {
     pub tunnel_local_port: u16,
 
     // ---- Daemon Settings ----
-
     /// Whether to run as background daemon.
     pub daemon_enabled: bool,
 
@@ -751,7 +705,6 @@ pub struct ReceiverConfig {
     pub daemon_log_file: Option<String>,
 
     // ---- Phase 5: Transfer Driver (Receiver) ----
-
     /// Selected transfer driver type (direct_tcp, storage_relay).
     pub transfer_driver_type: String,
 
@@ -765,7 +718,6 @@ pub struct ReceiverConfig {
     pub transfer_poll_interval_secs: u64,
 
     // ---- Phase 5: Log Configuration ----
-
     /// Audit log output format (json, syslog, cef, custom).
     pub log_format: String,
 
@@ -779,7 +731,6 @@ pub struct ReceiverConfig {
     pub log_retention_days: u32,
 
     // ---- Phase 5: Encoding ----
-
     /// Fallback encoding name for undetectable inputs.
     pub encoding_default_encoding: String,
 
@@ -790,12 +741,10 @@ pub struct ReceiverConfig {
     pub encoding_fallback_fonts: Vec<String>,
 
     // ---- Phase 5: File Types ----
-
     /// Default action for unrecognized file extensions.
     pub file_types_default_action: String,
 
     // ---- Legacy Fields (Required by existing code) ----
-
     /// Storage directory path (alias for chunk_dir, used by ChunkStorage).
     ///
     /// This field provides backward compatibility with [`ChunkStorage`] which
@@ -819,7 +768,6 @@ pub struct ReceiverConfig {
     pub ppap_log_converted: bool,
 
     // ---- Phase 7: UDP Blast (Air-Gap Data Diode) ----
-
     /// UDP port for incoming Blast traffic from data diode.
     #[serde(default = "default_blast_listen_port")]
     pub blast_listen_port: u16,
@@ -837,7 +785,6 @@ pub struct ReceiverConfig {
     pub blast_session_timeout_secs: u64,
 
     // ---- Multi-Version API Management (Resolved Runtime Fields) ----
-
     /// Default active API version for this deployment ("v1" or "v2").
     pub versioning_default_version: String,
 
@@ -956,15 +903,13 @@ impl ReceiverConfig {
         // Step 1: Load from TOML file
         let mut config = if let Some(ref path) = cli.config {
             match std::fs::read_to_string(path) {
-                Ok(content) => {
-                    match toml::from_str::<TomlConfig>(&content) {
-                        Ok(toml_config) => Self::from_toml_unchecked(&toml_config),
-                        Err(e) => {
-                            tracing::error!(error = %e, path = %path.display(), "Failed to parse TOML config, using defaults");
-                            Self::default()
-                        }
+                Ok(content) => match toml::from_str::<TomlConfig>(&content) {
+                    Ok(toml_config) => Self::from_toml_unchecked(&toml_config),
+                    Err(e) => {
+                        tracing::error!(error = %e, path = %path.display(), "Failed to parse TOML config, using defaults");
+                        Self::default()
                     }
-                }
+                },
                 Err(e) => {
                     tracing::error!(error = %e, path = ?path, "Failed to read config file, using defaults");
                     Self::default()
@@ -1016,18 +961,27 @@ impl ReceiverConfig {
             };
 
         // Phase 5 sections
-        let (transfer_driver_type, transfer_input_dir, transfer_output_dir, transfer_poll_interval_secs) =
-            if let Some(ref td) = toml.transfer_driver {
-                let type_str = td.r#type.as_str().to_string();
-                (
-                    type_str.to_string(),
-                    td.input_dir.clone(),
-                    td.output_dir.clone(),
-                    td.poll_interval_secs,
-                )
-            } else {
-                ("direct_tcp".to_string(), None, None, default_receiver_relay_poll_interval())
-            };
+        let (
+            transfer_driver_type,
+            transfer_input_dir,
+            transfer_output_dir,
+            transfer_poll_interval_secs,
+        ) = if let Some(ref td) = toml.transfer_driver {
+            let type_str = td.r#type.as_str().to_string();
+            (
+                type_str.to_string(),
+                td.input_dir.clone(),
+                td.output_dir.clone(),
+                td.poll_interval_secs,
+            )
+        } else {
+            (
+                "direct_tcp".to_string(),
+                None,
+                None,
+                default_receiver_relay_poll_interval(),
+            )
+        };
 
         let (log_format, log_template_path, log_max_memory_entries, log_retention_days) =
             if let Some(ref lg) = toml.log {
@@ -1037,9 +991,19 @@ impl ReceiverConfig {
                     LogFormatType::Cef => "cef",
                     LogFormatType::Custom => "custom",
                 };
-                (fmt_str.to_string(), lg.template_path.clone(), lg.max_memory_entries, lg.retention_days)
+                (
+                    fmt_str.to_string(),
+                    lg.template_path.clone(),
+                    lg.max_memory_entries,
+                    lg.retention_days,
+                )
             } else {
-                ("json".to_string(), None, default_max_memory_entries(), default_retention_days())
+                (
+                    "json".to_string(),
+                    None,
+                    default_max_memory_entries(),
+                    default_retention_days(),
+                )
             };
 
         let (encoding_default_encoding, encoding_unknown_font_action, encoding_fallback_fonts) =
@@ -1049,25 +1013,39 @@ impl ReceiverConfig {
                     UnknownFontAction::Strip => "strip",
                     UnknownFontAction::Replace => "replace",
                 };
-                (enc.default_encoding.clone(), ufas.to_string(), enc.fallback_fonts.clone())
-            } else {
-                (default_encoding(), "preserve".to_string(), default_fallback_fonts())
-            };
-
-        let file_types_default_action =
-            toml.file_types.as_ref().map(|f| f.default_action.clone()).unwrap_or_else(default_file_action);
-
-        // ---- Map Versioning Section (Multi-Version API Management) ----
-        let (versioning_default_version, versioning_deprecation_warnings_enabled, versioning_deprecation_headers) =
-            if let Some(ref v) = toml.versioning {
                 (
-                    v.default_version.clone(),
-                    v.deprecation_warnings_enabled,
-                    v.deprecation_headers,
+                    enc.default_encoding.clone(),
+                    ufas.to_string(),
+                    enc.fallback_fonts.clone(),
                 )
             } else {
-                ("v1".to_string(), true, true)
+                (
+                    default_encoding(),
+                    "preserve".to_string(),
+                    default_fallback_fonts(),
+                )
             };
+
+        let file_types_default_action = toml
+            .file_types
+            .as_ref()
+            .map(|f| f.default_action.clone())
+            .unwrap_or_else(default_file_action);
+
+        // ---- Map Versioning Section (Multi-Version API Management) ----
+        let (
+            versioning_default_version,
+            versioning_deprecation_warnings_enabled,
+            versioning_deprecation_headers,
+        ) = if let Some(ref v) = toml.versioning {
+            (
+                v.default_version.clone(),
+                v.deprecation_warnings_enabled,
+                v.deprecation_headers,
+            )
+        } else {
+            ("v1".to_string(), true, true)
+        };
 
         Self {
             server_addr,
@@ -1097,10 +1075,25 @@ impl ReceiverConfig {
             file_types_default_action,
             ppap_log_converted: false,
             // Blast (UDP data diode) fields
-            blast_enabled: toml.blast_config.as_ref().map(|b| b.enabled).unwrap_or(false),
-            blast_listen_port: toml.blast_config.as_ref().map(|b| b.listen_port).unwrap_or_else(default_blast_listen_port),
-            blast_output_dir: toml.blast_config.as_ref().and_then(|b| b.output_dir.clone()),
-            blast_session_timeout_secs: toml.blast_config.as_ref().map(|b| b.session_timeout_secs).unwrap_or_else(default_blast_session_timeout_secs),
+            blast_enabled: toml
+                .blast_config
+                .as_ref()
+                .map(|b| b.enabled)
+                .unwrap_or(false),
+            blast_listen_port: toml
+                .blast_config
+                .as_ref()
+                .map(|b| b.listen_port)
+                .unwrap_or_else(default_blast_listen_port),
+            blast_output_dir: toml
+                .blast_config
+                .as_ref()
+                .and_then(|b| b.output_dir.clone()),
+            blast_session_timeout_secs: toml
+                .blast_config
+                .as_ref()
+                .map(|b| b.session_timeout_secs)
+                .unwrap_or_else(default_blast_session_timeout_secs),
             versioning_default_version,
             versioning_deprecation_warnings_enabled,
             versioning_deprecation_headers,
@@ -1150,9 +1143,7 @@ impl ReceiverConfig {
     pub fn from_toml(path: &Path) -> Result<Self> {
         info!(config_path = %path.display(), "Loading receiver configuration from TOML file");
 
-        let content = std::fs::read_to_string(path).map_err(|e| {
-            MisogiError::Io(e)
-        })?;
+        let content = std::fs::read_to_string(path).map_err(MisogiError::Io)?;
 
         let toml_config: TomlConfig = toml::from_str(&content).map_err(|e| {
             MisogiError::Protocol(format!(
@@ -1171,11 +1162,7 @@ impl ReceiverConfig {
         // Map optional tunnel configuration
         let (tunnel_remote_addr, tunnel_auth_token, tunnel_local_port) =
             if let Some(tunnel) = toml_config.tunnel {
-                (
-                    tunnel.remote_addr,
-                    tunnel.auth_token,
-                    tunnel.local_port,
-                )
+                (tunnel.remote_addr, tunnel.auth_token, tunnel.local_port)
             } else {
                 (None, None, default_tunnel_port())
             };
@@ -1183,11 +1170,7 @@ impl ReceiverConfig {
         // Map optional daemon configuration
         let (daemon_enabled, daemon_pid_file, daemon_log_file) =
             if let Some(daemon) = toml_config.daemon {
-                (
-                    daemon.enabled,
-                    daemon.pid_file,
-                    daemon.log_file,
-                )
+                (daemon.enabled, daemon.pid_file, daemon.log_file)
             } else {
                 (default_daemon_enabled(), None, None)
             };
@@ -1231,7 +1214,12 @@ impl ReceiverConfig {
                     lg.retention_days,
                 )
             } else {
-                ("json".to_string(), None, default_max_memory_entries(), default_retention_days())
+                (
+                    "json".to_string(),
+                    None,
+                    default_max_memory_entries(),
+                    default_retention_days(),
+                )
             };
 
         // ---- Map Phase 5: Encoding Section ----
@@ -1248,21 +1236,25 @@ impl ReceiverConfig {
                     enc.fallback_fonts.clone(),
                 )
             } else {
-                (default_encoding(), "preserve".to_string(), default_fallback_fonts())
+                (
+                    default_encoding(),
+                    "preserve".to_string(),
+                    default_fallback_fonts(),
+                )
             };
 
         // ---- Map Phase 5: File Types Section ----
-        let file_types_default_action =
-            toml_config.file_types
-                .as_ref()
-                .map(|ft| ft.default_action.clone())
-                .unwrap_or_else(default_file_action);
+        let file_types_default_action = toml_config
+            .file_types
+            .as_ref()
+            .map(|ft| ft.default_action.clone())
+            .unwrap_or_else(default_file_action);
 
         Ok(Self {
             server_addr,
             chunk_dir: chunk_dir.clone(),
             download_dir,
-            storage_dir: storage_dir, // Legacy alias (String for ChunkStorage compatibility)
+            storage_dir, // Legacy alias (String for ChunkStorage compatibility)
             tunnel_port: tunnel_local_port,
             output_dir: None,
             log_level: String::from("info"),
@@ -1287,10 +1279,25 @@ impl ReceiverConfig {
             file_types_default_action,
             ppap_log_converted: false,
             // Blast (UDP data diode) fields
-            blast_enabled: toml_config.blast_config.as_ref().map(|b| b.enabled).unwrap_or(false),
-            blast_listen_port: toml_config.blast_config.as_ref().map(|b| b.listen_port).unwrap_or_else(default_blast_listen_port),
-            blast_output_dir: toml_config.blast_config.as_ref().and_then(|b| b.output_dir.clone()),
-            blast_session_timeout_secs: toml_config.blast_config.as_ref().map(|b| b.session_timeout_secs).unwrap_or_else(default_blast_session_timeout_secs),
+            blast_enabled: toml_config
+                .blast_config
+                .as_ref()
+                .map(|b| b.enabled)
+                .unwrap_or(false),
+            blast_listen_port: toml_config
+                .blast_config
+                .as_ref()
+                .map(|b| b.listen_port)
+                .unwrap_or_else(default_blast_listen_port),
+            blast_output_dir: toml_config
+                .blast_config
+                .as_ref()
+                .and_then(|b| b.output_dir.clone()),
+            blast_session_timeout_secs: toml_config
+                .blast_config
+                .as_ref()
+                .map(|b| b.session_timeout_secs)
+                .unwrap_or_else(default_blast_session_timeout_secs),
             versioning_default_version: "v1".to_string(),
             versioning_deprecation_warnings_enabled: true,
             versioning_deprecation_headers: true,
@@ -1473,8 +1480,13 @@ poll_interval_secs = 20
 "#;
         let config: TomlConfig = toml::from_str(toml_content).unwrap();
 
-        let td = config.transfer_driver.expect("transfer_driver should be present");
-        assert!(matches!(td.r#type, ReceiverTransferDriverType::StorageRelay));
+        let td = config
+            .transfer_driver
+            .expect("transfer_driver should be present");
+        assert!(matches!(
+            td.r#type,
+            ReceiverTransferDriverType::StorageRelay
+        ));
         assert_eq!(td.input_dir.as_deref().unwrap(), "./relay/inbound/");
         assert_eq!(td.poll_interval_secs, 20);
     }
@@ -1612,7 +1624,12 @@ default_action = "allow"
 
         let (driver_type, _, _, poll) = if let Some(ref td) = toml.transfer_driver {
             let ds = td.r#type.as_str().to_string();
-            (ds.to_string(), td.input_dir.clone(), td.output_dir.clone(), td.poll_interval_secs)
+            (
+                ds.to_string(),
+                td.input_dir.clone(),
+                td.output_dir.clone(),
+                td.poll_interval_secs,
+            )
         } else {
             ("direct_tcp".to_string(), None, None, 10)
         };
@@ -1624,7 +1641,12 @@ default_action = "allow"
                 LogFormatType::Cef => "cef",
                 LogFormatType::Custom => "custom",
             };
-            (fs.to_string(), lg.template_path.clone(), lg.max_memory_entries, lg.retention_days)
+            (
+                fs.to_string(),
+                lg.template_path.clone(),
+                lg.max_memory_entries,
+                lg.retention_days,
+            )
         } else {
             ("json".to_string(), None, 1000, 365)
         };
@@ -1635,12 +1657,24 @@ default_action = "allow"
                 UnknownFontAction::Strip => "strip",
                 UnknownFontAction::Replace => "replace",
             };
-            (e.default_encoding.clone(), ufas.to_string(), e.fallback_fonts.clone())
+            (
+                e.default_encoding.clone(),
+                ufas.to_string(),
+                e.fallback_fonts.clone(),
+            )
         } else {
-            ("utf-8".to_string(), "preserve".to_string(), vec![String::from("IPAexMincho"), String::from("IPAGothic")])
+            (
+                "utf-8".to_string(),
+                "preserve".to_string(),
+                vec![String::from("IPAexMincho"), String::from("IPAGothic")],
+            )
         };
 
-        let fta = toml.file_types.as_ref().map(|f| f.default_action.clone()).unwrap_or_else(|| "allow".to_string());
+        let fta = toml
+            .file_types
+            .as_ref()
+            .map(|f| f.default_action.clone())
+            .unwrap_or_else(|| "allow".to_string());
 
         ReceiverConfig {
             server_addr,
@@ -1692,8 +1726,10 @@ default_action = "allow"
 
     #[test]
     fn test_validate_empty_server_addr_fails() {
-        let mut config = ReceiverConfig::default();
-        config.server_addr = String::new();
+        let config = ReceiverConfig {
+            server_addr: String::new(),
+            ..ReceiverConfig::default()
+        };
         assert!(config.validate().is_err());
     }
 
@@ -1703,15 +1739,30 @@ default_action = "allow"
 
     #[test]
     fn test_enum_defaults() {
-        assert!(matches!(ReceiverTransferDriverType::default(), ReceiverTransferDriverType::DirectTcp));
+        assert!(matches!(
+            ReceiverTransferDriverType::default(),
+            ReceiverTransferDriverType::DirectTcp
+        ));
         assert!(matches!(LogFormatType::default(), LogFormatType::Json));
-        assert!(matches!(UnknownFontAction::default(), UnknownFontAction::Preserve));
+        assert!(matches!(
+            UnknownFontAction::default(),
+            UnknownFontAction::Preserve
+        ));
     }
 
     #[test]
     fn test_receiver_transfer_driver_type_from_str_fallback() {
-        assert!(matches!(ReceiverTransferDriverType::from_str_fallback("direct_tcp"), ReceiverTransferDriverType::DirectTcp));
-        assert!(matches!(ReceiverTransferDriverType::from_str_fallback("storage_relay"), ReceiverTransferDriverType::StorageRelay));
-        assert!(matches!(ReceiverTransferDriverType::from_str_fallback("unknown"), ReceiverTransferDriverType::DirectTcp)); // fallback
+        assert!(matches!(
+            ReceiverTransferDriverType::from_str_fallback("direct_tcp"),
+            ReceiverTransferDriverType::DirectTcp
+        ));
+        assert!(matches!(
+            ReceiverTransferDriverType::from_str_fallback("storage_relay"),
+            ReceiverTransferDriverType::StorageRelay
+        ));
+        assert!(matches!(
+            ReceiverTransferDriverType::from_str_fallback("unknown"),
+            ReceiverTransferDriverType::DirectTcp
+        )); // fallback
     }
 }

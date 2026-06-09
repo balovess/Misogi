@@ -11,12 +11,9 @@
 //! 3. Pass collected shards to RS decoder for reconstruction
 //! 4. Trim padding to recover exact original length
 
-use crate::error::{MisogiError, Result};
-use crate::fec::{
-    FecConfig,
-    reed_solomon::ReedSolomonCodec,
-};
 use super::packet::FecPacket;
+use crate::error::{MisogiError, Result};
+use crate::fec::{FecConfig, reed_solomon::ReedSolomonCodec};
 
 /// Reconstructs original data from a (possibly incomplete) set of received packets.
 pub struct BlindSendDecoder {
@@ -76,10 +73,7 @@ impl BlindSendDecoder {
                 );
                 continue;
             }
-            received.push((
-                pkt.shard_index as usize,
-                pkt.data.to_vec(),
-            ));
+            received.push((pkt.shard_index as usize, pkt.data.to_vec()));
         }
 
         if received.is_empty() {
@@ -119,8 +113,8 @@ impl BlindSendDecoder {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::driver::BlindSendConfig;
+    use super::*;
 
     // -----------------------------------------------------------------
     // Helper: encode → simulate loss → decode → compare
@@ -183,13 +177,14 @@ mod tests {
         let config = BlindSendConfig {
             fec_data_shards: 16,
             ..Default::default()
-        }.to_fec_config();
+        }
+        .to_fec_config();
         let dec = BlindSendDecoder::new(&config).unwrap();
 
         assert_eq!(dec.packets_needed(0), 16); // Need 16, have 0
-        assert_eq!(dec.packets_needed(10), 6);  // Need 16, have 10
-        assert_eq!(dec.packets_needed(16), 0);  // Need 16, have 16 -> ready
-        assert_eq!(dec.packets_needed(20), 0);  // Already have enough
+        assert_eq!(dec.packets_needed(10), 6); // Need 16, have 10
+        assert_eq!(dec.packets_needed(16), 0); // Need 16, have 16 -> ready
+        assert_eq!(dec.packets_needed(20), 0); // Already have enough
     }
 
     #[test]
@@ -213,7 +208,8 @@ mod tests {
             fec_data_shards: 8,
             redundancy_factor: 1.5, // Low redundancy to keep valid
             ..Default::default()
-        }.to_fec_config();
+        }
+        .to_fec_config();
         let enc = super::super::encoder::BlindSendEncoder::new(&config).unwrap();
         let dec = BlindSendDecoder::new(&config).unwrap();
 

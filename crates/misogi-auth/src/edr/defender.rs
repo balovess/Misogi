@@ -25,12 +25,7 @@ use serde::{Deserialize, Serialize};
 use tracing::debug;
 
 use super::models::{
-    EdrDevicePosture,
-    EdrError,
-    EdrOsInfo,
-    EdrRiskScore,
-    EdrRiskLevel,
-    RiskFactor,
+    EdrDevicePosture, EdrError, EdrOsInfo, EdrRiskLevel, EdrRiskScore, RiskFactor,
 };
 use super::traits::EdrProvider;
 
@@ -92,7 +87,9 @@ impl DefenderEdrProvider {
             return Err(EdrError::Configuration("client_id is required".to_string()));
         }
         if client_secret.is_empty() {
-            return Err(EdrError::Configuration("client_secret is required".to_string()));
+            return Err(EdrError::Configuration(
+                "client_secret is required".to_string(),
+            ));
         }
 
         Ok(Self {
@@ -127,9 +124,10 @@ impl DefenderEdrProvider {
     /// Ensure a valid access token is available, refreshing if necessary.
     async fn ensure_token(&self) -> Result<String, EdrError> {
         {
-            let token = self.access_token.read().map_err(|e| {
-                EdrError::Internal(format!("Token lock poisoned: {e}"))
-            })?;
+            let token = self
+                .access_token
+                .read()
+                .map_err(|e| EdrError::Internal(format!("Token lock poisoned: {e}")))?;
             if !token.is_empty() {
                 return Ok(token.clone());
             }
@@ -203,10 +201,7 @@ impl DefenderEdrProvider {
 
 #[async_trait]
 impl EdrProvider for DefenderEdrProvider {
-    async fn get_device_posture(
-        &self,
-        device_id: &str,
-    ) -> Result<EdrDevicePosture, EdrError> {
+    async fn get_device_posture(&self, device_id: &str) -> Result<EdrDevicePosture, EdrError> {
         let url_encoded = urlencoding::encode(device_id);
         let response = self
             .graph_get(&format!("/security/machines/{url_encoded}"))
@@ -230,7 +225,8 @@ impl EdrProvider for DefenderEdrProvider {
             .map_err(|e| EdrError::InvalidResponse(format!("Parse machine failed: {e}")))?;
 
         let has_active_threats = machine.risk_score.unwrap_or(0) >= 70
-            || machine.exposure_level
+            || machine
+                .exposure_level
                 .as_deref()
                 .map_or(false, |e| e == "High" || e == "Medium");
 
@@ -250,18 +246,12 @@ impl EdrProvider for DefenderEdrProvider {
         })
     }
 
-    async fn has_active_threats(
-        &self,
-        device_id: &str,
-    ) -> Result<bool, EdrError> {
+    async fn has_active_threats(&self, device_id: &str) -> Result<bool, EdrError> {
         let posture = self.get_device_posture(device_id).await?;
         Ok(posture.has_active_threats)
     }
 
-    async fn get_risk_score(
-        &self,
-        device_id: &str,
-    ) -> Result<EdrRiskScore, EdrError> {
+    async fn get_risk_score(&self, device_id: &str) -> Result<EdrRiskScore, EdrError> {
         let posture = self.get_device_posture(device_id).await?;
 
         let score_raw = posture

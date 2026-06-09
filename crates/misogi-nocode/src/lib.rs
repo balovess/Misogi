@@ -46,18 +46,18 @@
 //! runtime.watch_file("config.yaml").await?;
 //! ```
 
-pub mod error;
-pub mod schema;
-pub mod compiler;
-pub mod runtime;
-pub mod health;
 pub mod api;
 pub mod cli;
+pub mod compiler;
+pub mod error;
+pub mod health;
+pub mod runtime;
+pub mod schema;
 
 // Re-export primary types for ergonomic imports
-pub use error::{YamlError, ValidationError, CompileError, RuntimeError, ApiError};
-pub use schema::YamlConfig;
-pub use compiler::{compile, CompileReport};
-pub use runtime::NoCodeRuntime;
 pub use api::create_admin_router;
+pub use compiler::{CompileReport, compile};
+pub use error::{ApiError, CompileError, RuntimeError, ValidationError, YamlError};
 pub use health::build_health_router;
+pub use runtime::NoCodeRuntime;
+pub use schema::YamlConfig;

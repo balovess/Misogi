@@ -12,8 +12,8 @@
 //! | `#[on_scan_content]`  | `PIIDetector`       | Structured PII match reporting    |
 //! | `#[misogi_plugin]`    | `PluginMetadata`    | Auto-registration + metadata     |
 
-use misogi_macros::{misogi_plugin, on_metadata, on_file_stream, on_scan_content};
 use misogi_core::traits::PIIMatch;
+use misogi_macros::{misogi_plugin, on_file_stream, on_metadata, on_scan_content};
 
 /// Korea Financial Supervisory Service compliance plugin.
 ///
@@ -85,8 +85,7 @@ async fn scan_korean_rrn(chunk: &mut [u8]) -> Result<(), std::io::Error> {
         Err(_) => return Ok(()),
     };
 
-    let rrn_pattern =
-        regex::Regex::new(r"\d{6}[-]?\d{7}").expect("RRN regex is valid");
+    let rrn_pattern = regex::Regex::new(r"\d{6}[-]?\d{7}").expect("RRN regex is valid");
 
     for mat in rrn_pattern.find_iter(data_str) {
         let candidate: String = mat.as_str().replace('-', "");
@@ -116,8 +115,7 @@ async fn scan_pii_matches(content: &[u8]) -> Result<Vec<PIIMatch>, std::io::Erro
         Err(_) => return Ok(Vec::new()),
     };
 
-    let rrn_pattern =
-        regex::Regex::new(r"\d{6}[-]?\d{7}").expect("RRN regex is valid");
+    let rrn_pattern = regex::Regex::new(r"\d{6}[-]?\d{7}").expect("RRN regex is valid");
     let mut matches = Vec::new();
 
     for mat in rrn_pattern.find_iter(text) {
@@ -153,10 +151,7 @@ fn validate_rrn_check_digit(rrn: &str) -> bool {
         return false;
     }
 
-    let digits: Vec<u32> = rrn
-        .chars()
-        .filter_map(|c| c.to_digit(10))
-        .collect();
+    let digits: Vec<u32> = rrn.chars().filter_map(|c| c.to_digit(10)).collect();
 
     if digits.len() != 13 {
         return false;

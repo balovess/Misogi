@@ -108,7 +108,11 @@ impl AzureBlobConfig {
                 "container must not be empty".into(),
             ));
         }
-        if !self.container.chars().all(|c| c.is_ascii_lowercase() || c == '-' || c.is_ascii_digit()) {
+        if !self
+            .container
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c == '-' || c.is_ascii_digit())
+        {
             return Err(StorageError::ConfigurationError(
                 "container must be lowercase alphanumeric or hyphens".into(),
             ));
@@ -204,9 +208,7 @@ impl AzureBlobStorage {
         let mut default_headers = reqwest::header::HeaderMap::new();
         default_headers.insert(
             reqwest::header::HeaderName::from_static("x-ms-version"),
-            "2023-11-03"
-                .parse()
-                .unwrap(),
+            "2023-11-03".parse().unwrap(),
         );
 
         let sas_query = match mode {
@@ -217,7 +219,9 @@ impl AzureBlobStorage {
         let http_client = reqwest::Client::builder()
             .default_headers(default_headers)
             .build()
-            .map_err(|e| StorageError::ConfigurationError(format!("HTTP client build failed: {e}")))?;
+            .map_err(|e| {
+                StorageError::ConfigurationError(format!("HTTP client build failed: {e}"))
+            })?;
 
         // For AccessKey mode, validate connectivity via health_check
         let inner = Arc::new(AzureBlobInner {
@@ -254,27 +258,30 @@ impl AzureBlobStorage {
     ) -> Result<String, StorageError> {
         let string_to_sign = format!(
             "{}\n\n{}\n{}\n\n\n\n\n\nx-ms-date:{}\n/{}{}",
-            verb, content_type, content_length, date_str,
+            verb,
+            content_type,
+            content_length,
+            date_str,
             self.inner.config.container,
             encode_key(blob_url)
                 .strip_prefix(&self.inner.base_url)
                 .unwrap_or("")
         );
 
-        let key_bytes =
-            base64::engine::general_purpose::STANDARD
-                .decode(&self.inner.config.credential)
-                .map_err(|_| {
-                    StorageError::ConfigurationError("Invalid base64-encoded account key".into())
-                })?;
+        let key_bytes = base64::engine::general_purpose::STANDARD
+            .decode(&self.inner.config.credential)
+            .map_err(|_| {
+                StorageError::ConfigurationError("Invalid base64-encoded account key".into())
+            })?;
 
-        use hmac::{Hmac, Mac};
         use base64::Engine;
+        use hmac::{Hmac, Mac};
         type HmacSha256 = Hmac<sha2::Sha256>;
         let mut mac = HmacSha256::new_from_slice(&key_bytes)
             .map_err(|e| StorageError::InternalError(format!("HMAC init failed: {e}")))?;
         mac.update(string_to_sign.as_bytes());
-        let signature = base64::engine::general_purpose::STANDARD.encode(mac.finalize().into_bytes());
+        let signature =
+            base64::engine::general_purpose::STANDARD.encode(mac.finalize().into_bytes());
 
         Ok(format!(
             "SharedKey {}:{}",
@@ -321,13 +328,13 @@ impl StorageBackend for AzureBlobStorage {
             .await
             .map_err(|e| map_reqwest_error(&e, key))?
             .error_for_status()
-            .map_err(|e| StorageError::NetworkError(format!(
-                "Azure HTTP error ({}) for '{}'",
-                e.status()
-                    .map(|s| s.as_u16())
-                    .unwrap_or(0),
-                key
-            )))?;
+            .map_err(|e| {
+                StorageError::NetworkError(format!(
+                    "Azure HTTP error ({}) for '{}'",
+                    e.status().map(|s| s.as_u16()).unwrap_or(0),
+                    key
+                ))
+            })?;
 
         let etag = response
             .headers()
@@ -359,7 +366,9 @@ impl StorageBackend for AzureBlobStorage {
         } else {
             let now = Utc::now().format("%a, %d %b %Y %H:%M:%S GMT").to_string();
             let auth = self.authorization_header("GET", "", 0, &now, &url)?;
-            request = request.header("x-ms-date", now).header("Authorization", auth);
+            request = request
+                .header("x-ms-date", now)
+                .header("Authorization", auth);
         }
 
         let response = request
@@ -367,13 +376,18 @@ impl StorageBackend for AzureBlobStorage {
             .await
             .map_err(|e| map_reqwest_error(&e, key))?
             .error_for_status()
-            .map_err(|e| StorageError::NetworkError(format!(
-                "Azure HTTP error ({}) for '{}'",
-                e.status().map(|s| s.as_u16()).unwrap_or(0),
-                key
-            )))?;
+            .map_err(|e| {
+                StorageError::NetworkError(format!(
+                    "Azure HTTP error ({}) for '{}'",
+                    e.status().map(|s| s.as_u16()).unwrap_or(0),
+                    key
+                ))
+            })?;
 
-        let bytes = response.bytes().await.map_err(|e| map_reqwest_error(&e, key))?;
+        let bytes = response
+            .bytes()
+            .await
+            .map_err(|e| map_reqwest_error(&e, key))?;
         debug!(key = %key, size = bytes.len(), "Download complete");
         Ok(bytes)
     }
@@ -385,7 +399,11 @@ impl StorageBackend for AzureBlobStorage {
 
         debug!(key = %key, "Deleting from Azure Blob");
 
-        let mut request = self.inner.http_client.delete(&url).header("x-ms-date", &now);
+        let mut request = self
+            .inner
+            .http_client
+            .delete(&url)
+            .header("x-ms-date", &now);
 
         if let Some(ref sas) = self.inner.sas_query {
             request = request.query(&[("sas", sas.as_str())]);
@@ -399,11 +417,13 @@ impl StorageBackend for AzureBlobStorage {
             .await
             .map_err(|e| map_reqwest_error(&e, key))?
             .error_for_status()
-            .map_err(|e| StorageError::NetworkError(format!(
-                "Azure HTTP error ({}) for '{}'",
-                e.status().map(|s| s.as_u16()).unwrap_or(0),
-                key
-            )))?;
+            .map_err(|e| {
+                StorageError::NetworkError(format!(
+                    "Azure HTTP error ({}) for '{}'",
+                    e.status().map(|s| s.as_u16()).unwrap_or(0),
+                    key
+                ))
+            })?;
 
         info!(key = %key, "Deleted successfully");
         Ok(())
@@ -414,11 +434,7 @@ impl StorageBackend for AzureBlobStorage {
         let url = self.blob_url(key);
         let now = Utc::now().format("%a, %d %b %Y %H:%M:%S GMT").to_string();
 
-        let mut request = self
-            .inner
-            .http_client
-            .head(&url)
-            .header("x-ms-date", &now);
+        let mut request = self.inner.http_client.head(&url).header("x-ms-date", &now);
 
         if let Some(ref sas) = self.inner.sas_query {
             request = request.query(&[("sas", sas.as_str())]);
@@ -436,17 +452,10 @@ impl StorageBackend for AzureBlobStorage {
 
     #[instrument(skip(self))]
     async fn health_check(&self) -> Result<(), StorageError> {
-        let url = format!(
-            "{}?restype=service&comp=properties",
-            self.inner.base_url
-        );
+        let url = format!("{}?restype=service&comp=properties", self.inner.base_url);
         let now = Utc::now().format("%a, %d %b %Y %H:%M:%S GMT").to_string();
 
-        let mut request = self
-            .inner
-            .http_client
-            .get(&url)
-            .header("x-ms-date", &now);
+        let mut request = self.inner.http_client.get(&url).header("x-ms-date", &now);
 
         if let Some(ref sas) = self.inner.sas_query {
             request = request.query(&[("sas", sas.as_str())]);
@@ -503,16 +512,10 @@ fn map_status_error(err: reqwest::Response, key: &str) -> StorageError {
     let status = err.status().as_u16();
     match status {
         404 => StorageError::NotFound(key.into()),
-        403 => StorageError::PermissionDenied(format!(
-            "Access denied for '{key}'"
-        )),
+        403 => StorageError::PermissionDenied(format!("Access denied for '{key}'")),
         409 => StorageError::AlreadyExists(key.into()),
-        400 => StorageError::ConfigurationError(format!(
-            "Bad request for '{key}'"
-        )),
-        _ => StorageError::NetworkError(format!(
-            "Azure HTTP error ({status}) for '{key}'"
-        )),
+        400 => StorageError::ConfigurationError(format!("Bad request for '{key}'")),
+        _ => StorageError::NetworkError(format!("Azure HTTP error ({status}) for '{key}'")),
     }
 }
 

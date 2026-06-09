@@ -18,8 +18,8 @@
 //! `run_daemon_mode()`), not per-transfer. Each call to [`execute_transfer`] reuses
 //! the existing connection.
 
-use bytes::Bytes;
 use crate::state::SharedState;
+use bytes::Bytes;
 use misogi_core::{FileStatus, MisogiError, Result};
 
 /// Execute file transfer using the pluggable transport driver.
@@ -39,10 +39,7 @@ use misogi_core::{FileStatus, MisogiError, Result};
 /// - [`MisogiError::NotFound`] if `file_id` does not exist in the registry.
 /// - [`MisogiError::Protocol`] if any chunk is rejected by the receiver.
 /// - [`MisogiError::Io`] if chunk read or network transmission fails.
-pub async fn execute_transfer(
-    state: SharedState,
-    file_id: String,
-) -> Result<()> {
+pub async fn execute_transfer(state: SharedState, file_id: String) -> Result<()> {
     let file_info = state.uploader.get_file_info(&file_id).await?;
 
     let driver_name = state.transfer_driver.name();
@@ -68,7 +65,11 @@ pub async fn execute_transfer(
         // Convert &[u8] to Bytes for the TransferDriver interface.
         let bytes_data = Bytes::from(chunk_data);
 
-        match state.transfer_driver.send_chunk(&file_id, i, bytes_data).await {
+        match state
+            .transfer_driver
+            .send_chunk(&file_id, i, bytes_data)
+            .await
+        {
             Ok(ack) => {
                 if let Some(err_msg) = &ack.error {
                     tracing::error!(
@@ -98,7 +99,8 @@ pub async fn execute_transfer(
     }
 
     // Signal transfer finalization to the receiver.
-    let _final_ack = state.transfer_driver
+    let _final_ack = state
+        .transfer_driver
         .send_complete(&file_id, total_chunks, "")
         .await?;
 

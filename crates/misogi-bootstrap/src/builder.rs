@@ -200,9 +200,11 @@ impl MisogiApplicationBuilder {
     #[cfg(feature = "jwt")]
     #[instrument(skip(self), fields(issuer))]
     pub fn build_jwt_validator(&mut self) -> Result<&mut Self, BootstrapError> {
-        let jwt_section = self.config.jwt.as_ref().ok_or_else(|| {
-            BootstrapError::MissingConfig("jwt".to_string())
-        })?;
+        let jwt_section = self
+            .config
+            .jwt
+            .as_ref()
+            .ok_or_else(|| BootstrapError::MissingConfig("jwt".to_string()))?;
 
         info!(issuer = %jwt_section.issuer, "Building JwtValidator");
 
@@ -215,10 +217,8 @@ impl MisogiApplicationBuilder {
             refresh_ttl_hours: jwt_section.refresh_ttl_hours,
         };
 
-        let validator =
-            JwtValidator::new(jwt_config).map_err(|e| {
-                BootstrapError::JwtValidationError(e.to_string())
-            })?;
+        let validator = JwtValidator::new(jwt_config)
+            .map_err(|e| BootstrapError::JwtValidationError(e.to_string()))?;
 
         self.jwt_validator = Some(Arc::new(validator));
         info!("JwtValidator constructed successfully");
@@ -241,9 +241,11 @@ impl MisogiApplicationBuilder {
     #[cfg(feature = "jwt")]
     #[instrument(skip(self), fields(issuer))]
     pub fn build_jwt_issuer(&mut self) -> Result<&mut Self, BootstrapError> {
-        let jwt_section = self.config.jwt.as_ref().ok_or_else(|| {
-            BootstrapError::MissingConfig("jwt".to_string())
-        })?;
+        let jwt_section = self
+            .config
+            .jwt
+            .as_ref()
+            .ok_or_else(|| BootstrapError::MissingConfig("jwt".to_string()))?;
 
         info!(issuer = %jwt_section.issuer, "Building JwtIssuer");
 
@@ -256,10 +258,8 @@ impl MisogiApplicationBuilder {
             refresh_ttl_hours: jwt_section.refresh_ttl_hours,
         };
 
-        let issuer =
-            JwtIssuer::new(jwt_config).map_err(|e| {
-                BootstrapError::JwtIssuerError(e.to_string())
-            })?;
+        let issuer = JwtIssuer::new(jwt_config)
+            .map_err(|e| BootstrapError::JwtIssuerError(e.to_string()))?;
 
         self.jwt_issuer = Some(Arc::new(issuer));
         info!("JwtIssuer constructed successfully");
@@ -413,13 +413,12 @@ impl MisogiApplicationBuilder {
                 ))
             })?;
 
-        let provider =
-            OidcIdentityProvider::new(provider_config).map_err(|e| {
-                BootstrapError::ProviderRegistrationError {
-                    provider_id: cfg.id.clone(),
-                    reason: e.to_string(),
-                }
-            })?;
+        let provider = OidcIdentityProvider::new(provider_config).map_err(|e| {
+            BootstrapError::ProviderRegistrationError {
+                provider_id: cfg.id.clone(),
+                reason: e.to_string(),
+            }
+        })?;
 
         Ok(Arc::new(provider))
     }
@@ -452,13 +451,12 @@ impl MisogiApplicationBuilder {
                 ))
             })?;
 
-        let provider =
-            SamlIdentityProvider::new(plugin_config).map_err(|e| {
-                BootstrapError::ProviderRegistrationError {
-                    provider_id: cfg.id.clone(),
-                    reason: e.to_string(),
-                }
-            })?;
+        let provider = SamlIdentityProvider::new(plugin_config).map_err(|e| {
+            BootstrapError::ProviderRegistrationError {
+                provider_id: cfg.id.clone(),
+                reason: e.to_string(),
+            }
+        })?;
 
         Ok(Arc::new(provider))
     }
@@ -533,12 +531,7 @@ impl MisogiApplicationBuilder {
                     .as_ref()
                     .map(|j| j.rsa_pub_pem_path.clone())
                     .unwrap_or_default(),
-                ttl_hours: self
-                    .config
-                    .jwt
-                    .as_ref()
-                    .map(|j| j.ttl_hours)
-                    .unwrap_or(8),
+                ttl_hours: self.config.jwt.as_ref().map(|j| j.ttl_hours).unwrap_or(8),
                 refresh_ttl_hours: self
                     .config
                     .jwt
@@ -547,10 +540,8 @@ impl MisogiApplicationBuilder {
                     .unwrap_or(168),
             };
 
-            let mut engine =
-                AuthEngine::new(jwt_config).map_err(|e| {
-                    BootstrapError::AuthEngineError(e.to_string())
-                })?;
+            let mut engine = AuthEngine::new(jwt_config)
+                .map_err(|e| BootstrapError::AuthEngineError(e.to_string()))?;
 
             // Attach IdentityRegistry if available
             if let Some(registry) = self.identity_registry.take() {
@@ -564,9 +555,8 @@ impl MisogiApplicationBuilder {
         #[cfg(not(feature = "jwt"))]
         {
             // Minimal mode without JWT
-            let mut engine = AuthEngine::new(()).map_err(|e| {
-                BootstrapError::AuthEngineError(e.to_string())
-            })?;
+            let mut engine =
+                AuthEngine::new(()).map_err(|e| BootstrapError::AuthEngineError(e.to_string()))?;
 
             if let Some(registry) = self.identity_registry.take() {
                 engine = engine.with_identity_registry(registry);
@@ -636,9 +626,12 @@ impl MisogiApplicationBuilder {
     /// - [`BootstrapError::InvalidConfig`] for unknown backend types
     #[instrument(skip(self), fields(backend))]
     pub fn build_storage(&mut self) -> Result<&mut Self, BootstrapError> {
-        let storage_cfg = self.config.storage.as_ref().ok_or_else(|| {
-            BootstrapError::MissingConfig("storage".to_string())
-        })?.clone();
+        let storage_cfg = self
+            .config
+            .storage
+            .as_ref()
+            .ok_or_else(|| BootstrapError::MissingConfig("storage".to_string()))?
+            .clone();
 
         info!(backend = %storage_cfg.backend, "Building StorageBackend");
 
@@ -653,14 +646,11 @@ impl MisogiApplicationBuilder {
     }
 
     /// Construct local filesystem storage backend.
-    fn build_local_storage(
-        &mut self,
-        cfg: &StorageSection,
-    ) -> Result<&mut Self, BootstrapError> {
+    fn build_local_storage(&mut self, cfg: &StorageSection) -> Result<&mut Self, BootstrapError> {
         // Placeholder: actual LocalStorageBackend construction would go here
         // For now, we note that this requires the concrete implementation
         info!(base_path = ?cfg.base_path, "Local filesystem storage configured");
-        
+
         // TODO: Instantiate LocalStorageBackend once implemented
         // let backend = LocalStorageBackend::new(cfg.base_path.clone())?;
         // self.storage_backend = Some(Arc::new(backend));
@@ -670,10 +660,7 @@ impl MisogiApplicationBuilder {
     }
 
     /// Construct in-memory storage backend (for testing).
-    fn build_memory_storage(
-        &mut self,
-        _cfg: &StorageSection,
-    ) -> Result<&mut Self, BootstrapError> {
+    fn build_memory_storage(&mut self, _cfg: &StorageSection) -> Result<&mut Self, BootstrapError> {
         // TODO: Instantiate MemoryStorageBackend for testing
         info!("In-memory storage configured (testing mode)");
         warn!("MemoryStorageBackend not yet implemented in bootstrap (stub)");
@@ -682,10 +669,7 @@ impl MisogiApplicationBuilder {
 
     /// Construct S3/MinIO cloud storage backend.
     #[cfg(feature = "storage")]
-    fn build_s3_storage(
-        &mut self,
-        cfg: &StorageSection,
-    ) -> Result<&mut Self, BootstrapError> {
+    fn build_s3_storage(&mut self, cfg: &StorageSection) -> Result<&mut Self, BootstrapError> {
         info!(
             bucket = ?cfg.bucket,
             region = ?cfg.region,
@@ -703,10 +687,7 @@ impl MisogiApplicationBuilder {
 
     /// S3 storage stub when storage feature is disabled.
     #[cfg(not(feature = "storage"))]
-    fn build_s3_storage(
-        &mut self,
-        _cfg: &StorageSection,
-    ) -> Result<&mut Self, BootstrapError> {
+    fn build_s3_storage(&mut self, _cfg: &StorageSection) -> Result<&mut Self, BootstrapError> {
         Err(BootstrapError::StorageBackendError(
             "S3 storage feature not enabled (add 'storage-s3' feature flag)".to_string(),
         ))
@@ -727,9 +708,11 @@ impl MisogiApplicationBuilder {
     /// - [`BootstrapError::TransportLayerError`] if server binding fails
     #[instrument(skip(self), fields(http_port, grpc_port))]
     pub fn build_transport(&mut self) -> Result<&mut Self, BootstrapError> {
-        let transport_cfg = self.config.transport.as_ref().ok_or_else(|| {
-            BootstrapError::MissingConfig("transport".to_string())
-        })?;
+        let transport_cfg = self
+            .config
+            .transport
+            .as_ref()
+            .ok_or_else(|| BootstrapError::MissingConfig("transport".to_string()))?;
 
         info!(
             http_host = %transport_cfg.http_host,
@@ -908,15 +891,23 @@ impl std::fmt::Debug for MisogiApplicationBuilder {
         f.debug_struct("MisogiApplicationBuilder")
             .field("has_jwt_validator", &{
                 #[cfg(feature = "jwt")]
-                { self.jwt_validator.is_some() }
+                {
+                    self.jwt_validator.is_some()
+                }
                 #[cfg(not(feature = "jwt"))]
-                { false }
+                {
+                    false
+                }
             })
             .field("has_jwt_issuer", &{
                 #[cfg(feature = "jwt")]
-                { self.jwt_issuer.is_some() }
+                {
+                    self.jwt_issuer.is_some()
+                }
                 #[cfg(not(feature = "jwt"))]
-                { false }
+                {
+                    false
+                }
             })
             .field("has_identity_registry", &self.identity_registry.is_some())
             .field("has_auth_engine", &self.auth_engine.is_some())

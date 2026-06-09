@@ -99,7 +99,10 @@ mod tests {
 
     #[test]
     fn test_parse_encryption_status_encrypted() {
-        assert_eq!(parse_encryption_status("encrypted"), EncryptionStatus::Encrypted);
+        assert_eq!(
+            parse_encryption_status("encrypted"),
+            EncryptionStatus::Encrypted
+        );
         assert_eq!(parse_encryption_status("ON"), EncryptionStatus::Encrypted);
         assert_eq!(parse_encryption_status("Yes"), EncryptionStatus::Encrypted);
     }
@@ -110,7 +113,10 @@ mod tests {
             parse_encryption_status("not_encrypted"),
             EncryptionStatus::NotEncrypted
         );
-        assert_eq!(parse_encryption_status("off"), EncryptionStatus::NotEncrypted);
+        assert_eq!(
+            parse_encryption_status("off"),
+            EncryptionStatus::NotEncrypted
+        );
     }
 
     #[test]

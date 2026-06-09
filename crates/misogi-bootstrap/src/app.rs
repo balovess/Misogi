@@ -33,9 +33,9 @@ use crate::config::MisogiConfig;
 use crate::error::BootstrapError;
 
 // Import component types
+use misogi_auth::engine::AuthEngine;
 #[cfg(feature = "jwt")]
 use misogi_auth::jwt::{JwtIssuer, JwtValidator};
-use misogi_auth::engine::AuthEngine;
 use misogi_auth::registry::IdentityRegistry;
 use misogi_cdr::ParserRegistry;
 use misogi_core::traits::storage::StorageBackend;
@@ -253,8 +253,7 @@ impl MisogiApp {
         let timeout_secs = self.config.app.shutdown_timeout_secs;
         info!(
             timeout_secs,
-            "Shutdown notification sent (graceful drain timeout: {}s)",
-            timeout_secs
+            "Shutdown notification sent (graceful drain timeout: {}s)", timeout_secs
         );
 
         Ok(())
@@ -293,9 +292,9 @@ impl MisogiApp {
                 }
                 Err(e) => {
                     warn!(error = %e, "Failed to register SIGTERM handler, falling back to Ctrl+C only");
-                    signal::ctrl_c().await.map_err(|e| {
-                        BootstrapError::ShutdownError(format!("Signal error: {e}"))
-                    })?;
+                    signal::ctrl_c()
+                        .await
+                        .map_err(|e| BootstrapError::ShutdownError(format!("Signal error: {e}")))?;
                     info!("Ctrl+C received");
                 }
             }
@@ -303,9 +302,9 @@ impl MisogiApp {
 
         #[cfg(not(unix))]
         {
-            signal::ctrl_c().await.map_err(|e| {
-                BootstrapError::ShutdownError(format!("Signal error: {e}"))
-            })?;
+            signal::ctrl_c()
+                .await
+                .map_err(|e| BootstrapError::ShutdownError(format!("Signal error: {e}")))?;
             info!("Ctrl+C received");
         }
 
@@ -393,32 +392,26 @@ impl MisogiApp {
 impl std::fmt::Debug for MisogiApp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("MisogiApp")
-            .field(
-                "has_jwt_validator",
-                &{
-                    #[cfg(feature = "jwt")]
-                    {
-                        self.jwt_validator.is_some()
-                    }
-                    #[cfg(not(feature = "jwt"))]
-                    {
-                        false
-                    }
-                },
-            )
-            .field(
-                "has_jwt_issuer",
-                &{
-                    #[cfg(feature = "jwt")]
-                    {
-                        self.jwt_issuer.is_some()
-                    }
-                    #[cfg(not(feature = "jwt"))]
-                    {
-                        false
-                    }
-                },
-            )
+            .field("has_jwt_validator", &{
+                #[cfg(feature = "jwt")]
+                {
+                    self.jwt_validator.is_some()
+                }
+                #[cfg(not(feature = "jwt"))]
+                {
+                    false
+                }
+            })
+            .field("has_jwt_issuer", &{
+                #[cfg(feature = "jwt")]
+                {
+                    self.jwt_issuer.is_some()
+                }
+                #[cfg(not(feature = "jwt"))]
+                {
+                    false
+                }
+            })
             .field("has_identity_registry", &self.identity_registry.is_some())
             .field("has_auth_engine", &self.auth_engine.is_some())
             .field("has_parser_registry", &self.parser_registry.is_some())
@@ -553,9 +546,7 @@ mod tests {
 
         // Spawn start() in background
         let app_clone = Arc::clone(&app);
-        let start_handle = tokio::spawn(async move {
-            app_clone.start().await
-        });
+        let start_handle = tokio::spawn(async move { app_clone.start().await });
 
         // Let it initialize
         tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;

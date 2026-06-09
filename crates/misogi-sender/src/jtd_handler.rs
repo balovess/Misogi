@@ -32,8 +32,8 @@
 use std::path::{Path, PathBuf};
 
 use misogi_core::{
-    JtdConversionPipeline, JtdFailurePolicy, JtdPipelineConfig, JtdConverterType,
-    should_convert_jtd, DummyAction,
+    DummyAction, JtdConversionPipeline, JtdConverterType, JtdFailurePolicy, JtdPipelineConfig,
+    should_convert_jtd,
 };
 
 use crate::config::SenderConfig;
@@ -114,15 +114,9 @@ impl JtdHandleResult {
 ///
 /// A [`JtdHandleResult`] indicating what action was taken and which file path
 /// to use for downstream processing.
-pub async fn handle_jtd_upload(
-    file_path: &Path,
-    config: &SenderConfig,
-) -> JtdHandleResult {
+pub async fn handle_jtd_upload(file_path: &Path, config: &SenderConfig) -> JtdHandleResult {
     // Step 1: Quick extension check using core's helper function (zero-cost for non-JTD)
-    let ext = file_path
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("");
+    let ext = file_path.extension().and_then(|e| e.to_str()).unwrap_or("");
 
     if !should_convert_jtd(ext) {
         return JtdHandleResult::NotJtd {
@@ -148,7 +142,7 @@ pub async fn handle_jtd_upload(
              \u{26a0} \u{8b66}\u{544a}: \u{4e00}\u{592a}\u{90ce} (.jtd) \u{30d5}\u{30a9}\u{30fc}\u{30de}\u{30c3}\u{30c8}\u{304c}\u{691c}\u{51fa}\u{3055}\u{308c}\u{307e}\u{3057}\u{305f}\u{3002}\
              JTD\u{5909}\u{63db}\u{306f}\u{6709}\u{52b9}\u{3067}\u{306f}\u{3042}\u{308a}\u{307e}\u{305b}\u{3093}\u{3002}\n\
              \u{20} \u{81ea}\u{52d5}JTD->PDF\u{5909}\u{63db}\u{3092}\u{6709}\u{52b9}\u{306b}\u{3059}\u{308b}\u{306b}\u{306f}\u{3001}--convert-jtd-to-pdf \
-             \u{30d5}\u{30e9}\u{30b0}\u{3092}\u{8ffd}\u{52a0}\u{3057}\u{3066}\u{304f}\u{3060}\u{3055}\u{3044}\u{3002}"
+             \u{30d5}\u{30e9}\u{30b0}\u{3092}\u{8ffd}\u{52a0}\u{3057}\u{3066}\u{304f}\u{3060}\u{3055}\u{3044}\u{3002}",
         );
 
         eprintln!("{warning}");
@@ -195,9 +189,7 @@ pub async fn handle_jtd_upload(
     let pipeline = JtdConversionPipeline::new(pipeline_config);
 
     // Determine output directory (same directory as input file)
-    let output_dir = file_path
-        .parent()
-        .unwrap_or_else(|| Path::new("."));
+    let output_dir = file_path.parent().unwrap_or_else(|| Path::new("."));
 
     // Execute conversion via the existing pipeline API
     match pipeline.process_file(file_path, output_dir).await {
@@ -292,6 +284,7 @@ mod tests {
     // =========================================================================
 
     #[tokio::test]
+    #[allow(clippy::field_reassign_with_default)]
     async fn test_jtd_file_disabled_conversion_emits_warning() {
         let mut config = SenderConfig::default();
         config.jtd_conversion_enabled = false;
@@ -335,6 +328,7 @@ mod tests {
     // =========================================================================
 
     #[tokio::test]
+    #[allow(clippy::field_reassign_with_default)]
     async fn test_jtd_file_enabled_conversion_succeeds_with_dummy() {
         let mut config = SenderConfig::default();
         config.jtd_conversion_enabled = true;
@@ -353,10 +347,7 @@ mod tests {
                 ref original_path,
             } => {
                 assert_eq!(*original_path, jtd_path);
-                assert!(
-                    pdf_path.exists(),
-                    "Converted PDF file must exist on disk"
-                );
+                assert!(pdf_path.exists(), "Converted PDF file must exist on disk");
                 assert!(
                     pdf_path.extension().and_then(|e| e.to_str()) == Some("pdf"),
                     "Output must have .pdf extension"
@@ -373,6 +364,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::field_reassign_with_default)]
     async fn test_jtd_auto_converter_falls_back_to_dummy() {
         // Auto mode should fall back to dummy in CI where no real converters exist
         let mut config = SenderConfig::default();
@@ -394,7 +386,10 @@ mod tests {
                 );
             }
             JtdHandleResult::ConversionFailed { error_message } => {
-                panic!("Auto mode should not fail with dummy fallback: {}", error_message);
+                panic!(
+                    "Auto mode should not fail with dummy fallback: {}",
+                    error_message
+                );
             }
             other => panic!("Unexpected result: {:?}", other),
         }
@@ -405,6 +400,7 @@ mod tests {
     // =========================================================================
 
     #[tokio::test]
+    #[allow(clippy::field_reassign_with_default)]
     async fn test_jtd_detection_case_insensitive() {
         let mut config = SenderConfig::default();
         config.jtd_conversion_enabled = false;

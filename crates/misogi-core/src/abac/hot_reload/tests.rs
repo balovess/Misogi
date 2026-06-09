@@ -10,22 +10,19 @@ use std::time::Duration;
 
 use tokio::sync::watch;
 
-use super::{AbacHotReload, ReloadError};
 use super::super::config::AbacConfig;
 use super::super::engine::AbacEngine;
 use super::super::executor::ApprovalExecutor;
 use super::super::policy::{
     AbacPolicyRule, ApprovalTemplate, ApproverPool, PolicyEffect, PolicyTarget,
 };
+use super::{AbacHotReload, ReloadError};
 
 // ===========================================================================
 // Test Helpers
 // ===========================================================================
 
-fn make_config(
-    rules: Vec<AbacPolicyRule>,
-    templates: Vec<ApprovalTemplate>,
-) -> AbacConfig {
+fn make_config(rules: Vec<AbacPolicyRule>, templates: Vec<ApprovalTemplate>) -> AbacConfig {
     AbacConfig {
         enabled: true,
         default_effect: "deny".to_string(),
@@ -67,9 +64,7 @@ fn config_to_toml(config: &AbacConfig) -> String {
     toml::to_string_pretty(config).expect("config must be serializable")
 }
 
-fn make_components(
-    config: &AbacConfig,
-) -> (AbacEngine, ApprovalExecutor) {
+fn make_components(config: &AbacConfig) -> (AbacEngine, ApprovalExecutor) {
     (
         AbacEngine::from_config(config),
         ApprovalExecutor::new(config.approval_templates.clone()),
@@ -117,7 +112,7 @@ fn test_check_no_change_returns_false() {
     let (e, x) = make_components(&c);
     let hr = AbacHotReload::with_file_watch(e, x, &path);
     let _ = hr.check_and_reload(); // baseline
-    assert_eq!(hr.check_and_reload().unwrap(), false);
+    assert!(!hr.check_and_reload().unwrap());
 }
 
 // ===========================================================================
@@ -150,7 +145,10 @@ fn test_check_modified_returns_true() {
 
 #[test]
 fn test_force_reload_success() {
-    let c = make_config(vec![make_permit_rule("f1", 5)], vec![make_template("t1", 1)]);
+    let c = make_config(
+        vec![make_permit_rule("f1", 5)],
+        vec![make_template("t1", 1)],
+    );
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("abac.toml");
     std::fs::write(&path, config_to_toml(&c)).unwrap();
@@ -231,6 +229,7 @@ approval_templates = []
 // ===========================================================================
 
 #[test]
+#[allow(clippy::await_holding_lock)]
 fn test_invalidate_cache_on_reload() {
     use crate::abac::attribute::AbacValue;
     use std::collections::HashMap;
@@ -245,9 +244,10 @@ fn test_invalidate_cache_on_reload() {
 
     let mut r2 = make_permit_rule("cv2", 20);
     r2.effect = PolicyEffect::Deny;
-    assert!(hr
-        .reload_from_string(&config_to_toml(&make_config(vec![r2], vec![])))
-        .is_ok());
+    assert!(
+        hr.reload_from_string(&config_to_toml(&make_config(vec![r2], vec![])))
+            .is_ok()
+    );
 }
 
 // ===========================================================================
@@ -287,7 +287,9 @@ fn test_executor_templates_updated() {
 
     let e = hr.executor.read().unwrap();
     let attrs: HashMap<String, AbacValue> = HashMap::new();
-    let req = e.execute_template("new-tpl", "r", "u", "d", &attrs).unwrap();
+    let req = e
+        .execute_template("new-tpl", "r", "u", "d", &attrs)
+        .unwrap();
     assert_eq!(req.required_approvers, 3);
 }
 
@@ -338,7 +340,10 @@ approval_templates = []
 "#;
     match hr.reload_from_string(bad).unwrap_err() {
         ReloadError::ValidationFailed(errs) => {
-            assert!(errs.iter().any(|e| e.contains("duplicate") || e.contains("dup")));
+            assert!(
+                errs.iter()
+                    .any(|e| e.contains("duplicate") || e.contains("dup"))
+            );
         }
         other => panic!("expected ValidationFailed, got {:?}", other),
     }

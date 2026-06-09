@@ -39,14 +39,14 @@ fn test_issue_and_validate_roundtrip() {
 
     let token = issuer.issue(&claims).unwrap();
     assert!(!token.is_empty(), "Token should not be empty");
-    assert!(token.contains('.'), "Token should be JWS format (contain dots)");
+    assert!(
+        token.contains('.'),
+        "Token should be JWS format (contain dots)"
+    );
 
     let validated_claims = validator.validate(&token).unwrap();
     assert_eq!(validated_claims.applicant_id, "user-001");
-    assert_eq!(
-        validated_claims.display_name.as_deref(),
-        Some("Test User")
-    );
+    assert_eq!(validated_claims.display_name.as_deref(), Some("Test User"));
     assert!(validated_claims.has_role("staff"));
 }
 
@@ -69,7 +69,7 @@ fn test_expired_token_rejection() {
     // Decode the token manually to verify it should be expired
     // Then validate through the validator which should reject it
     let result = validator.validate(&token);
-    
+
     // If validation succeeded unexpectedly, check if the token is actually expired
     if let Ok(validated) = &result {
         let now = super::unix_timestamp();
@@ -80,7 +80,7 @@ fn test_expired_token_rejection() {
             now.saturating_sub(validated.exp)
         );
     }
-    
+
     assert!(
         matches!(result, Err(super::JwtError::TokenExpired)),
         "Expired token should be rejected with TokenExpired error, got: {:?}",
@@ -153,7 +153,7 @@ fn test_custom_ttl_works_correctly() {
 
     // Validate immediately — should succeed
     let validated = validator.validate_and_extract(&short_lived_token).unwrap();
-    
+
     // Check that TTL was applied correctly (exp should be approximately now + 60)
     let lifetime = validated.claims.lifetime_seconds();
     assert!(
@@ -235,8 +235,14 @@ fn test_validate_with_metadata_returns_rich_info() {
     assert_eq!(validated.issuer, "test-issuer");
     assert_eq!(validated.audience, "test-audience");
     assert_eq!(validated.issued_at, now); // Approximately
-    assert!(!validated.is_expired, "Freshly issued token should not be expired");
-    assert!(validated.remaining_seconds() > 0, "Should have positive remaining time");
+    assert!(
+        !validated.is_expired,
+        "Freshly issued token should not be expired"
+    );
+    assert!(
+        validated.remaining_seconds() > 0,
+        "Should have positive remaining time"
+    );
     assert!(validated.has_role("admin"));
     assert!(validated.has_role("auditor"));
     assert!(!validated.has_role("nonexistent"));

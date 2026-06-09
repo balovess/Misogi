@@ -1,9 +1,12 @@
-use axum::{Router, routing::{get, post}, middleware};
-use tower_http::cors::CorsLayer;
-use uuid::Uuid;
-use tracing::Instrument;
-use crate::state::SharedState;
 use crate::http_routes;
+use crate::state::SharedState;
+use axum::{
+    Router, middleware,
+    routing::{get, post},
+};
+use tower_http::cors::CorsLayer;
+use tracing::Instrument;
+use uuid::Uuid;
 
 async fn request_id_middleware(
     mut req: axum::extract::Request,

@@ -32,16 +32,16 @@
 // Sub-module declarations
 // =============================================================================
 
-mod types;
-mod constants;
 mod config;
-mod report;
+mod constants;
 mod engine;
+mod report;
+mod types;
 mod xml_filter;
 
-pub mod threat;
 mod binary;
 mod rels_cleaner;
+pub mod threat;
 
 #[cfg(test)]
 mod tests;
@@ -54,7 +54,7 @@ mod tests;
 #[cfg(feature = "runtime")]
 pub use super::office_sanitizer::OfficeSanitizer;
 
-pub use types::{ContentTypeFilterMode, FilteredXmlResult, OoxmlDocumentType, OoxmlTrueCdrResult};
 pub use config::{ElementWhitelist, OoxmlTrueCdrConfig};
-pub use report::{OoxmlCdrAction, OoxmlCdrReport};
 pub use engine::OoxmlTrueCdrEngine;
+pub use report::{OoxmlCdrAction, OoxmlCdrReport};
+pub use types::{ContentTypeFilterMode, FilteredXmlResult, OoxmlDocumentType, OoxmlTrueCdrResult};

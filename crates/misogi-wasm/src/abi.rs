@@ -311,7 +311,9 @@ impl WasmSupportedTypes {
     /// `true` if the type is in the supported list.
     #[inline]
     pub fn supports(&self, mime_type: &str) -> bool {
-        self.mime_types.iter().any(|t| t.eq_ignore_ascii_case(mime_type))
+        self.mime_types
+            .iter()
+            .any(|t| t.eq_ignore_ascii_case(mime_type))
     }
 
     /// Get count of supported MIME types.
