@@ -9,6 +9,7 @@ pub mod hash;
 pub mod integrity;
 pub mod pii;
 pub mod presets;
+pub mod relay;
 
 // Protocol module: contains framing utilities, some async functions gated internally
 pub mod protocol;

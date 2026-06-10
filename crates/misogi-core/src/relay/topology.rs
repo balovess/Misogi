@@ -88,6 +88,32 @@ impl RouteStrategy {
     pub fn default_strategy() -> Self {
         Self::LocalEgressFirst
     }
+
+    /// Parses a route strategy from its string representation.
+    ///
+    /// # Supported Names
+    ///
+    /// | Name              | Variant              |
+    /// |-------------------|----------------------|
+    /// | `"shortest_path"` | `ShortestPath`       |
+    /// | `"lowest_latency"`| `LowestLatency`      |
+    /// | `"local_egress_first"` | `LocalEgressFirst` |
+    /// | `"force_hub"`     | `ForceHub(vec![])`   |
+    /// | `"custom"`        | `Custom(name)`       |
+    ///
+    /// Returns `None` for unrecognized names.
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "shortest_path" => Some(Self::ShortestPath),
+            "lowest_latency" => Some(Self::LowestLatency),
+            "local_egress_first" => Some(Self::LocalEgressFirst),
+            "force_hub" => Some(Self::ForceHub(vec![])),
+            other if other.starts_with("custom:") => {
+                Some(Self::Custom(other.strip_prefix("custom:").unwrap().to_string()))
+            }
+            _ => None,
+        }
+    }
 }
 
 /// Directed graph representing the complete relay network topology.
@@ -418,14 +444,16 @@ impl RelayTopology {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::relay::RelayEdgeBuilder;
 
     // Helper: construct a minimal Edge node for testing.
     fn make_test_node(id: &str, role: NodeRole) -> RelayNode {
+        let tier = role.tier();
         RelayNode::new(
             id,
             role,
             EndpointConfig::new("tcp", "127.0.0.1", 8080),
-            role.tier(),
+            tier,
             CapacityLimits::new(100, 1000),
         )
     }
@@ -570,9 +598,7 @@ mod tests {
         let mut topo = RelayTopology::new(RouteStrategy::default_strategy());
         topo.add_node(make_test_node("dst", NodeRole::Terminal)).unwrap();
 
-        let result = topo.add_node(make_test_node("ghost-src", NodeRole::Edge)).ok(); // don't actually add
-        let _ = result;
-
+        // Note: "ghost-src" is NOT added to the topology.
         let edge = RelayEdge::new("ghost-src", "dst");
         let err = topo.add_edge(edge).unwrap_err();
         assert!(err.contains("non-existent source"), "error: {err}");
@@ -692,12 +718,23 @@ mod tests {
             ),
         )
         .unwrap();
+        // Add the destination node so the edge can be added successfully.
+        topo.add_node(
+            RelayNode::new(
+                "some-other",
+                NodeRole::Terminal,
+                EndpointConfig::new("tcp", "10.0.0.100", 8080),
+                4,
+                CapacityLimits::new(100, 1000),
+            ),
+        )
+        .unwrap();
         topo.add_edge(
             RelayEdgeBuilder::new("ser-node", "some-other")
                 .protocol("quic")
                 .build(),
         )
-        .unwrap(); // Note: "some-other" doesn't exist — will fail validation but serialize fine.
+        .unwrap();
 
         let json = serde_json::to_string_pretty(&topo).unwrap();
         let decoded: RelayTopology = serde_json::from_str(&json).unwrap();

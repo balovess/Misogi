@@ -274,6 +274,7 @@ impl SyslogCefFormatter {
             AuditEventType::FileDownloaded => 3,     // Info
             AuditEventType::SecurityViolation => 10, // Critical
             AuditEventType::SystemError => 7,        // Error
+            AuditEventType::Custom(_) => 3,          // Info (default for custom events)
         }
     }
 

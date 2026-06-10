@@ -89,6 +89,7 @@ impl std::fmt::Display for CircuitState {
 
 /// Internal bookkeeping combining [`CircuitState`] with timing metadata for
 /// automatic Open -> HalfOpen transitions based on elapsed time.
+#[derive(Debug)]
 struct CircuitBreakerEntry {
     state: CircuitState,
     opened_at: Option<Instant>,
@@ -159,6 +160,7 @@ impl CircuitBreakerEntry {
 /// assert!(mgr.register_node(node).is_ok());
 /// assert!(mgr.is_available("edge-tokyo"));
 /// ```
+#[derive(Debug)]
 pub struct RelayNodeManager {
     /// Managed topology graph (shared read access via `Arc<RwLock<...>>`).
     topology: Arc<RwLock<RelayTopology>>,
@@ -306,11 +308,15 @@ impl RelayNodeManager {
 
     /// Returns references to nodes that are Healthy OR Degraded (not Unhealthy)
     /// AND whose circuit breakers are not Open.
-    pub fn get_routable_nodes(&self) -> Vec<&RelayNode> {
+    ///
+    /// Note: Returns cloned nodes to avoid lifetime issues with the RwLock guard.
+    /// For large topologies, consider using [`Self::get_routable_nodes_sorted`] instead.
+    pub fn get_routable_nodes(&self) -> Vec<RelayNode> {
         let topo = self.topology.read().unwrap();
         topo.nodes.iter()
             .filter(|n| !n.health_status.is_unhealthy()
                 && !self.is_circuit_open(&n.node_id))
+            .cloned()
             .collect()
     }
 

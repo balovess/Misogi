@@ -53,6 +53,7 @@ pub mod config;
 #[cfg(test)]
 mod config_tests;
 pub mod forwarder;
+pub mod mesh;
 pub mod node;
 pub mod node_manager;
 pub mod route_planner;
@@ -87,3 +88,6 @@ pub use route_planner::{RouteError, RoutePath, RoutePlanner};
 
 // -- Forwarder types --
 pub use forwarder::{ForwardFileResult, HopResult, RelayForwarder};
+
+// -- Mesh types --
+pub use mesh::RelayMesh;

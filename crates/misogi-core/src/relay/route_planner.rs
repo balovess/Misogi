@@ -42,9 +42,6 @@
 //! println!("Route: {:?}", path.hops);
 //! ```
 
-#[cfg(test)]
-mod tests;
-
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::{Arc, RwLock};
 
@@ -140,12 +137,12 @@ pub enum RouteError {
     /// This occurs when the source and target are in disconnected components
     /// of the directed graph, or when all paths exceed the configured
     /// [`RoutePlanner::max_hops`] limit.
-    #[error("no path exists from '{source}' to '{target}'")]
+    #[error("no path exists from '{from_node}' to '{to_node}'")]
     NoPath {
         /// Source node identifier that was queried.
-        source: String,
+        from_node: String,
         /// Target node identifier that was queried.
-        target: String,
+        to_node: String,
     },
 
     /// The computed path exceeds the maximum allowed hop count.
@@ -203,7 +200,7 @@ pub enum RouteError {
 /// in the range `3..=15` are typical for production deployments.
 ///
 /// # Performance Characteristics
-//!
+///
 /// | Operation              | Complexity         | Lock Type |
 /// |------------------------|--------------------|-----------|
 /// | `find_path`            | O(V + E)           | Read      |
@@ -214,6 +211,7 @@ pub enum RouteError {
 /// | `update_strategy`      | O(1)               | None      |
 ///
 /// Where V = node count, E = edge count, P = path length.
+#[derive(Debug)]
 pub struct RoutePlanner {
     /// Shared topology graph protected by reader-writer lock.
     ///
@@ -389,8 +387,8 @@ impl RoutePlanner {
 
         // BFS exhausted without finding target.
         Err(RouteError::NoPath {
-            source: source.to_string(),
-            target: target.to_string(),
+            from_node: source.to_string(),
+            to_node: target.to_string(),
         })
     }
 
@@ -578,8 +576,11 @@ impl RoutePlanner {
             // Policy warning: log (do not error) for encryption requirements.
             if let Some(edge) = topo.get_edges_from(from).into_iter().find(|e| e.to_node == *to) {
                 if edge.require_encryption {
-                    log::warn!(
-                        "route_planner: edge '{}'->'{}' requires encryption; \
+                    // Note: In production, use a proper logging framework.
+                    // This warning is informational and does not affect routing.
+                    #[allow(clippy::print_stderr)]
+                    eprintln!(
+                        "WARN: route_planner: edge '{}'->'{}' requires encryption; \
                          ensure transport layer negotiates TLS",
                         from, to
                     );
@@ -727,8 +728,8 @@ impl RoutePlanner {
         }
 
         best_path.ok_or(RouteError::NoPath {
-            source: source.to_string(),
-            target: target.to_string(),
+            from_node: source.to_string(),
+            to_node: target.to_string(),
         })
     }
 

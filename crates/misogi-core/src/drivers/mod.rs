@@ -325,21 +325,30 @@ impl TransferDriver for DirectTcpDriver {
         Ok(())
     }
 
-    /// Integrity-aware chunk sending stub for TCP driver.
+    /// Integrity-aware chunk sending for TCP driver.
     ///
-    /// Currently delegates to the default [`TransferDriver::send_chunk_integrity()`]
-    /// implementation which falls back to plain `send_chunk()` without cryptographic
-    /// envelope verification. Full integrity-aware sending for the TCP transport
-    /// is planned for a future release and will include:
+    /// When an [`IntegrityEnvelope`] is provided, this method transmits the
+    /// chunk with cryptographic envelope using [`TunnelClient::send_chunk_with_envelope()`].
+    /// The receiver will verify the envelope and may request retransmission
+    /// if corruption is detected.
     ///
-    /// - Envelope construction before each chunk transmission.
-    /// - Receiver-side hash verification acknowledgment.
-    /// - Automatic repair triggering on verification failure.
+    /// When envelope is `None`, falls back to plain chunk transfer without
+    /// integrity verification (legacy mode).
     ///
-    /// # Warning
-    /// This stub logs a deprecation notice on every invocation. Production
-    /// deployments requiring tamper detection should use a different transport
-    /// backend or await the full implementation.
+    /// # Arguments
+    /// * `file_id` — Unique identifier of the file being transferred.
+    /// * `chunk_index` — Zero-based position of this chunk within the file.
+    /// * `data` — Raw bytes of the chunk payload.
+    /// * `metadata` — Chunk metadata containing MD5 and size information.
+    /// * `envelope` — Optional integrity envelope with cryptographic proofs.
+    ///
+    /// # Returns
+    /// An [`IntegrityChunkAck`] indicating whether the receiver accepted
+    /// the chunk and verified its integrity.
+    ///
+    /// # Errors
+    /// - [`MisogiError::Protocol`] if not initialized or envelope transmission fails.
+    /// - [`MisogiError::Io`] if TCP write/read fails.
     async fn send_chunk_integrity(
         &self,
         file_id: &str,
@@ -348,21 +357,34 @@ impl TransferDriver for DirectTcpDriver {
         metadata: &ChunkMeta,
         envelope: Option<&IntegrityEnvelope>,
     ) -> Result<IntegrityChunkAck> {
-        let _metadata = metadata;
-        let _envelope = envelope;
+        let mut guard = self.client.lock().await;
+        let client = guard
+            .as_mut()
+            .ok_or_else(|| MisogiError::Protocol("DirectTcpDriver not initialized".to_string()))?;
 
-        tracing::warn!(
-            driver = %self.name(),
-            file_id = %file_id,
-            chunk_index = chunk_index,
-            data_len = data.len(),
-            "integrity-aware sending not yet implemented for TCP driver; \
-             falling back to plain transfer"
-        );
+        // Compute MD5 for the chunk (used as fallback hash).
+        let md5 = compute_md5(data);
 
-        // Delegate to the trait's default implementation.
-        TransferDriver::send_chunk_integrity(self, file_id, chunk_index, data, metadata, envelope)
-            .await
+        // Send chunk with optional integrity envelope.
+        let response = client
+            .send_chunk_with_envelope(file_id, chunk_index, data, &md5, envelope.cloned())
+            .await?;
+
+        // Log integrity status for observability.
+        if envelope.is_some() {
+            tracing::debug!(
+                file_id = %file_id,
+                chunk_index = chunk_index,
+                success = response.success,
+                "Chunk sent with integrity envelope"
+            );
+        }
+
+        Ok(IntegrityChunkAck {
+            chunk_index,
+            received_ok: response.success,
+            error: response.error,
+        })
     }
 }
 

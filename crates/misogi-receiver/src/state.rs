@@ -16,10 +16,27 @@
 //!
 //! When `transfer_driver` is `Some(...)`, the receiver can poll for incoming
 //! files instead of (or in addition to) listening for TCP connections.
+//!
+//! # Self-Healing Transport Integrity (Task 6.27)
+//!
+//! When `integrity_config` is `Some(...)`, the receiver performs per-chunk
+//! integrity verification on all incoming chunks:
+//!
+//! - **Data hash verification** — Recomputes chunk hash and compares with envelope.
+//! - **Envelope authenticity** — Verifies envelope self-hash (tamper-proof seal).
+//! - **Chain validation** — Checks previous_chunk_hash linkage when enabled.
+//! - **Automatic repair request** — Sends NACK for corrupted chunks to trigger retransmission.
+//!
+//! The `session_manager` tracks transfer progress for checkpoint-based resume
+//! when the sender reconnects after interruption.
 
 use crate::config::ReceiverConfig;
 use crate::storage::ChunkStorage;
 use misogi_core::FileInfo;
+// Self-healing transport integrity imports (Task 6.27)
+use misogi_core::integrity::{IntegrityConfig, IntegrityVerifier, SessionManager};
+// Multi-tier relay imports (Task 6.25)
+use misogi_core::relay::RelayMesh;
 #[allow(dead_code)]
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -61,6 +78,78 @@ pub struct AppState {
     /// - Storage relay mode: Future enhancement via `StorageRelayDriver`
     #[allow(dead_code)]
     pub transfer_driver: Option<String>,
+
+    // =======================================================================
+    // Self-Healing Transport Integrity Layer (Task 6.27)
+    // =======================================================================
+    /// Optional integrity configuration for self-healing transport.
+    ///
+    /// When `Some(config)`, incoming chunks are verified against their
+    /// [`IntegrityEnvelope`] before being written to storage. Corrupted
+    /// chunks trigger NACK responses to request retransmission.
+    ///
+    /// # Security Implications
+    /// - Enabled: Detects bit-flip corruption, tampering, replay attacks.
+    /// - Disabled: Relies solely on TCP checksums (weak protection).
+    ///
+    /// # Backward Compatibility
+    /// This field is optional to maintain compatibility with existing
+    /// deployments that do not require integrity verification.
+    pub integrity_config: Option<IntegrityConfig>,
+
+    /// Integrity verifier for per-chunk hash verification.
+    ///
+    /// Initialized when `integrity_config` is `Some(...)`.
+    /// Used by [`tunnel_handler`](crate::tunnel_handler) to verify each
+    /// incoming chunk against its envelope before storage.
+    ///
+    /// # Thread Safety
+    /// This type is `Clone + Send + Sync` and can be freely shared
+    /// across async tasks.
+    pub integrity_verifier: Option<IntegrityVerifier>,
+
+    /// Session manager for self-healing transport lifecycle tracking.
+    ///
+    /// Manages session creation, checkpoint persistence, and cleanup.
+    /// Initialized when `integrity_config` is `Some(...)`.
+    ///
+    /// # Thread Safety
+    /// Internally uses `parking_lot::RwLock` for high-performance
+    /// concurrent access from multiple async tasks.
+    pub session_manager: Option<Arc<SessionManager>>,
+
+    // =======================================================================
+    // Multi-Tier Relay Integration (Task 6.25)
+    // =======================================================================
+    /// Integrated multi-tier relay mesh for cross-network file reception.
+    ///
+    /// When `Some(mesh)`, the receiver can accept files forwarded through
+    /// a multi-hop relay topology. The mesh encapsulates:
+    /// - [`RelayForwarder`]: Executes chunk-level forwarding through paths.
+    /// - [`RelayNodeManager`]: Manages node health and circuit breakers.
+    /// - [`RoutePlanner`]: Computes optimal paths through the topology.
+    ///
+    /// `None` when relay mode is disabled (default for backward compatibility).
+    /// When enabled, the receiver acts as a terminal node in a relay mesh,
+    /// receiving files forwarded from upstream edge/proxy/hub nodes.
+    ///
+    /// # Configuration
+    ///
+    /// Enable via `[relay]` TOML section with `enabled = true` and
+    /// topology definition (nodes and edges).
+    ///
+    /// # Security Implications
+    ///
+    /// - Each hop can enforce encryption and approval requirements.
+    /// - Circuit breakers prevent cascading failures across the mesh.
+    /// - Health tracking enables dynamic rerouting around degraded nodes.
+    ///
+    /// # Note
+    ///
+    /// RelayMesh is not yet available; this field uses a placeholder type
+    /// until the relay module is enabled in misogi-core.
+    #[allow(dead_code)]
+    pub relay_mesh: Option<String>, // Placeholder: will be Option<Arc<RelayMesh>> when relay module is enabled
 }
 
 /// Shared reference to application state, suitable for Axum's `.with_state()`.
@@ -87,11 +176,40 @@ impl AppState {
         // will be added when receiver polling mode is fully implemented.
         let transfer_driver = None;
 
+        // Initialize integrity subsystem when enabled (Task 6.27)
+        // When enabled, creates IntegrityVerifier and SessionManager for
+        // per-chunk verification and checkpoint-based resume.
+        // Falls back to None when disabled (backward compatible).
+        let (integrity_config, integrity_verifier, session_manager) = if config.integrity_enabled {
+            let cfg = IntegrityConfig::sha256_default();
+            let verifier = IntegrityVerifier::new(
+                misogi_core::integrity::HashAlgorithm::Sha256,
+                cfg.verification.zero_tolerance,
+            );
+            let session_mgr = SessionManager::with_persistence(
+                &std::path::PathBuf::from(&config.storage_dir).join("sessions"),
+            );
+            (Some(cfg), Some(verifier), Some(Arc::new(session_mgr)))
+        } else {
+            (None, None, None)
+        };
+
+        // Initialize relay mesh if configured (Task 6.25)
+        // For now, default to None; full relay configuration loading
+        // will be added when the [relay] TOML section schema is defined.
+        // Note: RelayMesh is not yet available; using placeholder type.
+        let relay_mesh: Option<String> = None;
+
         Self {
             config,
             files: RwLock::new(Vec::new()),
             storage,
             transfer_driver,
+            integrity_config,
+            integrity_verifier,
+            session_manager,
+            // Multi-Tier Relay Integration (Task 6.25)
+            relay_mesh,
         }
     }
 }

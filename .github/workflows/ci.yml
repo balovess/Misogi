@@ -101,6 +101,45 @@ jobs:
         run: cargo deny check --config .github/deny.toml
 
   # ===========================================================================
+  # Job 1.5: Version Check — Version Consistency Validation
+  # ===========================================================================
+  # Validates that all crate versions follow semantic versioning.
+
+  version-check:
+    name: Version Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Validate semantic versioning
+        run: |
+          # Check all Cargo.toml files for valid version strings
+          find crates -name "Cargo.toml" -exec grep -H "^version" {} \; | while read line; do
+            version=$(echo "$line" | sed 's/.*version = "\(.*\)"/\1/')
+            if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
+              echo "::error::Invalid version format in $line"
+              exit 1
+            fi
+          done
+          echo "All versions are valid semver"
+
+      - name: Check CHANGELOG versions
+        run: |
+          # Verify CHANGELOG.md has entries for released versions
+          for crate in $(ls crates/); do
+            version=$(grep "^version" "crates/$crate/Cargo.toml" 2>/dev/null | head -1 | sed 's/version = "\(.*\)"/\1/')
+            if [ -n "$version" ] && [ "$version" != "0.0.0" ]; then
+              if ! grep -q "\[$version\]" CHANGELOG.md; then
+                echo "::warning::Version $version not found in CHANGELOG.md for $crate"
+              fi
+            fi
+          done
+
+  # ===========================================================================
   # Job 2: Check — Compilation Verification
   # ===========================================================================
   # Matrix: All platforms × stable + Linux × MSRV
@@ -340,7 +379,7 @@ jobs:
   summary:
     name: CI Summary
     runs-on: ubuntu-latest
-    needs: [lint, check, test, doc, security, wasm-gate, build]
+    needs: [lint, version-check, check, test, doc, security, wasm-gate, build]
     if: always()
     steps:
       - name: Check CI status
@@ -352,7 +391,7 @@ jobs:
           echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
           
-          for job in lint check test doc security wasm-gate build; do
+          for job in lint version-check check test doc security wasm-gate build; do
             # Use bracket notation for keys with hyphens (jq interprets '-' as subtraction)
             status=$(echo "$NEEDS_CONTEXT" | jq -r ".[\"${job}\"].result")
             case "$status" in

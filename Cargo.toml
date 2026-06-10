@@ -14,3 +14,20 @@ members = [
     "crates/misogi-bootstrap",
     "crates/misogi-config",
 ]
+
+# =============================================================================
+# Workspace Package Metadata
+# =============================================================================
+# These values can be inherited by workspace members using:
+#   version.workspace = true
+#   edition.workspace = true
+#   etc.
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+repository = "https://github.com/misogi-project/misogi"
+homepage = "https://github.com/misogi-project/misogi"
+readme = "README.md"
+authors = ["Misogi Development Team"]

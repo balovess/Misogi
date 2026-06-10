@@ -142,9 +142,9 @@ fn test_no_path_exists_returns_error() {
         .expect_err("should return NoPath error");
 
     match err {
-        RouteError::NoPath { source, target } => {
-            assert_eq!(source, "isolated");
-            assert_eq!(target, "edge-a");
+        RouteError::NoPath { from_node, to_node } => {
+            assert_eq!(from_node, "isolated");
+            assert_eq!(to_node, "edge-a");
         }
         other => panic!("expected NoPath error, got: {other}"),
     }

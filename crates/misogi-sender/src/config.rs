@@ -1520,6 +1520,30 @@ pub struct SenderConfig {
     /// ClamAV socket path.
     pub cdr_clamav_socket_path: String,
 
+    /// Whether CDR Engine v2 pipeline is enabled (Task 6.26).
+    ///
+    /// When `true`, the new stage-based CDR pipeline is used for document
+    /// sanitization instead of legacy direct sanitizer calls. The v2 pipeline
+    /// provides enhanced audit trails, policy-driven decisions, and
+    /// extensible stage architecture.
+    pub cdr_v2_enabled: bool,
+
+    // ---- Phase 6: Self-Healing Transport Integrity (Task 6.27) ----
+    /// Whether self-healing transport integrity verification is enabled.
+    ///
+    /// When `true`, each chunk is wrapped in an [`IntegrityEnvelope`] containing
+    /// cryptographic hashes (data_hash, envelope_hash), sequence nonces for
+    /// replay protection, and optional chain-linking for tamper detection.
+    ///
+    /// Enables:
+    /// - Per-chunk integrity verification
+    /// - Automatic repair on corruption detection
+    /// - Checkpoint-based resume after interruption
+    /// - End-to-end file hash verification
+    ///
+    /// Default: `false` (backward compatible, no integrity overhead).
+    pub integrity_enabled: bool,
+
     // ---- Phase 5: File Types ----
     /// Default action for unrecognized file extensions.
     pub file_types_default_action: String,
@@ -1664,6 +1688,36 @@ pub struct SenderConfig {
 
     /// Maximum time in seconds allowed for a single JTD-to-PDF conversion.
     pub jtd_timeout_secs: u64,
+
+    // ---- Phase 6.28: ABAC (Attribute-Based Access Control) ----
+    /// Whether ABAC policy evaluation is enabled for transfer operations.
+    ///
+    /// When `true`, all transfer requests are evaluated against ABAC policy
+    /// rules before proceeding. The evaluation produces a decision (Permit/Deny)
+    /// and may include obligations (approval, MFA, justification, etc.).
+    #[serde(default)]
+    pub abac_enabled: bool,
+
+    /// TTL in seconds for ABAC attribute resolver cache.
+    ///
+    /// Cached attribute values are reused within this TTL window to avoid
+    /// redundant resolution operations. Set to 0 to disable caching.
+    #[serde(default = "default_abac_cache_ttl")]
+    pub abac_attribute_cache_ttl_secs: u64,
+
+    /// TTL in seconds for ABAC decision cache.
+    ///
+    /// Cached decisions are reused within this TTL window for identical
+    /// attribute sets. Set to 0 to disable decision caching.
+    #[serde(default = "default_abac_cache_ttl")]
+    pub abac_decision_cache_ttl_secs: u64,
+
+    /// Approval templates for ABAC obligation fulfillment.
+    ///
+    /// Each template defines approval workflow parameters (required approvers,
+    /// timeout, escalation policy) referenced by policy rule obligations.
+    #[serde(default)]
+    pub abac_approval_templates: Vec<misogi_core::abac::policy::ApprovalTemplate>,
 }
 
 /// PPAP (Password Protected Attachment Protocol) detection and handling configuration.
@@ -1815,6 +1869,10 @@ fn default_repeat_count() -> u32 {
     3
 }
 
+fn default_abac_cache_ttl() -> u64 {
+    300 // 5 minutes default cache TTL
+}
+
 impl Default for BlastConfig {
     fn default() -> Self {
         Self {
@@ -1862,6 +1920,9 @@ impl Default for SenderConfig {
             cdr_format_downgrade_enabled: false,
             cdr_clamav_enabled: false,
             cdr_clamav_socket_path: default_clamd_socket(),
+            cdr_v2_enabled: false, // Opt-in for CDR v2 (backward compatible)
+            // Phase 6: Self-Healing Transport Integrity defaults (Task 6.27)
+            integrity_enabled: false, // Opt-in for integrity (backward compatible)
             // Phase 5: File Types defaults
             file_types_default_action: default_file_action(),
             // Phase 5: PII defaults
@@ -1903,6 +1964,11 @@ impl Default for SenderConfig {
             jtd_conversion_enabled: false,
             jtd_converter_type: "auto".to_string(),
             jtd_timeout_secs: 120,
+            // Phase 6.28: ABAC defaults
+            abac_enabled: false, // Opt-in for ABAC (backward compatible)
+            abac_attribute_cache_ttl_secs: default_abac_cache_ttl(),
+            abac_decision_cache_ttl_secs: default_abac_cache_ttl(),
+            abac_approval_templates: Vec::new(),
         }
     }
 }
@@ -2121,15 +2187,18 @@ impl SenderConfig {
             cdr_format_downgrade_enabled,
             cdr_clamav_enabled,
             cdr_clamav_socket_path,
+            cdr_v2_enabled,
         ) = if let Some(ref cdr) = toml.cdr_strategies {
             (
                 cdr.vba_whitelist.enabled,
                 cdr.format_downgrade.enabled,
                 cdr.clamav_integration.enabled,
                 cdr.clamav_integration.socket_path.clone(),
+                // CDR v2 is enabled when any CDR strategy is active
+                cdr.vba_whitelist.enabled || cdr.format_downgrade.enabled || cdr.clamav_integration.enabled,
             )
         } else {
-            (false, false, false, default_clamd_socket())
+            (false, false, false, default_clamd_socket(), false)
         };
 
         // ---- Map Phase 5: File Types Section ----
@@ -2251,6 +2320,10 @@ impl SenderConfig {
             cdr_format_downgrade_enabled,
             cdr_clamav_enabled,
             cdr_clamav_socket_path,
+            cdr_v2_enabled,
+            // Phase 6: Self-Healing Transport Integrity (Task 6.27)
+            // Not yet configurable via TOML; defaults to false
+            integrity_enabled: false,
             file_types_default_action,
             pii_enabled,
             pii_mask_char,
@@ -2277,6 +2350,11 @@ impl SenderConfig {
             jtd_conversion_enabled: false,
             jtd_converter_type: "auto".to_string(),
             jtd_timeout_secs: 120,
+            // Phase 6.28: ABAC (TOML not yet supported; using defaults)
+            abac_enabled: false,
+            abac_attribute_cache_ttl_secs: default_abac_cache_ttl(),
+            abac_decision_cache_ttl_secs: default_abac_cache_ttl(),
+            abac_approval_templates: Vec::new(),
         }
     }
 
@@ -3150,6 +3228,9 @@ timeout_secs = 300
             cdr_format_downgrade_enabled: false,
             cdr_clamav_enabled: false,
             cdr_clamav_socket_path: String::new(),
+            cdr_v2_enabled: false,
+            // Phase 6: Self-Healing Transport Integrity (Task 6.27)
+            integrity_enabled: false,
             file_types_default_action: String::from("allow"),
             pii_enabled: pii_en,
             pii_mask_char: pii_mc,
@@ -3184,6 +3265,11 @@ timeout_secs = 300
             jtd_converter_type: "auto".to_string(),
             jtd_timeout_secs: 120,
             versioning: None,
+            // Phase 6.28: ABAC
+            abac_enabled: false,
+            abac_attribute_cache_ttl_secs: default_abac_cache_ttl(),
+            abac_decision_cache_ttl_secs: default_abac_cache_ttl(),
+            abac_approval_templates: Vec::new(),
         }
     }
 

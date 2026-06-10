@@ -71,6 +71,11 @@ pub enum AuditEventType {
     SecurityViolation,
     /// System-level error (operational failure)
     SystemError,
+    /// Custom event type for extensibility (e.g., "abac_policy_evaluated")
+    ///
+    /// Allows recording domain-specific events that don't fit standard categories.
+    /// The string value should be a snake_case identifier (e.g., "abac_mfa_required").
+    Custom(String),
 }
 
 impl std::fmt::Display for AuditEventType {
@@ -87,6 +92,7 @@ impl std::fmt::Display for AuditEventType {
             Self::FileDownloaded => write!(f, "file_downloaded"),
             Self::SecurityViolation => write!(f, "security_violation"),
             Self::SystemError => write!(f, "system_error"),
+            Self::Custom(name) => write!(f, "{}", name),
         }
     }
 }
@@ -230,6 +236,22 @@ pub struct AuditLogEntry {
     /// - `Some(false)`: No PII detected, standard handling
     /// - `None`: PII scanning not performed or not applicable
     pub contains_personal_info: Option<bool>,
+
+    // === Custom Fields for Extensibility ===
+    /// Arbitrary key-value pairs for domain-specific audit data.
+    ///
+    /// Used by ABAC integration, custom event types, and other extensions
+    /// that need to record additional context beyond standard fields.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let entry = AuditLogEntry::new(AuditEventType::Custom("abac_evaluated".to_string()))
+    ///     .with_custom_field("policy_effect", "Permit")
+    ///     .with_custom_field("matched_rule", "rule-001");
+    /// ```
+    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
+    pub custom_fields: std::collections::HashMap<String, String>,
 }
 
 impl AuditLogEntry {
@@ -280,6 +302,8 @@ impl AuditLogEntry {
             new_file_name: None,
             new_size_bytes: None,
             contains_personal_info: None,
+            // Custom fields for extensibility
+            custom_fields: std::collections::HashMap::new(),
         }
     }
 
@@ -468,6 +492,32 @@ impl AuditLogEntry {
     /// of Personal Information (個人情報保護法).
     pub fn with_contains_personal_info(mut self, contains_pii: bool) -> Self {
         self.contains_personal_info = Some(contains_pii);
+        self
+    }
+
+    // =========================================================================
+    // Builder Methods for Custom Fields (Extensibility)
+    // =========================================================================
+
+    /// Add a custom key-value field to the audit entry.
+    ///
+    /// Used for domain-specific data that doesn't fit standard fields,
+    /// such as ABAC policy evaluation results, MFA status, etc.
+    ///
+    /// # Arguments
+    /// * `key` - Field name (should be snake_case, e.g., "abac_effect")
+    /// * `value` - Field value as string
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let entry = AuditLogEntry::new(AuditEventType::Custom("abac_evaluated".to_string()))
+    ///     .with_custom_field("policy_effect", "Permit")
+    ///     .with_custom_field("matched_rule", "rule-001")
+    ///     .with_custom_field("cache_hit", "true");
+    /// ```
+    pub fn with_custom_field(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.custom_fields.insert(key.into(), value.into());
         self
     }
 

@@ -16,6 +16,9 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::relay::node::{CapacityLimits, EndpointConfig, NodeRole, RelayEdge, RelayNode};
+use crate::relay::topology::{RelayTopology, RouteStrategy};
+
 /// Global runtime configuration for the multi-tier relay subsystem.
 ///
 /// Encapsulates all system-wide parameters that govern relay behavior,
@@ -72,6 +75,7 @@ pub struct RelayConfig {
     /// depending solely on configuration.
     ///
     /// Default: `false`.
+    #[serde(default)]
     pub enabled: bool,
 
     /// Name of the default routing strategy applied when a transfer request
@@ -82,6 +86,7 @@ pub struct RelayConfig {
     /// or a custom registered strategy name.
     ///
     /// Default: `"local_egress_first"`.
+    #[serde(default = "default_strategy")]
     pub default_strategy: String,
 
     /// Upper bound on the number of hops (intermediate nodes) permitted in
@@ -95,6 +100,7 @@ pub struct RelayConfig {
     /// Range: `[0, 255]`. Value of `0` effectively disables routing.
     ///
     /// Default: `5`.
+    #[serde(default = "default_max_hops")]
     pub max_hops: u8,
 
     /// Interval in seconds between consecutive heartbeat probes sent by each
@@ -107,6 +113,7 @@ pub struct RelayConfig {
     /// Range: `[1, u64::MAX]`. Recommended range: `[5, 60]`.
     ///
     /// Default: `15`.
+    #[serde(default = "default_heartbeat_interval")]
     pub heartbeat_interval_secs: u64,
 
     /// Number of consecutive heartbeat failures (or health-check violations)
@@ -119,8 +126,17 @@ pub struct RelayConfig {
     /// Range: `[0, u32::MAX]`. Value of `0` disables circuit breaking.
     ///
     /// Default: `3`.
+    #[serde(default = "default_circuit_breaker_threshold")]
     pub circuit_breaker_threshold: u32,
 }
+
+// Default value functions for serde(default) attributes
+fn default_strategy() -> String {
+    String::from("local_egress_first")
+}
+fn default_max_hops() -> u8 { 5 }
+fn default_heartbeat_interval() -> u64 { 15 }
+fn default_circuit_breaker_threshold() -> u32 { 3 }
 
 impl Default for RelayConfig {
     /// Returns a `RelayConfig` with all fields set to their documented defaults.
@@ -453,17 +469,41 @@ impl RelayConfig {
     ) -> Result<RelayTopology, String> {
         use crate::relay::node::{NodeRole, RelayEdge};
 
-        // Parse nodes.
-        let raw_nodes: Vec<toml::Value> =
-            toml::from_str(nodes_toml).map_err(|e| format!("failed to parse nodes TOML: {}", e))?;
+        // Parse nodes - support both direct array and [[nodes]] table array format.
+        let raw_nodes: Vec<toml::Value> = if nodes_toml.trim().starts_with("[[nodes]]") {
+            // Table array format: parse as map and extract "nodes" key
+            let map: toml::map::Map<String, toml::Value> =
+                toml::from_str(nodes_toml).map_err(|e| format!("failed to parse nodes TOML: {}", e))?;
+            map.get("nodes")
+                .and_then(|v| v.as_array())
+                .cloned()
+                .unwrap_or_default()
+        } else {
+            // Direct array format
+            toml::from_str(nodes_toml).map_err(|e| format!("failed to parse nodes TOML: {}", e))?
+        };
 
-        // Parse edges.
-        let raw_edges: Vec<toml::Value> =
-            toml::from_str(edges_toml).map_err(|e| format!("failed to parse edges TOML: {}", e))?;
+        // Parse edges - support both direct array and [[edges]] table array format.
+        let raw_edges: Vec<toml::Value> = if edges_toml.trim().starts_with("[[edges]]") {
+            // Table array format: parse as map and extract "edges" key
+            let map: toml::map::Map<String, toml::Value> =
+                toml::from_str(edges_toml).map_err(|e| format!("failed to parse edges TOML: {}", e))?;
+            map.get("edges")
+                .and_then(|v| v.as_array())
+                .cloned()
+                .unwrap_or_default()
+        } else {
+            // Direct array format (or empty)
+            if edges_toml.trim().is_empty() {
+                Vec::new()
+            } else {
+                toml::from_str(edges_toml).map_err(|e| format!("failed to parse edges TOML: {}", e))?
+            }
+        };
 
         let mut topo = RelayTopology::new(
-            crate::relay::topology::RouteStrategy::from_name(&self.default_strategy)
-                .unwrap_or(crate::relay::topology::RouteStrategy::default_strategy()),
+            RouteStrategy::from_name(&self.default_strategy)
+                .unwrap_or_else(RouteStrategy::default_strategy),
         );
 
         // Insert nodes.
@@ -540,19 +580,21 @@ impl RelayConfig {
                 .and_then(|v| v.as_str())
                 .ok_or("missing 'to_node' in edge definition")?;
 
-            let mut edge = RelayEdge::new(from, to);
+            // Build edge using RelayEdgeBuilder for fluent API.
+            let mut builder = crate::relay::node::RelayEdgeBuilder::new(from, to);
 
             // Optional edge attributes.
             if let Some(protocol) = edge_val.get("protocol").and_then(|v| v.as_str()) {
-                edge = edge.with_protocol(protocol);
+                builder = builder.protocol(protocol);
             }
             if let Some(enc) = edge_val.get("require_encryption").and_then(|v| v.as_bool()) {
-                edge = edge.require_encryption(enc);
+                builder = builder.require_encryption(enc);
             }
             if let Some(app) = edge_val.get("require_approval").and_then(|v| v.as_bool()) {
-                edge = edge.require_approval(app);
+                builder = builder.require_approval(app);
             }
 
+            let edge = builder.build();
             topo.add_edge(edge)
                 .map_err(|e| format!("failed to add edge '{}'->'{}': {}", from, to, e))?;
         }

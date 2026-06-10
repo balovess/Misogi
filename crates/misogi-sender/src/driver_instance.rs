@@ -33,7 +33,9 @@
 
 use bytes::Bytes;
 use misogi_core::error::Result;
+use misogi_core::integrity::{IntegrityAck, IntegrityEnvelope};
 use misogi_core::traits::{ChunkAck, DriverHealthStatus, TransferDriver};
+use misogi_core::ChunkMeta;
 
 use misogi_core::drivers::{
     DirectTcpDriver, DirectTcpDriverConfig, ExternalCommandDriver, ExternalCommandDriverConfig,
@@ -159,6 +161,54 @@ impl TransferDriverInstance {
             Self::StorageRelay(driver) => driver.send_chunk(file_id, chunk_index, data).await,
             Self::ExternalCommand(driver) => driver.send_chunk(file_id, chunk_index, data).await,
             Self::UdpBlast(driver) => driver.send_chunk(file_id, chunk_index, data).await,
+        }
+    }
+
+    /// Transmit a single file chunk with integrity envelope for tamper detection.
+    ///
+    /// When an [`IntegrityEnvelope`] is provided, the receiver will verify
+    /// the chunk's cryptographic hash and may request retransmission if
+    /// corruption is detected.
+    ///
+    /// # Arguments
+    /// * `file_id` — Unique identifier of the file being transferred.
+    /// * `chunk_index` — Zero-based position of this chunk within the file.
+    /// * `data` — Raw bytes of the chunk payload.
+    /// * `metadata` — Chunk metadata containing MD5 and size information.
+    /// * `envelope` — Optional integrity envelope with cryptographic proofs.
+    ///
+    /// # Returns
+    /// An [`IntegrityChunkAck`] indicating whether the receiver accepted
+    /// the chunk and verified its integrity.
+    pub async fn send_chunk_integrity(
+        &self,
+        file_id: &str,
+        chunk_index: u32,
+        data: &[u8],
+        metadata: &ChunkMeta,
+        envelope: Option<&IntegrityEnvelope>,
+    ) -> Result<IntegrityAck> {
+        match self {
+            Self::DirectTcp(driver) => {
+                driver
+                    .send_chunk_integrity(file_id, chunk_index, data, metadata, envelope)
+                    .await
+            }
+            Self::StorageRelay(driver) => {
+                driver
+                    .send_chunk_integrity(file_id, chunk_index, data, metadata, envelope)
+                    .await
+            }
+            Self::ExternalCommand(driver) => {
+                driver
+                    .send_chunk_integrity(file_id, chunk_index, data, metadata, envelope)
+                    .await
+            }
+            Self::UdpBlast(driver) => {
+                driver
+                    .send_chunk_integrity(file_id, chunk_index, data, metadata, envelope)
+                    .await
+            }
         }
     }
 

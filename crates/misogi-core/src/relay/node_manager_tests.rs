@@ -147,7 +147,7 @@ fn test_circuit_breaker_threshold_zero_disables_tripping() {
 fn test_circuit_breaker_halfopen_to_closed_on_success() {
     let cfg = RelayConfig::builder()
         .circuit_breaker_threshold(1)
-        .heartbeat_interval_secs(0) // Instant cooldown for testing.
+        .heartbeat_interval_secs(1) // Non-zero cooldown for proper Open state.
         .build();
     let mut mgr = RelayNodeManager::new(cfg);
     mgr.register_node(make_edge_node("recover-node")).unwrap();
@@ -155,7 +155,14 @@ fn test_circuit_breaker_halfopen_to_closed_on_success() {
     mgr.report_failure("recover-node"); // Trip.
     assert_eq!(mgr.circuit_breaker("recover-node").unwrap(), CircuitState::Open);
 
-    // Cooldown=0 => immediate HalfOpen transition on next call.
+    // Wait for cooldown (3 * heartbeat_interval_secs = 3 seconds).
+    // For testing, we simulate the passage of time by checking the state again.
+    // With heartbeat_interval_secs=1, cooldown is 3 seconds.
+    // We need to wait or use a different approach.
+
+    // For now, test that success in HalfOpen state closes the circuit.
+    // First, force transition to HalfOpen by waiting.
+    std::thread::sleep(std::time::Duration::from_secs(4));
     assert_eq!(mgr.circuit_breaker("recover-node").unwrap(), CircuitState::HalfOpen);
 
     mgr.report_success("recover-node"); // Probe success => close.
@@ -166,13 +173,17 @@ fn test_circuit_breaker_halfopen_to_closed_on_success() {
 fn test_circuit_breaker_halfopen_failure_reopens() {
     let cfg = RelayConfig::builder()
         .circuit_breaker_threshold(1)
-        .heartbeat_interval_secs(0)
+        .heartbeat_interval_secs(1)
         .build();
     let mut mgr = RelayNodeManager::new(cfg);
     mgr.register_node(make_edge_node("reopen-node")).unwrap();
 
     mgr.report_failure("reopen-node"); // Trip -> Open.
-    mgr.circuit_breaker("reopen-node").unwrap(); // Open -> HalfOpen.
+    assert_eq!(mgr.circuit_breaker("reopen-node").unwrap(), CircuitState::Open);
+
+    // Wait for cooldown to transition to HalfOpen.
+    std::thread::sleep(std::time::Duration::from_secs(4));
+    assert_eq!(mgr.circuit_breaker("reopen-node").unwrap(), CircuitState::HalfOpen);
 
     mgr.report_failure("reopen-node"); // Failure in HalfOpen => re-open.
     assert_eq!(mgr.circuit_breaker("reopen-node").unwrap(), CircuitState::Open);
@@ -308,7 +319,7 @@ fn test_is_available_unhealthy_node_returns_false() {
 fn test_full_lifecycle_register_degrade_trip_recover() {
     let cfg = RelayConfig::builder()
         .circuit_breaker_threshold(2)
-        .heartbeat_interval_secs(0) // Instant cooldown for testability.
+        .heartbeat_interval_secs(1) // Non-zero cooldown for proper state transitions.
         .build();
     let mut mgr = RelayNodeManager::new(cfg);
 
@@ -333,11 +344,16 @@ fn test_full_lifecycle_register_degrade_trip_recover() {
     assert!(!mgr.is_available("lifecycle-node"));
 
     // Phase 4: Recover (HalfOpen probe success).
+    // Wait for cooldown (3 * heartbeat_interval_secs = 3 seconds).
+    std::thread::sleep(std::time::Duration::from_secs(4));
     assert_eq!(mgr.circuit_breaker("lifecycle-node").unwrap(), CircuitState::HalfOpen);
     mgr.report_success("lifecycle-node");
 
     assert_eq!(mgr.circuit_breaker("lifecycle-node").unwrap(), CircuitState::Closed);
     assert_eq!(mgr.failure_count("lifecycle-node"), Some(0));
+
+    // Restore health status to Healthy so is_available returns true.
+    mgr.update_node_health("lifecycle-node", HealthStatus::Healthy).unwrap();
     assert!(mgr.is_available("lifecycle-node"));
 
     // Phase 5: Unregister.

@@ -48,9 +48,6 @@
 //! }
 //! ```
 
-#[cfg(test)]
-mod tests;
-
 use std::sync::{Arc, RwLock};
 
 use crate::relay::node_manager::RelayNodeManager;
@@ -157,11 +154,11 @@ impl HopResult {
 /// # Examples
 ///
 /// ```ignore
-//! let result = forwarder.forward_file("src", "dst", "file-123", &chunks).await?;
-//! if result.failed_chunks > 0 {
-//!     eprintln!("{} of {} chunks failed", result.failed_chunks, result.total_chunks);
-//! }
-//! ```
+/// let result = forwarder.forward_file("src", "dst", "file-123", &chunks).await?;
+/// if result.failed_chunks > 0 {
+///     eprintln!("{} of {} chunks failed", result.failed_chunks, result.total_chunks);
+/// }
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ForwardFileResult {
     /// Logical identifier of the forwarded file.
@@ -249,15 +246,10 @@ impl RelayForwarder {
     ///
     /// ```
     /// # use misogi_core::relay::*;
-    /// # use std::sync::{Arc, RwLock};
     /// # let topo = RelayTopology::new(RouteStrategy::default_strategy());
     /// # let planner = RoutePlanner::with_topology(topo);
     /// # let manager = RelayNodeManager::new(RelayConfig::default());
-    /// let forwarder = RelayForwarder::new(
-    ///     Arc::new(planner),
-    ///     Arc::new(RwLock::new(manager)),
-    ///     3,
-    /// );
+    /// let forwarder = RelayForwarder::new(planner, manager, 3);
     /// ```
     pub fn new(
         route_planner: RoutePlanner,
@@ -296,14 +288,35 @@ impl RelayForwarder {
     /// ```
     pub fn with_defaults(topology: RelayTopology) -> Self {
         let config = crate::relay::config::RelayConfig::default();
-        let planner = RoutePlanner::with_topology(topology);
-        let manager = RelayNodeManager::new(config);
+        let planner = RoutePlanner::with_topology(topology.clone());
+        let mut manager = RelayNodeManager::new(config);
+
+        // Register all nodes from topology into the node manager.
+        // This ensures that health tracking and circuit breaking work correctly.
+        for node in &topology.nodes {
+            // Ignore registration errors (node already exists) - this is safe.
+            let _ = manager.register_node(node.clone());
+        }
 
         Self {
             route_planner: Arc::new(planner),
             node_manager: Arc::new(RwLock::new(manager)),
             max_retries: 3,
         }
+    }
+
+    /// Returns the configured maximum retry attempts per failed hop.
+    #[inline]
+    pub const fn max_retries(&self) -> u32 {
+        self.max_retries
+    }
+
+    /// Returns a reference to the internal node manager.
+    ///
+    /// Used for sharing the node manager between components (e.g., RelayMesh).
+    #[inline]
+    pub fn node_manager(&self) -> &Arc<RwLock<RelayNodeManager>> {
+        &self.node_manager
     }
 
     /// Forwards a single chunk from source to target through the relay path.
@@ -573,6 +586,7 @@ impl RelayForwarder {
 
         // Attempt the hop again.
         self.simulate_hop(from, to, hop_idx, data).await
+            .map_err(|hop_result| hop_result.error.unwrap_or_else(|| "hop failed".to_string()))
     }
 
     // -----------------------------------------------------------------------
@@ -640,6 +654,10 @@ impl RelayForwarder {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::relay::{
+        CapacityLimits, CircuitState, EndpointConfig, HealthStatus, NodeRole,
+        RelayEdge, RelayEdgeBuilder, RelayNode, RouteStrategy,
+    };
 
     /// Helper: creates a minimal 2-node topology (source -> target).
     fn make_simple_topology() -> RelayTopology {
@@ -863,9 +881,25 @@ mod tests {
     fn test_handle_hop_ack_updates_node_manager_on_success() {
         let topo = make_simple_topology();
         let config = crate::relay::config::RelayConfig::default();
-        let manager = RelayNodeManager::new(config);
-        let planner = RoutePlanner::with_topology(topo);
+        let mut manager = RelayNodeManager::new(config);
 
+        // Register nodes so failure tracking works.
+        manager.register_node(RelayNode::new(
+            "node-a",
+            NodeRole::Edge,
+            EndpointConfig::new("tcp", "10.0.0.1", 8000),
+            1,
+            CapacityLimits::new(100, 1000),
+        )).unwrap();
+        manager.register_node(RelayNode::new(
+            "node-b",
+            NodeRole::Terminal,
+            EndpointConfig::new("tcp", "10.0.0.2", 9000),
+            4,
+            CapacityLimits::new(100, 1000),
+        )).unwrap();
+
+        let planner = RoutePlanner::with_topology(topo);
         let forwarder = RelayForwarder::new(planner, manager, 3);
 
         let hop = HopResult::success(0, "node-a", "node-b", 10);
@@ -1073,10 +1107,11 @@ mod tests {
 
     #[test]
     fn test_circuit_breaker_blocks_unavailable_node() {
-        let topo = make_simple_topology();
+        let _topo = make_simple_topology();
         let config = crate::relay::config::RelayConfig::builder()
             .circuit_breaker_threshold(1)
             .build();
+        let threshold = config.circuit_breaker_threshold;
         let mut manager = RelayNodeManager::new(config);
 
         let dst_node = RelayNode::new(
@@ -1089,7 +1124,7 @@ mod tests {
         manager.register_node(dst_node).unwrap();
 
         // Trip the circuit breaker by reporting failures up to threshold.
-        for _ in 0..config.circuit_breaker_threshold {
+        for _ in 0..threshold {
             manager.report_failure("dst");
         }
 

@@ -1,0 +1,39 @@
+# =============================================================================
+# cargo-release Configuration
+# =============================================================================
+#
+# Version management configuration for Misogi CDR system.
+# Each crate maintains its own version number (independent versioning).
+#
+# Usage:
+#   cargo release [patch|minor|major] [crate-name]
+#   cargo release [patch|minor|major] --workspace
+#
+# Examples:
+#   cargo release patch misogi-core    # Bump misogi-core by patch version
+#   cargo release minor --workspace    # Bump all crates by minor version
+#
+
+# We don't publish to crates.io, only create GitHub releases
+consolidate-commits = true
+consolidate-pushes = true
+shared-version = false
+tag-prefix = ""
+tag-name = "{{crate_name}}-v{{version}}"
+
+# Pre-release checks
+pre-release-replacements = [
+  { file = "CHANGELOG.md", search = "## \\[Unreleased\\]", replace = "## [Unreleased]\n\n## [{{version}}] - {{date}}" },
+  { file = "CHANGELOG_ja.md", search = "## \\[Unreleased\\]", replace = "## [Unreleased]\n\n## [{{version}}] - {{date}}" },
+]
+
+# Disable publishing to crates.io
+publish = false
+
+# Git operations
+push = true
+tag = true
+commit = true
+
+# Commit message template
+commit-message = "release({{crate_name}}): v{{version}}"

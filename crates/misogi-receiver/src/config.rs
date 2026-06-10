@@ -744,6 +744,22 @@ pub struct ReceiverConfig {
     /// Default action for unrecognized file extensions.
     pub file_types_default_action: String,
 
+    // ---- Phase 6: Self-Healing Transport Integrity (Task 6.27) ----
+    /// Whether self-healing transport integrity verification is enabled.
+    ///
+    /// When `true`, incoming chunks are verified against their [`IntegrityEnvelope`]
+    /// before being written to storage. Corrupted chunks trigger NACK responses
+    /// to request retransmission from the sender.
+    ///
+    /// Enables:
+    /// - Per-chunk integrity verification (data_hash, envelope_hash)
+    /// - Chain validation (previous_chunk_hash linkage)
+    /// - Automatic repair request on corruption detection
+    /// - Checkpoint-based resume support
+    ///
+    /// Default: `false` (backward compatible, no integrity overhead).
+    pub integrity_enabled: bool,
+
     // ---- Legacy Fields (Required by existing code) ----
     /// Storage directory path (alias for chunk_dir, used by ChunkStorage).
     ///
@@ -824,6 +840,8 @@ impl Default for ReceiverConfig {
             encoding_fallback_fonts: default_fallback_fonts(),
             // Phase 5: File Types defaults
             file_types_default_action: default_file_action(),
+            // Phase 6: Self-Healing Transport Integrity defaults (Task 6.27)
+            integrity_enabled: false, // Opt-in for integrity (backward compatible)
             // Legacy fields defaults
             storage_dir: default_storage_dir(),
             tunnel_port: default_tunnel_port(),
@@ -1073,6 +1091,9 @@ impl ReceiverConfig {
             encoding_unknown_font_action,
             encoding_fallback_fonts,
             file_types_default_action,
+            // Phase 6: Self-Healing Transport Integrity (Task 6.27)
+            // Not yet configurable via TOML; defaults to false
+            integrity_enabled: false,
             ppap_log_converted: false,
             // Blast (UDP data diode) fields
             blast_enabled: toml
@@ -1277,6 +1298,9 @@ impl ReceiverConfig {
             encoding_unknown_font_action,
             encoding_fallback_fonts,
             file_types_default_action,
+            // Phase 6: Self-Healing Transport Integrity (Task 6.27)
+            // Not yet configurable via TOML; defaults to false
+            integrity_enabled: false,
             ppap_log_converted: false,
             // Blast (UDP data diode) fields
             blast_enabled: toml_config
@@ -1698,6 +1722,8 @@ default_action = "allow"
             encoding_unknown_font_action: enc_ufa,
             encoding_fallback_fonts: Vec::new(),
             file_types_default_action: fta,
+            // Phase 6: Self-Healing Transport Integrity (Task 6.27)
+            integrity_enabled: false,
             storage_dir: chunk_dir.clone().to_string_lossy().to_string(),
             tunnel_port: 9000,
             output_dir: None,
