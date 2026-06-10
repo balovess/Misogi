@@ -353,7 +353,8 @@ jobs:
           echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
           
           for job in lint check test doc security wasm-gate build; do
-            status=$(echo "$NEEDS_CONTEXT" | jq -r ".${job}.result")
+            # Use bracket notation for keys with hyphens (jq interprets '-' as subtraction)
+            status=$(echo "$NEEDS_CONTEXT" | jq -r ".[\"${job}\"].result")
             case "$status" in
               success) emoji="✅" ;;
               failure) emoji="❌" ;;
