@@ -84,6 +84,22 @@ jobs:
       - name: Run Clippy (strict)
         run: cargo clippy --workspace --all-targets -- -D warnings -D clippy::all
 
+      - name: Install typos-cli
+        uses: taiki-e/install-action@v2
+        with:
+          tool: typos-cli
+
+      - name: Check spelling
+        run: typos --config .github/typos.toml
+
+      - name: Install cargo-deny
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny
+
+      - name: Check licenses and advisories
+        run: cargo deny check --config .github/deny.toml
+
   # ===========================================================================
   # Job 2: Check — Compilation Verification
   # ===========================================================================

@@ -1,0 +1,86 @@
+# =============================================================================
+# Typos Configuration
+# =============================================================================
+# Configuration for typos-cli spell checker.
+#
+# See: https://github.com/crate-ci/typos
+
+[default]
+# Files to check
+extend-glob = ["*.rs", "*.md", "*.toml", "*.yml", "*.yaml"]
+
+# Files to ignore
+ignore-glob = [
+    "target/**",
+    "**/target/**",
+    "*.lock",
+    "**/*.lock",
+    "proto-dist/**",
+]
+
+[default.extend-identifiers]
+# Rust identifiers that look like typos but are correct
+Misogi = "Misogi"
+misogi = "misogi"
+WASM = "WASM"
+wasm = "wasm"
+GRPC = "gRPC"
+grpc = "gRPC"
+JWT = "JWT"
+jwt = "JWT"
+OIDC = "OIDC"
+oidc = "OIDC"
+SAML = "SAML"
+saml = "SAML"
+LDAP = "LDAP"
+ldap = "LDAP"
+EDR = "EDR"
+edr = "EDR"
+CDR = "CDR"
+cdr = "CDR"
+PII = "PII"
+pii = "PII"
+TCM = "TCM"
+tcm = "TCM"
+ABAC = "ABAC"
+abac = "ABAC"
+RTP = "RTP"
+rtp = "RTP"
+VBA = "VBA"
+vba = "VBA"
+OOXML = "OOXML"
+ooxml = "OOXML"
+PPAP = "PPAP"
+ppap = "PPAP"
+JTD = "JTD"
+jtd = "JTD"
+FEC = "FEC"
+fec = "FEC"
+SMTP = "SMTP"
+smtp = "SMTP"
+
+[default.extend-words]
+# Words that look like typos but are correct
+# Japanese romanization
+misogi = "misogi"
+# Technical terms
+aarch = "aarch"
+amd = "amd"
+msvc = "msvc"
+gnu = "gnu"
+# File extensions
+serde = "serde"
+clippy = "clippy"
+rustfmt = "rustfmt"
+# Common abbreviations
+impl = "impl"
+fn = "fn"
+struct = "struct"
+enum = "enum"
+mod = "mod"
+pub = "pub"
+mut = "mut"
+ref = "ref"
+dyn = "dyn"
+async = "async"
+await = "await"

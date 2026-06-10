@@ -1,0 +1,112 @@
+# =============================================================================
+# PR Label Configuration
+# =============================================================================
+# Maps file patterns to labels for automatic PR labeling.
+#
+# Syntax:
+#   label-name:
+#     - 'glob/pattern/**'
+#
+# See: https://github.com/actions/labeler
+
+# =============================================================================
+# Core Crates
+# =============================================================================
+C-core:
+  - 'crates/misogi-core/**'
+  - 'proto-dist/**'
+
+C-cdr:
+  - 'crates/misogi-cdr/**'
+
+C-auth:
+  - 'crates/misogi-auth/**'
+
+C-wasm:
+  - 'crates/misogi-wasm/**'
+
+C-sender:
+  - 'crates/misogi-sender/**'
+
+C-receiver:
+  - 'crates/misogi-receiver/**'
+
+C-smtp:
+  - 'crates/misogi-smtp/**'
+
+C-rest-api:
+  - 'crates/misogi-rest-api/**'
+
+C-nocode:
+  - 'crates/misogi-nocode/**'
+
+C-bootstrap:
+  - 'crates/misogi-bootstrap/**'
+
+C-config:
+  - 'crates/misogi-config/**'
+
+C-macros:
+  - 'crates/misogi-macros/**'
+
+C-health:
+  - 'crates/misogi-health/**'
+
+# =============================================================================
+# Infrastructure
+# =============================================================================
+I-docker:
+  - 'Dockerfile'
+  - 'docker/**'
+  - '.dockerignore'
+
+I-kubernetes:
+  - 'helm/**'
+
+I-ci:
+  - '.github/workflows/**'
+
+# =============================================================================
+# Documentation
+# =============================================================================
+D-docs:
+  - 'docs/**'
+  - 'README.md'
+  - 'README_ja.md'
+  - 'CHANGELOG.md'
+  - 'CHANGELOG_ja.md'
+  - 'CONTRIBUTING.md'
+  - 'SECURITY.md'
+  - 'CODE_OF_CONDUCT.md'
+  - '**/README.md'
+
+# =============================================================================
+# Examples & Clients
+# =============================================================================
+E-examples:
+  - 'examples/**'
+
+# =============================================================================
+# Configuration
+# =============================================================================
+F-config:
+  - 'config/**'
+  - 'Cargo.toml'
+  - 'Cargo.lock'
+  - '**/Cargo.toml'
+
+# =============================================================================
+# Security
+# =============================================================================
+S-security:
+  - '.cargo/audit.toml'
+  - 'SECURITY.md'
+  - 'docs/**/security/**'
+
+# =============================================================================
+# Tests
+# =============================================================================
+T-tests:
+  - '**/tests/**'
+  - '**/*_tests.rs'
+  - '**/tests.rs'
