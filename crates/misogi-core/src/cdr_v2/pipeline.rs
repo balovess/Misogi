@@ -24,7 +24,9 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::cdr_v2::ast::DocumentAst;
-use crate::cdr_v2::types::{ActiveContentType, CdrError, SanitizeAction, ThreatSeverity};
+use crate::cdr_v2::types::{
+    ActiveContentType, CdrError, ExecutionMode, SanitizeAction, ThreatSeverity,
+};
 
 /// Single processing stage within the CDR pipeline.
 ///
@@ -81,6 +83,12 @@ pub struct CdrPolicy {
     #[serde(default = "fail_mode")]
     pub fail_mode: String,
 
+    /// Pipeline execution mode controlling stage processing strategy.
+    /// - Sequential: Stages run one after another (default, safe).
+    /// - Parallel: Independent stages run concurrently (performance).
+    #[serde(default)]
+    pub execution_mode: ExecutionMode,
+
     /// Whether to strip JavaScript from documents (PDF actions, SVG scripts).
     #[serde(default = "default_true")]
     pub strip_javascript: bool,
@@ -119,6 +127,7 @@ impl Default for CdrPolicy {
         Self {
             default_action: default_action(),
             fail_mode: fail_mode(),
+            execution_mode: ExecutionMode::default(),
             strip_javascript: true,
             strip_open_actions: true,
             strip_embedded_files: true,
@@ -362,12 +371,15 @@ impl CdrPipeline {
         // Update the caller's AST with final result
         *ast = current_ast;
 
+        // Compute output hash for audit integrity verification
+        let output_hash = Some(ast.compute_hash());
+
         Ok(CdrReport {
             success,
             stages_executed: stage_reports,
             total_active_contents_found: ast.active_content_count() as u32,
             total_actions_taken: total_actions,
-            output_hash: None,
+            output_hash,
         })
     }
 

@@ -287,6 +287,47 @@ impl std::fmt::Display for SanitizeAction {
     }
 }
 
+/// Pipeline execution mode controlling stage processing strategy.
+///
+/// Determines whether stages execute sequentially (safe default) or
+/// in parallel (performance optimization for independent stages).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ExecutionMode {
+    /// Sequential execution — stages run one after another in order.
+    ///
+    /// This is the safe default that guarantees deterministic behavior
+    /// and makes debugging easier.
+    Sequential,
+
+    /// Parallel execution — independent stages run concurrently.
+    ///
+    /// Improves performance for documents with multiple independent threat
+    /// vectors (e.g., PDF with JavaScript AND embedded files). Stages are
+    /// partitioned into groups that can safely run in parallel.
+    Parallel {
+        /// Maximum number of stages that can execute concurrently.
+        /// Must be >= 1. Typical values: 2-4 for most systems.
+        max_concurrency: usize,
+    },
+}
+
+impl Default for ExecutionMode {
+    fn default() -> Self {
+        Self::Sequential
+    }
+}
+
+impl std::fmt::Display for ExecutionMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Sequential => write!(f, "sequential"),
+            Self::Parallel { max_concurrency } => {
+                write!(f, "parallel(max_concurrency={max_concurrency})")
+            }
+        }
+    }
+}
+
 /// XPath-like location identifier within a document's structural tree.
 ///
 /// Encodes the precise position of an element using a path notation similar

@@ -19,6 +19,9 @@
 // =============================================================================
 
 use crate::cdr_v2::types::{ActiveContentRef, ActiveContentType, DocumentFormat, ThreatSeverity};
+use sha2::{Digest, Sha256};
+use std::cell::RefCell;
+use std::sync::Arc;
 
 /// Node in the document Abstract Syntax Tree.
 ///
@@ -290,6 +293,224 @@ impl DocumentAst {
     #[must_use]
     pub fn max_severity(&self) -> Option<ThreatSeverity> {
         self.active_contents.iter().map(|ac| ac.severity).max()
+    }
+
+    /// Compute SHA-256 hash of the AST for audit integrity verification.
+    ///
+    /// The hash is computed over a deterministic serialization of the AST:
+    /// - Document format
+    /// - Active content entries (sorted by location path for determinism)
+    /// - Tree structure (recursive node hashing)
+    ///
+    /// This hash can be stored in audit logs to verify that the sanitized
+    /// output has not been tampered with.
+    ///
+    /// # Returns
+    /// Hex-encoded SHA-256 hash string.
+    #[must_use]
+    pub fn compute_hash(&self) -> String {
+        let mut hasher = Sha256::new();
+
+        // Hash document format
+        hasher.update(self.format.extension().as_bytes());
+        hasher.update(b"|");
+
+        // Hash metadata (filename, size, format)
+        hasher.update(self.metadata.original_filename.as_bytes());
+        hasher.update(&self.metadata.file_size_bytes.to_be_bytes());
+        hasher.update(self.metadata.format.extension().as_bytes());
+        hasher.update(b"|");
+
+        // Hash active contents in deterministic order (sorted by path)
+        let mut sorted_contents: Vec<_> = self.active_contents.iter().collect();
+        sorted_contents.sort_by_key(|ac| &ac.location.path);
+
+        for ac in &sorted_contents {
+            hasher.update(ac.location.path.as_bytes());
+            hasher.update(b":");
+            hasher.update(&[ac.severity.level()]);
+            hasher.update(b":");
+            if let Some(action) = &ac.action_taken {
+                hasher.update(format!("{action}").as_bytes());
+            }
+            hasher.update(b";");
+        }
+        hasher.update(b"|");
+
+        // Hash tree structure
+        self.hash_node(&self.root, &mut hasher);
+
+        format!("{:x}", hasher.finalize())
+    }
+
+    /// Internal: recursively hash AST nodes for integrity verification.
+    fn hash_node(&self, node: &AstNode, hasher: &mut Sha256) {
+        match node {
+            AstNode::Document { children } => {
+                hasher.update(b"Doc[");
+                for child in children {
+                    self.hash_node(child, hasher);
+                }
+                hasher.update(b"]");
+            }
+            AstNode::Page { index, children } => {
+                hasher.update(format!("Pg{index}[").as_bytes());
+                for child in children {
+                    self.hash_node(child, hasher);
+                }
+                hasher.update(b"]");
+            }
+            AstNode::Text { content } => {
+                hasher.update(b"T:");
+                hasher.update(content.as_bytes());
+            }
+            AstNode::Image {
+                width,
+                height,
+                format,
+            } => {
+                hasher.update(format!("Img{width}x{height}:{format}").as_bytes());
+            }
+            AstNode::ActiveContent { ref_item, .. } => {
+                hasher.update(b"AC:");
+                hasher.update(ref_item.location.path.as_bytes());
+                hasher.update(b":");
+                hasher.update(&[ref_item.severity.level()]);
+            }
+            AstNode::Metadata { key, value } => {
+                hasher.update(b"M:");
+                hasher.update(key.as_bytes());
+                hasher.update(b"=");
+                hasher.update(value.as_bytes());
+            }
+            AstNode::Container { name, children } => {
+                hasher.update(b"C:");
+                hasher.update(name.as_bytes());
+                hasher.update(b"[");
+                for child in children {
+                    self.hash_node(child, hasher);
+                }
+                hasher.update(b"]");
+            }
+            AstNode::Unknown { tag } => {
+                hasher.update(b"U:");
+                hasher.update(tag.as_bytes());
+            }
+        }
+    }
+}
+
+// =============================================================================
+// AstHandle — Copy-on-Write Wrapper for DocumentAst
+// =============================================================================
+
+/// Copy-on-Write wrapper for [`DocumentAst`] enabling zero-copy stage processing.
+///
+/// This wrapper allows multiple pipeline stages to share read access to the AST
+/// without cloning. When a stage needs to modify the AST, it triggers a clone
+/// only if the AST is shared with other references.
+///
+/// # Thread Safety
+/// - The inner AST is wrapped in `Arc<RefCell<...>>` for shared mutable access.
+/// - `AstHandle` itself is `Send` but not `Sync` (use `Arc<AstHandle>` for sharing).
+/// - CoW cloning only occurs when `Arc::strong_count() > 1`.
+///
+/// # Performance
+/// - Read access: O(1) with no allocation.
+/// - Write access: O(n) clone only if shared, otherwise O(1).
+#[derive(Debug, Clone)]
+pub struct AstHandle {
+    /// Shared reference to the AST with interior mutability.
+    inner: Arc<RefCell<DocumentAst>>,
+
+    /// Flag indicating whether this handle has been modified.
+    modified: bool,
+}
+
+impl AstHandle {
+    /// Create a new AstHandle wrapping the given AST.
+    ///
+    /// # Arguments
+    /// * `ast` - The document AST to wrap.
+    #[must_use]
+    pub fn new(ast: DocumentAst) -> Self {
+        Self {
+            inner: Arc::new(RefCell::new(ast)),
+            modified: false,
+        }
+    }
+
+    /// Get a read reference to the AST without cloning.
+    ///
+    /// # Panics
+    /// Panics if the AST is already mutably borrowed.
+    #[must_use]
+    pub fn read(&self) -> std::cell::Ref<'_, DocumentAst> {
+        self.inner.borrow()
+    }
+
+    /// Get a write reference to the AST, triggering CoW if shared.
+    ///
+    /// If the AST is shared with other `AstHandle` instances (strong_count > 1),
+    /// this method clones the AST before returning the mutable reference,
+    /// ensuring that other handles are not affected by modifications.
+    ///
+    /// # Panics
+    /// Panics if the AST is already mutably borrowed.
+    #[must_use]
+    pub fn write(&mut self) -> std::cell::RefMut<'_, DocumentAst> {
+        if Arc::strong_count(&self.inner) > 1 {
+            // CoW: clone before modification if shared
+            let cloned = self.inner.borrow().clone();
+            self.inner = Arc::new(RefCell::new(cloned));
+        }
+        self.modified = true;
+        self.inner.borrow_mut()
+    }
+
+    /// Check whether this handle has been modified.
+    #[must_use]
+    pub fn is_modified(&self) -> bool {
+        self.modified
+    }
+
+    /// Get a reference to the inner AST without triggering CoW.
+    ///
+    /// Use this for read-only operations that need direct access.
+    #[must_use]
+    pub fn as_ref(&self) -> &Arc<RefCell<DocumentAst>> {
+        &self.inner
+    }
+
+    /// Convert into the inner AST, consuming the handle.
+    ///
+    /// # Returns
+    /// The owned `DocumentAst`, consuming this handle.
+    #[must_use]
+    pub fn into_inner(self) -> DocumentAst {
+        Arc::try_unwrap(self.inner)
+            .map(|rc| rc.into_inner())
+            .unwrap_or_else(|arc| arc.borrow().clone())
+    }
+
+    /// Compute hash of the wrapped AST.
+    ///
+    /// Delegates to [`DocumentAst::compute_hash`].
+    #[must_use]
+    pub fn compute_hash(&self) -> String {
+        self.inner.borrow().compute_hash()
+    }
+}
+
+impl From<DocumentAst> for AstHandle {
+    fn from(ast: DocumentAst) -> Self {
+        Self::new(ast)
+    }
+}
+
+impl From<AstHandle> for DocumentAst {
+    fn from(handle: AstHandle) -> Self {
+        handle.into_inner()
     }
 }
 

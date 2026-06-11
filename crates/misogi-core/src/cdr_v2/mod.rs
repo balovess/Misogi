@@ -43,7 +43,7 @@ pub mod types;
 
 // -- Re-exports at module root for ergonomic access --
 
-pub use ast::{AstNode, DocumentAst, DocumentMetadata};
+pub use ast::{AstHandle, AstNode, DocumentAst, DocumentMetadata};
 pub use config::{
     ArchiveConfig, CdrV2Config, OfficeConfig, PdfConfig, WhitelistConfig, WhitelistEntry,
 };
@@ -52,6 +52,6 @@ pub use pipeline::{
 };
 pub use stages::{ArchiveStage, OfficeLegacyStage, OfficeOpenXmlStage, PdfSanitizeStage};
 pub use types::{
-    ActiveContentRef, ActiveContentType, CdrError, ContentLocation, DocumentFormat, SanitizeAction,
-    ThreatSeverity,
+    ActiveContentRef, ActiveContentType, CdrError, ContentLocation, DocumentFormat, ExecutionMode,
+    SanitizeAction, ThreatSeverity,
 };

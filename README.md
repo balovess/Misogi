@@ -13,9 +13,13 @@ Misogi is a secure file transfer platform that combines **Content Disarm and Rec
 ## Core Features
 
 - **CDR Engine**: PDF True CDR (`PdfStreamParser`), OOXML True CDR for Word/Excel/PPT (`OoxmlStreamParser`), ZIP recursive nested scanning (`ZipSanitizer`), SVG script-element removal (`SvgSanitizer`), image EXIF/GPS metadata stripping (`ImageMetadataSanitizer`), steganography detection, and JTD Japanese word processor format support (`JtdSanitizer`)
+- **CDR v2 Engine**: Enhanced pipeline with PDF/Office/Archive processing, whitelist enforcement, and bomb detection
 - **WASM Edge**: Browser-side CDR via WebAssembly — sub-200ms latency, zero server dependency, files never leave the client
 - **Authentication**: JWT RS256 (asymmetric keys only — HS256 symmetric rejected), LDAP/Active Directory, OIDC, SAML 2.0, RBAC with 9 granular permission actions
+- **ABAC Engine**: Attribute-Based Access Control following NIST SP 800-162 with policy rules, approval workflows, and hot reload
 - **Transfer Protocol**: gRPC chunked streaming with resume support, Forward Error Correction (FEC), and multiple driver types: `direct_tcp`, `storage_relay`, `blind_send`, `pull`, `external_command`
+- **Relay Mesh**: Multi-tier relay for secure file transfer across network boundaries with circuit breaker and heartbeat monitoring
+- **Integrity Layer**: Self-healing integrity verification with automatic repair, session management, and multi-algorithm checksums (BLAKE3, SHA-256, SHA-512)
 - **Audit Trail**: Immutable JSON/Syslog/CEF logs with SHA-256 event hashing and configurable retention policies
 - **PII Detection**: Configurable rules engine for automatic identification of sensitive/personal data in transferred files
 
@@ -219,6 +223,17 @@ Region-Specific Documentation
   US (FedRAMP/CMMC):         docs/us/fedramp-cmmc-compliance.md
   SEA (PDPA/Bank Indonesia): docs/sea/pdpa-bi-compliance.md
 ```
+
+## Technical Documentation
+
+| Document | Description |
+|----------|-------------|
+| [architecture-overview.md](docs/architecture-overview.md) | System architecture overview |
+| [relay-mesh-config.md](docs/relay-mesh-config.md) | Multi-tier relay mesh configuration |
+| [cdr-v2-config.md](docs/cdr-v2-config.md) | CDR v2 engine configuration |
+| [integrity-config.md](docs/integrity-config.md) | Self-healing integrity layer configuration |
+| [abac-config.md](docs/abac-config.md) | ABAC engine configuration |
+| [enterprise-deployment.md](docs/enterprise-deployment.md) | Enterprise deployment guide |
 
 ## Project Structure
 

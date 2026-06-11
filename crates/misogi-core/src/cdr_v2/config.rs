@@ -315,13 +315,51 @@ impl WhitelistEntry {
 
     /// Check whether this entry has expired relative to the given time.
     ///
-    /// Entries without an expiration never expire.
+    /// Parses the `expires_at` ISO8601 timestamp and compares against `now`.
+    /// Entries without an expiration timestamp never expire.
+    /// Invalid timestamp formats are treated as expired for safety.
+    ///
+    /// # Arguments
+    /// * `now` - Current UTC timestamp for comparison.
+    ///
+    /// # Returns
+    /// `true` if the entry has expired or has an invalid expiry format.
     #[must_use]
-    pub fn is_expired(&self, _now: &str) -> bool {
-        // In production, parse ISO8601 timestamps and compare.
-        // For now, entries with expires_at set are considered unexpired
-        // unless explicitly past their deadline.
-        false
+    pub fn is_expired(&self, now: &chrono::DateTime<chrono::Utc>) -> bool {
+        match &self.expires_at {
+            None => false, // No expiry = never expires
+            Some(expiry_str) => {
+                // Parse ISO8601/RFC3339 expiry timestamp
+                match chrono::DateTime::parse_from_rfc3339(expiry_str) {
+                    Ok(expiry) => {
+                        let expiry_utc: chrono::DateTime<chrono::Utc> =
+                            expiry.with_timezone(&chrono::Utc);
+                        now >= &expiry_utc
+                    }
+                    Err(_) => {
+                        // Invalid expiry format: log warning and treat as expired
+                        tracing::warn!(
+                            entry_id = %self.id,
+                            expiry_str = %expiry_str,
+                            "Invalid expiry timestamp format in whitelist entry, treating as expired"
+                        );
+                        true
+                    }
+                }
+            }
+        }
+    }
+
+    /// Check if entry is currently active (enabled and not expired).
+    ///
+    /// # Arguments
+    /// * `now` - Current UTC timestamp for expiry comparison.
+    ///
+    /// # Returns
+    /// `true` if the entry is enabled and has not expired.
+    #[must_use]
+    pub fn is_active(&self, now: &chrono::DateTime<chrono::Utc>) -> bool {
+        self.enabled && !self.is_expired(now)
     }
 
     /// Set expiration timestamp.
@@ -355,22 +393,23 @@ pub struct WhitelistConfig {
 
 impl WhitelistConfig {
     /// Return all enabled (non-expired, non-disabled) entries across categories.
+    ///
+    /// Uses the current system time for expiry comparison.
     #[must_use]
     pub fn active_entries(&self) -> Vec<&WhitelistEntry> {
-        let now = ""; // Placeholder; production uses chrono::Utc::now()
-        let mut active = Vec::new();
-        for entry in self
-            .file_hashes
+        let now = chrono::Utc::now();
+        self.all_entries().filter(|e| e.is_active(&now)).collect()
+    }
+
+    /// Return an iterator over all entries across all categories.
+    ///
+    /// Iterates over file_hashes, sources, signatures, and content_types.
+    pub fn all_entries(&self) -> impl Iterator<Item = &WhitelistEntry> {
+        self.file_hashes
             .iter()
             .chain(self.sources.iter())
             .chain(self.signatures.iter())
             .chain(self.content_types.iter())
-        {
-            if entry.enabled && !entry.is_expired(now) {
-                active.push(entry);
-            }
-        }
-        active
     }
 
     /// Total number of configured entries (including disabled/expired).
